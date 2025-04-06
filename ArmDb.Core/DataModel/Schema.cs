@@ -23,7 +23,7 @@ public class Schema
   {
     if (_columns.Any(c => c.Name == column.Name))
     {
-      throw new System.InvalidOperationException($"A column with the name '{column.Name}' already exists.");
+      throw new InvalidOperationException($"A column with the name '{column.Name}' already exists.");
     }
 
     _columns.Add(column);
