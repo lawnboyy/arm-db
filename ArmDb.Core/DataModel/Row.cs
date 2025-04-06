@@ -62,8 +62,6 @@ public class Row
     var column = _schema.GetColumn(columnName);
     if (column != null)
     {
-      var columnType = column.ColumnType; // Enum for serialization.
-
       // Validate based on ColumnDataType (runtime C# Type)
       if (value != null && value.GetType() != column.ColumnDataType)
       {
