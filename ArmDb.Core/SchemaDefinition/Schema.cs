@@ -1,11 +1,13 @@
-namespace ArmDb.Core.DataModel;
+namespace ArmDb.Core.SchemaDefinition;
 
 public class Schema
 {
   private readonly List<ColumnDefinition> _columns;
+  private readonly string _name;
 
-  public Schema()
+  public Schema(string name)
   {
+    _name = name ?? throw new ArgumentNullException(nameof(name));
     _columns = new List<ColumnDefinition>();
   }
 
@@ -13,6 +15,8 @@ public class Schema
   /// Exposes the column definitions as read-only.
   /// </summary>
   public IEnumerable<ColumnDefinition> Columns => _columns.AsReadOnly();
+
+  public string Name => _name;
 
   /// <summary>
   /// Adds a new column to the schema.
@@ -34,16 +38,15 @@ public class Schema
   /// Returns true if the column was removed, false if not found.
   /// </summary>
   /// <param name="columnName">The name of the column to remove.</param>
-  public bool RemoveColumn(string columnName)
+  public void RemoveColumn(string columnName)
   {
     var index = _columns.FindIndex(c => c.Name == columnName);
-    if (index >= 0)
+    if (index < 0)
     {
-      _columns.RemoveAt(index);
-      return true;
+      throw new InvalidOperationException($"Column '{columnName}' does not exist.");
     }
 
-    return false;
+    _columns.RemoveAt(index);
   }
 
   /// <summary>

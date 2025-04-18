@@ -1,4 +1,4 @@
-using ArmDb.Core.DataModel;
+using ArmDb.Core.SchemaDefinition;
 
 namespace ArmDb.Tests;
 

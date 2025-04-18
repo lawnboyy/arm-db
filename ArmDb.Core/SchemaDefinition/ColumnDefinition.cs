@@ -1,4 +1,4 @@
-namespace ArmDb.Core.DataModel;
+namespace ArmDb.Core.SchemaDefinition;
 
 public class ColumnDefinition
 {

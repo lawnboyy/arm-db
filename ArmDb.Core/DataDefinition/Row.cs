@@ -1,7 +1,6 @@
-namespace ArmDb.Core.DataModel;
+using ArmDb.Core.SchemaDefinition;
 
-using System;
-using System.Collections.Generic;
+namespace ArmDb.Core.DataDefinition;
 
 public class Row
 {
