@@ -18,7 +18,7 @@ public class RowTests
   [Fact]
   public void SetValue_ShouldStoreAndRetrieveValue()
   {
-    var column = new ColumnDefinition("Age", ColumnType.Int);
+    var column = new ColumnDefinition("Age", PrimitiveDataType.Integer);
     var schema = CreateSchema(column);
     var row = new Row(schema);
 
@@ -31,7 +31,7 @@ public class RowTests
   [Fact]
   public void SetValue_ShouldThrowForInvalidType()
   {
-    var column = new ColumnDefinition("IsActive", ColumnType.Bool);
+    var column = new ColumnDefinition("IsActive", PrimitiveDataType.Bool);
     var schema = CreateSchema(column);
     var row = new Row(schema);
 
@@ -42,7 +42,7 @@ public class RowTests
   [Fact]
   public void GetValue_ShouldThrowIfColumnNotSet()
   {
-    var column = new ColumnDefinition("Name", ColumnType.String);
+    var column = new ColumnDefinition("Name", PrimitiveDataType.Varchar);
     var schema = CreateSchema(column);
     var row = new Row(schema);
 

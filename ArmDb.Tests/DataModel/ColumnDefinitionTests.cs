@@ -7,16 +7,16 @@ public class ColumnDefinitionTests
   [Fact]
   public void Constructor_ShouldMapColumnTypeToCorrectDataType()
   {
-    var columnInt = new ColumnDefinition("TestInt", ColumnType.Int);
+    var columnInt = new ColumnDefinition("TestInt", PrimitiveDataType.Integer);
     Assert.Equal(typeof(int), columnInt.ColumnDataType);
 
-    var columnString = new ColumnDefinition("TestString", ColumnType.String);
+    var columnString = new ColumnDefinition("TestString", PrimitiveDataType.Varchar);
     Assert.Equal(typeof(string), columnString.ColumnDataType);
 
-    var columnDateTime = new ColumnDefinition("TestDateTime", ColumnType.DateTime);
+    var columnDateTime = new ColumnDefinition("TestDateTime", PrimitiveDataType.DateTime);
     Assert.Equal(typeof(DateTime), columnDateTime.ColumnDataType);
 
-    var columnBool = new ColumnDefinition("TestBool", ColumnType.Bool);
+    var columnBool = new ColumnDefinition("TestBool", PrimitiveDataType.Bool);
     Assert.Equal(typeof(bool), columnBool.ColumnDataType);
   }
 
@@ -24,6 +24,6 @@ public class ColumnDefinitionTests
   public void Constructor_ShouldThrowExceptionForInvalidColumnType()
   {
     Assert.Throws<InvalidOperationException>(() =>
-      new ColumnDefinition("Invalid", (ColumnType)999));
+      new ColumnDefinition("Invalid", (PrimitiveDataType)999));
   }
 }

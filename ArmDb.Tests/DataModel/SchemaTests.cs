@@ -17,7 +17,7 @@ public class SchemaTests
   public void AddColumn_ShouldAddNewColumn()
   {
     var schema = new Schema("Users");
-    var column = new ColumnDefinition("Id", ColumnType.Int);
+    var column = new ColumnDefinition("Id", PrimitiveDataType.Integer);
 
     schema.AddColumn(column);
 
@@ -28,8 +28,8 @@ public class SchemaTests
   public void AddColumn_ShouldThrowIfDuplicateName()
   {
     var schema = new Schema("Users");
-    var column1 = new ColumnDefinition("Email", ColumnType.String);
-    var column2 = new ColumnDefinition("Email", ColumnType.String);
+    var column1 = new ColumnDefinition("Email", PrimitiveDataType.Varchar);
+    var column2 = new ColumnDefinition("Email", PrimitiveDataType.Varchar);
 
     schema.AddColumn(column1);
 
@@ -41,7 +41,7 @@ public class SchemaTests
   public void RemoveColumn_ShouldRemoveExistingColumn()
   {
     var schema = new Schema("Users");
-    var column = new ColumnDefinition("Name", ColumnType.String);
+    var column = new ColumnDefinition("Name", PrimitiveDataType.Varchar);
 
     schema.AddColumn(column);
     schema.RemoveColumn("Name");
@@ -62,14 +62,14 @@ public class SchemaTests
   public void Columns_ShouldBeReadOnly()
   {
     var schema = new Schema("Users");
-    schema.AddColumn(new ColumnDefinition("Role", ColumnType.String));
+    schema.AddColumn(new ColumnDefinition("Role", PrimitiveDataType.Varchar));
 
     var columns = schema.Columns;
 
     Assert.Throws<NotSupportedException>(() =>
     {
       var asList = (IList<ColumnDefinition>)columns;
-      asList.Add(new ColumnDefinition("Hacker", ColumnType.String));
+      asList.Add(new ColumnDefinition("Hacker", PrimitiveDataType.Varchar));
     });
   }
 }
