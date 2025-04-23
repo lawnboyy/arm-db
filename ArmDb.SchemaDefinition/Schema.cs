@@ -1,4 +1,4 @@
-namespace ArmDb.Core.SchemaDefinition;
+namespace ArmDb.SchemaDefinition;
 
 public class Schema
 {

@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ArmDb.Core\ArmDb.Core.csproj" />
+    <ProjectReference Include="..\ArmDb.SchemaDefinition\ArmDb.SchemaDefinition.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,4 +1,4 @@
-namespace ArmDb.Core.SchemaDefinition;
+namespace ArmDb.SchemaDefinition;
 
 /// <summary>
 /// Encapsulates the complete information about a column's data type,

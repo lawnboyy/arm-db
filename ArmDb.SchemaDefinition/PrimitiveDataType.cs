@@ -1,4 +1,4 @@
-namespace ArmDb.Core.SchemaDefinition; // File-scoped namespace
+namespace ArmDb.SchemaDefinition; // File-scoped namespace
 
 /// <summary>
 /// Defines the fundamental data types supported by the database system.

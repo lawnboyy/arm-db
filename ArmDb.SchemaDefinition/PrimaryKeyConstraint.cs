@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace ArmDb.Core.SchemaDefinition; // File-scoped namespace
+namespace ArmDb.SchemaDefinition; // File-scoped namespace
 
 /// <summary>
 /// Represents a Primary Key constraint defined on one or more columns of a table.

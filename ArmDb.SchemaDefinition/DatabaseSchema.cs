@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace ArmDb.Core.SchemaDefinition; // File-scoped namespace
+namespace ArmDb.SchemaDefinition; // File-scoped namespace
 
 /// <summary>
 /// Represents the complete schema definition for a database, including all its tables.

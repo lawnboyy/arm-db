@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
-using ArmDb.Core.SchemaDefinition; // Namespace of the classes under test
+using ArmDb.SchemaDefinition; // Namespace of the classes under test
 
 namespace ArmDb.Core.UnitTests.SchemaDefinition; // Example test namespace
 

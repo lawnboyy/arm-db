@@ -1,4 +1,4 @@
-namespace ArmDb.Core.SchemaDefinition; // File-scoped namespace
+namespace ArmDb.SchemaDefinition; // File-scoped namespace
 
 /// <summary>
 /// Abstract base class for all schema constraint definitions (e.g., Primary Key, Foreign Key, Unique).

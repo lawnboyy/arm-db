@@ -1,4 +1,4 @@
-namespace ArmDb.Core.SchemaDefinition;
+namespace ArmDb.SchemaDefinition;
 
 /// <summary>
 /// Represents the definition of a single column within a table.

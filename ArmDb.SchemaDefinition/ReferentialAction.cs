@@ -1,4 +1,4 @@
-namespace ArmDb.Core.SchemaDefinition; // File-scoped namespace
+namespace ArmDb.SchemaDefinition; // File-scoped namespace
 
 /// <summary>
 /// Defines the actions that can occur when a referenced key (in a primary/unique constraint)

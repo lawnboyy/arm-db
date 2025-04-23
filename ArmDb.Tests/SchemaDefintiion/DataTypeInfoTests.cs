@@ -1,6 +1,6 @@
 using System;
 using Xunit;
-using ArmDb.Core.SchemaDefinition; // Assuming DataTypeInfo is in this namespace
+using ArmDb.SchemaDefinition; // Assuming DataTypeInfo is in this namespace
 
 namespace ArmDb.Core.UnitTests.SchemaDefinition; // Example test namespace
 
