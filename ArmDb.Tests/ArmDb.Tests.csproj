@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ArmDb.SchemaDefinition\ArmDb.SchemaDefinition.csproj" />
+    <ProjectReference Include="..\ArmDb.DataModel\ArmDb.DataModel.csproj" />
   </ItemGroup>
 
 </Project>

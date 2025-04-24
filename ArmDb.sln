@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.CLI", "ArmDb.CLI\ArmD
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.Tests", "ArmDb.Tests\ArmDb.Tests.csproj", "{5015DDA0-5520-4901-A2BC-CB558E09DF18}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.DataModel", "ArmDb.DataModel\ArmDb.DataModel.csproj", "{AEA78E40-014E-4AEE-858D-98F3B9A548FB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,6 +57,18 @@ Global
 		{5015DDA0-5520-4901-A2BC-CB558E09DF18}.Release|x64.Build.0 = Release|Any CPU
 		{5015DDA0-5520-4901-A2BC-CB558E09DF18}.Release|x86.ActiveCfg = Release|Any CPU
 		{5015DDA0-5520-4901-A2BC-CB558E09DF18}.Release|x86.Build.0 = Release|Any CPU
+		{AEA78E40-014E-4AEE-858D-98F3B9A548FB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AEA78E40-014E-4AEE-858D-98F3B9A548FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AEA78E40-014E-4AEE-858D-98F3B9A548FB}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{AEA78E40-014E-4AEE-858D-98F3B9A548FB}.Debug|x64.Build.0 = Debug|Any CPU
+		{AEA78E40-014E-4AEE-858D-98F3B9A548FB}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{AEA78E40-014E-4AEE-858D-98F3B9A548FB}.Debug|x86.Build.0 = Debug|Any CPU
+		{AEA78E40-014E-4AEE-858D-98F3B9A548FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AEA78E40-014E-4AEE-858D-98F3B9A548FB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AEA78E40-014E-4AEE-858D-98F3B9A548FB}.Release|x64.ActiveCfg = Release|Any CPU
+		{AEA78E40-014E-4AEE-858D-98F3B9A548FB}.Release|x64.Build.0 = Release|Any CPU
+		{AEA78E40-014E-4AEE-858D-98F3B9A548FB}.Release|x86.ActiveCfg = Release|Any CPU
+		{AEA78E40-014E-4AEE-858D-98F3B9A548FB}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
