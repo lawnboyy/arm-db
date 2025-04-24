@@ -1,5 +1,4 @@
-﻿using System;
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 using ArmDb.SchemaDefinition;
 
 namespace ArmDb.DataModel;
@@ -39,8 +38,6 @@ public sealed class DataValue : IEquatable<DataValue>
     DataType = type;
     Value = value; // Assigns the (potentially boxed) value or null
   }
-
-  // --- Static Factory Methods ---
 
   /// <summary>Creates a DataValue for a 64-bit integer.</summary>
   public static DataValue CreateInteger(long value) => new DataValue(PrimitiveDataType.Integer, value);
@@ -85,8 +82,6 @@ public sealed class DataValue : IEquatable<DataValue>
     return new DataValue(type, null); // Value is explicitly null
   }
 
-  // --- Instance Methods ---
-
   /// <summary>
   /// Gets the value cast to the specified type T.
   /// </summary>
@@ -122,8 +117,6 @@ public sealed class DataValue : IEquatable<DataValue>
       throw new InvalidCastException($"Attempted to cast a null value unexpectedly. DataValue Type: {DataType}", ex);
     }
   }
-
-  // --- Overrides ---
 
   /// <summary>
   /// Returns a string representation of the value (or "NULL").
