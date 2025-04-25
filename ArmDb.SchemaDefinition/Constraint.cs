@@ -1,9 +1,15 @@
+using System.Text.Json.Serialization;
+
 namespace ArmDb.SchemaDefinition; // File-scoped namespace
 
 /// <summary>
 /// Abstract base class for all schema constraint definitions (e.g., Primary Key, Foreign Key, Unique).
 /// It primarily provides a common structure for constraint naming.
 /// </summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "ConstraintType")] // Tells System.Text.Json to use this property name from JSON to decide the type
+[JsonDerivedType(typeof(PrimaryKeyConstraint), typeDiscriminator: "PrimaryKey")] // Maps "PrimaryKey" value to PrimaryKeyConstraint class
+[JsonDerivedType(typeof(ForeignKeyConstraint), typeDiscriminator: "ForeignKey")] // Maps "ForeignKey" value to ForeignKeyConstraint class
+[JsonDerivedType(typeof(UniqueConstraint), typeDiscriminator: "Unique")]       // Maps "Unique" value to UniqueConstraint class
 public abstract class Constraint
 {
   /// <summary>
