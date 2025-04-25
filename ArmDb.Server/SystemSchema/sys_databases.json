@@ -1,0 +1,47 @@
+{
+  "Name": "sys_databases",
+  "Columns": [
+    {
+      "Name": "database_id",
+      "DataType": {
+        "PrimitiveType": "Integer",
+        "MaxLength": null,
+        "Precision": null,
+        "Scale": null
+      },
+      "IsNullable": false,
+      "DefaultValueExpression": null
+    },
+    {
+      "Name": "database_name",
+      "DataType": {
+        "PrimitiveType": "Varchar",
+        "MaxLength": 128,
+        "Precision": null,
+        "Scale": null
+      },
+      "IsNullable": false,
+      "DefaultValueExpression": null
+    },
+    {
+      "Name": "creation_date",
+      "DataType": {
+        "PrimitiveType": "DateTime"
+      },
+      "IsNullable": false,
+      "DefaultValueExpression": null
+    }
+  ],
+  "Constraints": [
+    {
+      "ConstraintType": "PrimaryKey",
+      "Name": "PK_sys_databases",
+      "ColumnNames": [ "database_id" ]
+    },
+    {
+      "ConstraintType": "Unique",
+      "Name": "UQ_sys_databases_name",
+      "ColumnNames": [ "database_name" ]
+    }
+  ]
+}

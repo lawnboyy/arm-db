@@ -1,0 +1,59 @@
+{
+  "Name": "sys_tables",
+  "Columns": [
+    {
+      "Name": "table_id",
+      "DataType": {
+        "PrimitiveType": "Integer"
+      },
+      "IsNullable": false,
+      "DefaultValueExpression": null
+    },
+    {
+      "Name": "database_id",
+      "DataType": {
+        "PrimitiveType": "Integer"
+      },
+      "IsNullable": false,
+      "DefaultValueExpression": null
+    },
+    {
+      "Name": "table_name",
+      "DataType": {
+        "PrimitiveType": "Varchar",
+        "MaxLength": 128
+      },
+      "IsNullable": false,
+      "DefaultValueExpression": null
+    },
+    {
+      "Name": "creation_date",
+      "DataType": {
+        "PrimitiveType": "DateTime"
+      },
+      "IsNullable": false,
+      "DefaultValueExpression": null
+    }
+  ],
+  "Constraints": [
+    {
+      "ConstraintType": "PrimaryKey",
+      "Name": "PK_sys_tables",
+      "ColumnNames": [ "table_id" ]
+    },
+    {
+      "ConstraintType": "ForeignKey",
+      "Name": "FK_sys_tables_database_id",
+      "ReferencingColumnNames": [ "database_id" ],
+      "ReferencedTableName": "sys_databases",
+      "ReferencedColumnNames": [ "database_id" ],
+      "OnUpdateAction": "NoAction",
+      "OnDeleteAction": "Cascade"
+    },
+    {
+      "ConstraintType": "Unique",
+      "Name": "UQ_sys_tables_db_name",
+      "ColumnNames": [ "database_id", "table_name" ]
+    }
+  ]
+}
