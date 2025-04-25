@@ -1,0 +1,62 @@
+{
+  "Name": "sys_constraints",
+  "Columns": [
+    {
+      "Name": "constraint_id",
+      "DataType": { "PrimitiveType": "Integer" },
+      "IsNullable": false,
+      "DefaultValueExpression": null
+    },
+    {
+      "Name": "table_id",
+      "DataType": { "PrimitiveType": "Integer" },
+      "IsNullable": false,
+      "DefaultValueExpression": null
+    },
+    {
+      "Name": "constraint_name",
+      "DataType": { "PrimitiveType": "Varchar", "MaxLength": 128 },
+      "IsNullable": false,
+      "DefaultValueExpression": null
+    },
+    {
+      "Name": "constraint_type",
+      "DataType": { "PrimitiveType": "Varchar", "MaxLength": 16 },
+      "IsNullable": false,
+      "DefaultValueExpression": null
+    },
+    {
+      "Name": "definition",
+      "DataType": { "PrimitiveType": "Varchar", "MaxLength": 2048 },
+      "IsNullable": true,
+      "DefaultValueExpression": null
+    },
+    {
+      "Name": "creation_date",
+      "DataType": { "PrimitiveType": "DateTime" },
+      "IsNullable": false,
+      "DefaultValueExpression": null
+    }
+  ],
+  "Constraints": [
+    {
+      "ConstraintType": "PrimaryKey",
+      "Name": "PK_sys_constraints",
+      "ColumnNames": [ "constraint_id" ]
+    },
+    {
+      "ConstraintType": "ForeignKey",
+      "Name": "FK_sys_constraints_table_id",
+      "ReferencingColumnNames": [ "table_id" ],
+      "ReferencedTableName": "sys_tables",
+      "ReferencedColumnNames": [ "table_id" ],
+      "OnUpdateAction": "NoAction",
+      "OnDeleteAction": "Cascade"
+    },
+    {
+      "ConstraintType": "Unique",
+      "Name": "UQ_sys_constraints_table_name",
+      "ColumnNames": [ "table_id", "constraint_name" ]
+    }
+  ]
+}

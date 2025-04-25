@@ -1,0 +1,73 @@
+{
+  "Name": "sys_columns",
+  "Columns": [
+    {
+      "Name": "column_id",
+      "DataType": { "PrimitiveType": "Integer" },
+      "IsNullable": false,
+      "DefaultValueExpression": null
+    },
+    {
+      "Name": "table_id",
+      "DataType": { "PrimitiveType": "Integer" },
+      "IsNullable": false,
+      "DefaultValueExpression": null
+    },
+    {
+      "Name": "column_name",
+      "DataType": { "PrimitiveType": "Varchar", "MaxLength": 128 },
+      "IsNullable": false,
+      "DefaultValueExpression": null
+    },
+    {
+      "Name": "data_type_info_json",
+      "DataType": { "PrimitiveType": "Varchar", "MaxLength": 512 },
+      "IsNullable": false,
+      "DefaultValueExpression": null
+    },
+    {
+      "Name": "ordinal_position",
+      "DataType": { "PrimitiveType": "Integer" },
+      "IsNullable": false,
+      "DefaultValueExpression": null
+    },
+    {
+      "Name": "is_nullable",
+      "DataType": { "PrimitiveType": "Boolean" },
+      "IsNullable": false,
+      "DefaultValueExpression": null
+    },
+    {
+      "Name": "default_value_expression",
+      "DataType": { "PrimitiveType": "Varchar", "MaxLength": 1024 },
+      "IsNullable": true,
+      "DefaultValueExpression": null
+    }
+  ],
+  "Constraints": [
+    {
+      "ConstraintType": "PrimaryKey",
+      "Name": "PK_sys_columns",
+      "ColumnNames": [ "column_id" ]
+    },
+    {
+      "ConstraintType": "ForeignKey",
+      "Name": "FK_sys_columns_table_id",
+      "ReferencingColumnNames": [ "table_id" ],
+      "ReferencedTableName": "sys_tables",
+      "ReferencedColumnNames": [ "table_id" ],
+      "OnUpdateAction": "NoAction",
+      "OnDeleteAction": "Cascade"
+    },
+    {
+      "ConstraintType": "Unique",
+      "Name": "UQ_sys_columns_table_col",
+      "ColumnNames": [ "table_id", "column_name" ]
+    },
+    {
+      "ConstraintType": "Unique",
+      "Name": "UQ_sys_columns_table_ord",
+      "ColumnNames": [ "table_id", "ordinal_position" ]
+    }
+  ]
+}
