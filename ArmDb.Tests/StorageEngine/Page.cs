@@ -7,5 +7,13 @@ namespace ArmDb.StorageEngine;
 /// </summary>
 public sealed class Page
 {
+  /// <summary>
+  /// The underlying memory buffer holding the page's data. Typically an 8KB slice.
+  /// </summary>
+  private readonly Memory<byte> _memory;
 
+  /// <summary>
+  /// The unique identifier of this page within the database instance.
+  /// </summary>
+  private readonly long _pageId;
 }
