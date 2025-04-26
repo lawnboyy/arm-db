@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ArmDb.Common;
 using ArmDb.SchemaDefinition; // Reference the SchemaDefinition project
 
 namespace ArmDb.Server; // Changed namespace
@@ -40,9 +41,9 @@ public static class SystemTableLoader
   /// <exception cref="JsonException">Thrown if a JSON file is malformed or cannot be deserialized.</exception>
   /// <exception cref="Exception">Other potential exceptions during file access.</exception>
   // Method name kept the same, belongs to the renamed class now
-  public static async Task<List<TableDefinition>> LoadCatalogDefinitionsAsync(string definitionDirectoryPath)
+  public static async Task<List<TableDefinition>> LoadCatalogDefinitionsAsync(string definitionDirectoryPath, IFileSystem fileSystem)
   {
-    if (!Directory.Exists(definitionDirectoryPath))
+    if (!fileSystem.DirectoryExists(definitionDirectoryPath))
     {
       throw new DirectoryNotFoundException($"Catalog definition directory not found: '{definitionDirectoryPath}'");
     }
@@ -53,10 +54,10 @@ public static class SystemTableLoader
 
     foreach (var fileName in CatalogDefinitionFiles)
     {
-      string filePath = Path.Combine(definitionDirectoryPath, fileName);
+      string filePath = fileSystem.CombinePath(definitionDirectoryPath, fileName);
       Console.WriteLine($"  Attempting to load: {fileName}..."); // Replace with proper logging
 
-      if (!File.Exists(filePath))
+      if (!fileSystem.FileExists(filePath))
       {
         // Critical error if a required system table definition is missing
         throw new FileNotFoundException($"Required catalog definition file not found: '{filePath}'");
@@ -64,7 +65,7 @@ public static class SystemTableLoader
 
       try
       {
-        string jsonContent = await File.ReadAllTextAsync(filePath);
+        string jsonContent = await fileSystem.ReadAllTextAsync(filePath);
 
         // Deserialize the JSON content into a TableDefinition object
         var tableDefinition = JsonSerializer.Deserialize<TableDefinition>(jsonContent, SerializerOptions);

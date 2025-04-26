@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.Server", "ArmDb.Serve
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.StorageEngine", "ArmDb.StorageEngine\ArmDb.StorageEngine.csproj", "{B1402907-2F08-48D2-A7F1-82F547A9F945}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.Common", "ArmDb.Common\ArmDb.Common.csproj", "{8FB9FF20-A326-48C0-AB31-AA32B276159A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -97,6 +99,18 @@ Global
 		{B1402907-2F08-48D2-A7F1-82F547A9F945}.Release|x64.Build.0 = Release|Any CPU
 		{B1402907-2F08-48D2-A7F1-82F547A9F945}.Release|x86.ActiveCfg = Release|Any CPU
 		{B1402907-2F08-48D2-A7F1-82F547A9F945}.Release|x86.Build.0 = Release|Any CPU
+		{8FB9FF20-A326-48C0-AB31-AA32B276159A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8FB9FF20-A326-48C0-AB31-AA32B276159A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8FB9FF20-A326-48C0-AB31-AA32B276159A}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{8FB9FF20-A326-48C0-AB31-AA32B276159A}.Debug|x64.Build.0 = Debug|Any CPU
+		{8FB9FF20-A326-48C0-AB31-AA32B276159A}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{8FB9FF20-A326-48C0-AB31-AA32B276159A}.Debug|x86.Build.0 = Debug|Any CPU
+		{8FB9FF20-A326-48C0-AB31-AA32B276159A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8FB9FF20-A326-48C0-AB31-AA32B276159A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8FB9FF20-A326-48C0-AB31-AA32B276159A}.Release|x64.ActiveCfg = Release|Any CPU
+		{8FB9FF20-A326-48C0-AB31-AA32B276159A}.Release|x64.Build.0 = Release|Any CPU
+		{8FB9FF20-A326-48C0-AB31-AA32B276159A}.Release|x86.ActiveCfg = Release|Any CPU
+		{8FB9FF20-A326-48C0-AB31-AA32B276159A}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
