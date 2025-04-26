@@ -15,6 +15,10 @@ public sealed class Page
 
   /// <summary>
   /// The underlying memory buffer holding the page's data. Typically an 8KB slice.
+  /// We are usin Memory<byte> here for performance. Memory<T> represents a contiguous
+  /// block of memory which can be sliced without copying the data. It is heap allocated,
+  /// unlike Span<T>, so it can be used for async operations and can be passed by reference
+  /// to other methods.
   /// </summary>
   private readonly Memory<byte> _memory;
 
