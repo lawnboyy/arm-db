@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using ArmDb.Common.Utils;
 using ArmDb.SchemaDefinition;
 using ArmDb.Server.Bootstrap;
+using ArmDb.Common.Abstractions;
 // Add using for ArmDb.StorageEngine interfaces when defined
 // Add using for ArmDb.DataModel when needed for row generation
 

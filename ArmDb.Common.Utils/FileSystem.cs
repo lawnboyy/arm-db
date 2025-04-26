@@ -1,4 +1,6 @@
-﻿namespace ArmDb.Common.Utils;
+﻿using ArmDb.Common.Abstractions;
+
+namespace ArmDb.Common.Utils;
 
 /// <summary>
 /// Concrete implementation of IFileSystem using standard System.IO methods.

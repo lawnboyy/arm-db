@@ -11,6 +11,7 @@
     <ProjectReference Include="..\ArmDb.SchemaDefinition\ArmDb.SchemaDefinition.csproj" />
     <ProjectReference Include="..\ArmDb.DataModel\ArmDb.DataModel.csproj" />
     <ProjectReference Include="..\ArmDb.Common.Utils\ArmDb.Common.Utils.csproj" />
+    <ProjectReference Include="..\ArmDb.Common.Abstractions\ArmDb.Common.Abstractions.csproj" />
   </ItemGroup>
 
   <ItemGroup>
