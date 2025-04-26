@@ -1,9 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ArmDb.Common;
-using ArmDb.SchemaDefinition; // Reference the SchemaDefinition project
+using ArmDb.SchemaDefinition;
 
-namespace ArmDb.Server; // Changed namespace
+namespace ArmDb.Server.Bootstrap;
 
 /// <summary>
 /// Helper class responsible for loading the table definitions for system catalog tables
@@ -68,7 +68,8 @@ public static class SystemTableLoader
         string jsonContent = await fileSystem.ReadAllTextAsync(filePath);
 
         // Deserialize the JSON content into a TableDefinition object
-        var tableDefinition = JsonSerializer.Deserialize<TableDefinition>(jsonContent, SerializerOptions);
+        var tableDefinitionSurrogate = JsonSerializer.Deserialize<TableDefinitionSerializable>(jsonContent, SerializerOptions);
+        var tableDefinition = tableDefinitionSurrogate?.ToTableDefinition();
 
         if (tableDefinition != null)
         {

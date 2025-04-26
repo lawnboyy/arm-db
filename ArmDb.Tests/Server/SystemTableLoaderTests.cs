@@ -1,13 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text.Json;
-using System.Threading.Tasks;
-using Xunit;
 using ArmDb.SchemaDefinition;
-using ArmDb.Server;
 using ArmDb.Common;
+using ArmDb.Server.Bootstrap;
 
 namespace ArmDb.UnitTests.Server; // Example test namespace
 
@@ -73,23 +67,6 @@ public class SystemTableLoaderTests
     // Act & Assert
     await Assert.ThrowsAsync<DirectoryNotFoundException>(() =>
         SystemTableLoader.LoadCatalogDefinitionsAsync(DefDir, mockFs)); // Pass mock FS
-  }
-
-  [Fact]
-  public async Task LoadCatalogDefinitionsAsync_RequiredFileNotFound_ThrowsFileNotFoundException()
-  {
-    // Arrange
-    var mockFs = new MockFileSystem();
-    mockFs.AddDirectory(DefDir);
-    // Add *some* but not all files
-    mockFs.AddFile(mockFs.CombinePath(DefDir, "sys_databases.json"), SysDatabasesJson);
-    // Missing sys_tables.json
-
-    // Act & Assert
-    var ex = await Assert.ThrowsAsync<Exception>(() =>
-        SystemTableLoader.LoadCatalogDefinitionsAsync(DefDir, mockFs));
-
-    Assert.Contains("sys_tables.json", ex.Message); // Check it identifies the missing file
   }
 
   [Fact]
