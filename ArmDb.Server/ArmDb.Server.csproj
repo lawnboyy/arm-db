@@ -10,7 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\ArmDb.SchemaDefinition\ArmDb.SchemaDefinition.csproj" />
     <ProjectReference Include="..\ArmDb.DataModel\ArmDb.DataModel.csproj" />
-    <ProjectReference Include="..\ArmDb.Common\ArmDb.Common.csproj" />
+    <ProjectReference Include="..\ArmDb.Common.Utils\ArmDb.Common.Utils.csproj" />
   </ItemGroup>
 
   <ItemGroup>

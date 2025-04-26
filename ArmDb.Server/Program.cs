@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using ArmDb.Common;
+using ArmDb.Common.Utils;
 using ArmDb.SchemaDefinition;
 using ArmDb.Server.Bootstrap;
 // Add using for ArmDb.StorageEngine interfaces when defined

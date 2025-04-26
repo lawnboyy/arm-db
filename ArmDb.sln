@@ -15,7 +15,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.Server", "ArmDb.Serve
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.StorageEngine", "ArmDb.StorageEngine\ArmDb.StorageEngine.csproj", "{B1402907-2F08-48D2-A7F1-82F547A9F945}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.Common", "ArmDb.Common\ArmDb.Common.csproj", "{8FB9FF20-A326-48C0-AB31-AA32B276159A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.Common.Utils", "ArmDb.Common.Utils\ArmDb.Common.Utils.csproj", "{8FB9FF20-A326-48C0-AB31-AA32B276159A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

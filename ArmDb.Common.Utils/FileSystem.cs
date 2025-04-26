@@ -1,4 +1,4 @@
-﻿namespace ArmDb.Common;
+﻿namespace ArmDb.Common.Utils;
 
 /// <summary>
 /// Concrete implementation of IFileSystem using standard System.IO methods.

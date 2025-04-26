@@ -1,4 +1,4 @@
-namespace ArmDb.Common;
+namespace ArmDb.Common.Utils;
 
 public interface IFileSystem
 {

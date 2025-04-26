@@ -1,6 +1,6 @@
 using System.Text.Json;
 using ArmDb.SchemaDefinition;
-using ArmDb.Common;
+using ArmDb.Common.Utils;
 using ArmDb.Server.Bootstrap;
 
 namespace ArmDb.UnitTests.Server; // Example test namespace
