@@ -24,6 +24,23 @@ public sealed class Page
   private readonly long _pageId;
 
   /// <summary>
+  /// Gets the unique, non-negative identifier of this page.
+  /// </summary>
+  public long Id => _pageId;
+
+  /// <summary>
+  /// Gets the underlying memory buffer holding the page's data.
+  /// Use Data.Span for direct synchronous manipulation.
+  /// </summary>
+  public Memory<byte> Data => _memory;
+
+  /// <summary>
+  /// Gets a Span<byte> view over the page's memory buffer for synchronous access.
+  /// Provides direct, efficient access to the page data.
+  /// </summary>
+  public Span<byte> Span => _memory.Span;
+
+  /// <summary>
   /// Initializes a new instance of the <see cref="Page"/> class.
   /// Should be called by components managing page buffers (like BufferPoolManager).
   /// </summary>
