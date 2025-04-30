@@ -5,7 +5,7 @@ namespace ArmDb.Core.UnitTests.SchemaDefinition; // Example test namespace
 public class TableDefinitionTests
 {
   // --- Helper Data ---
-  private static readonly DataTypeInfo IntType = new DataTypeInfo(PrimitiveDataType.Integer);
+  private static readonly DataTypeInfo IntType = new DataTypeInfo(PrimitiveDataType.Int);
   private static readonly DataTypeInfo VarcharType = new DataTypeInfo(PrimitiveDataType.Varchar, 100);
   private static readonly ColumnDefinition IdCol = new ColumnDefinition("ID", IntType, isNullable: false);
   private static readonly ColumnDefinition NameCol = new ColumnDefinition("Name", VarcharType, isNullable: false);

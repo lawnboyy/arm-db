@@ -17,7 +17,7 @@ public class DataTypeInfoTests
   [InlineData(PrimitiveDataType.Decimal, null, 18, 0)]   // Decimal valid P, default S=0
   [InlineData(PrimitiveDataType.Decimal, null, 8, 8)]    // Decimal valid P=S
   [InlineData(PrimitiveDataType.Decimal, null, null, null)]// Decimal valid no P,S
-  [InlineData(PrimitiveDataType.Integer, null, null, null)] // Integer valid
+  [InlineData(PrimitiveDataType.Int, null, null, null)] // Integer valid
   [InlineData(PrimitiveDataType.Boolean, null, null, null)] // Boolean valid
   [InlineData(PrimitiveDataType.DateTime, null, null, null)]// DateTime valid
   [InlineData(PrimitiveDataType.Float, null, null, null)]   // Float valid
@@ -117,7 +117,7 @@ public class DataTypeInfoTests
   }
 
   [Theory]
-  [InlineData(PrimitiveDataType.Integer)]
+  [InlineData(PrimitiveDataType.Int)]
   [InlineData(PrimitiveDataType.Boolean)]
   [InlineData(PrimitiveDataType.DateTime)]
   [InlineData(PrimitiveDataType.Float)]
@@ -168,7 +168,7 @@ public class DataTypeInfoTests
   [InlineData(PrimitiveDataType.Decimal, null, 10, 2, "DECIMAL(10, 2)")]
   [InlineData(PrimitiveDataType.Decimal, null, 18, 0, "DECIMAL(18, 0)")] // Scale 0 should be shown
   [InlineData(PrimitiveDataType.Decimal, null, null, null, "DECIMAL")] // No precision/scale
-  [InlineData(PrimitiveDataType.Integer, null, null, null, "INTEGER")]
+  [InlineData(PrimitiveDataType.Int, null, null, null, "INTEGER")]
   [InlineData(PrimitiveDataType.Boolean, null, null, null, "BOOLEAN")]
   [InlineData(PrimitiveDataType.DateTime, null, null, null, "DATETIME")]
   [InlineData(PrimitiveDataType.Float, null, null, null, "FLOAT")]
@@ -192,7 +192,7 @@ public class DataTypeInfoTests
   public void Equals_SameInstance_ReturnsTrue()
   {
     // Arrange
-    var dt1 = new DataTypeInfo(PrimitiveDataType.Integer);
+    var dt1 = new DataTypeInfo(PrimitiveDataType.Int);
 
     // Act & Assert (using object.Equals)
     Assert.True(dt1.Equals((object)dt1));
@@ -202,7 +202,7 @@ public class DataTypeInfoTests
   public void Equals_NullObject_ReturnsFalse()
   {
     // Arrange
-    var dt1 = new DataTypeInfo(PrimitiveDataType.Integer);
+    var dt1 = new DataTypeInfo(PrimitiveDataType.Int);
 
     // Act & Assert (using object.Equals)
     Assert.False(dt1.Equals((object?)null));
@@ -212,7 +212,7 @@ public class DataTypeInfoTests
   public void Equals_DifferentType_ReturnsFalse()
   {
     // Arrange
-    var dt1 = new DataTypeInfo(PrimitiveDataType.Integer);
+    var dt1 = new DataTypeInfo(PrimitiveDataType.Int);
     var differentObject = "INTEGER";
 
     // Act & Assert (using object.Equals)
@@ -225,14 +225,14 @@ public class DataTypeInfoTests
     new List<object[]>
     {
         // Equal cases
-        new object[] { new DataTypeInfo(PrimitiveDataType.Integer), new DataTypeInfo(PrimitiveDataType.Integer), true },
+        new object[] { new DataTypeInfo(PrimitiveDataType.Int), new DataTypeInfo(PrimitiveDataType.Int), true },
         new object[] { new DataTypeInfo(PrimitiveDataType.Varchar, 100), new DataTypeInfo(PrimitiveDataType.Varchar, 100), true },
         new object[] { new DataTypeInfo(PrimitiveDataType.Decimal, null, 12, 3), new DataTypeInfo(PrimitiveDataType.Decimal, null, 12, 3), true },
         new object[] { new DataTypeInfo(PrimitiveDataType.Decimal, null, 10, 0), new DataTypeInfo(PrimitiveDataType.Decimal, null, 10, null), true }, // Scale defaults to 0
         new object[] { new DataTypeInfo(PrimitiveDataType.Decimal), new DataTypeInfo(PrimitiveDataType.Decimal), true }, // Both default
 
         // Unequal cases - Different Type
-        new object[] { new DataTypeInfo(PrimitiveDataType.Integer), new DataTypeInfo(PrimitiveDataType.Float), false },
+        new object[] { new DataTypeInfo(PrimitiveDataType.Int), new DataTypeInfo(PrimitiveDataType.Float), false },
 
         // Unequal cases - Same Type, Different Params
         new object[] { new DataTypeInfo(PrimitiveDataType.Varchar, 100), new DataTypeInfo(PrimitiveDataType.Varchar, 200), false },
@@ -264,7 +264,7 @@ public class DataTypeInfoTests
   public void EqualityOperators_WithNull_ReturnCorrectly()
   {
     // Arrange
-    DataTypeInfo? dt1 = new DataTypeInfo(PrimitiveDataType.Integer);
+    DataTypeInfo? dt1 = new DataTypeInfo(PrimitiveDataType.Int);
     DataTypeInfo? dt2 = null;
     DataTypeInfo? dt3 = null;
 

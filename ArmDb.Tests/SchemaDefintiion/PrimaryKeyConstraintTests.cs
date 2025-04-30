@@ -12,7 +12,7 @@ public class PrimaryKeyConstraintTests
   private const string TableName = "Products";
   private static readonly string[] SingleColumn = { "ProductID" };
   private static readonly string[] MultiColumns = { "OrderID", "LineItem" };
-  private static readonly DataTypeInfo IntType = new DataTypeInfo(PrimitiveDataType.Integer);
+  private static readonly DataTypeInfo IntType = new DataTypeInfo(PrimitiveDataType.Int);
   private static readonly DataTypeInfo StringType = new DataTypeInfo(PrimitiveDataType.Varchar, 50);
 
 

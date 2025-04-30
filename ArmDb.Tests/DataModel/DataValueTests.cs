@@ -15,7 +15,7 @@ public class DataValueTests
     // Act
     var dataValue = DataValue.CreateInteger(value);
     // Assert
-    Assert.Equal(PrimitiveDataType.Integer, dataValue.DataType);
+    Assert.Equal(PrimitiveDataType.Int, dataValue.DataType);
     Assert.False(dataValue.IsNull);
     Assert.Equal(value, dataValue.Value);
     Assert.IsType<long>(dataValue.Value);
@@ -121,7 +121,7 @@ public class DataValueTests
   }
 
   [Theory]
-  [InlineData(PrimitiveDataType.Integer)]
+  [InlineData(PrimitiveDataType.Int)]
   [InlineData(PrimitiveDataType.Varchar)]
   [InlineData(PrimitiveDataType.Boolean)]
   [InlineData(PrimitiveDataType.Decimal)]
@@ -173,7 +173,7 @@ public class DataValueTests
   public void GetAs_NullValue_ThrowsInvalidOperationException()
   {
     // Arrange
-    var nullInt = DataValue.CreateNull(PrimitiveDataType.Integer);
+    var nullInt = DataValue.CreateNull(PrimitiveDataType.Int);
     // Act & Assert
     var ex = Assert.Throws<InvalidOperationException>(() => nullInt.GetAs<long>());
     Assert.Contains("represents SQL NULL", ex.Message);
@@ -198,7 +198,7 @@ public class DataValueTests
   public void ToString_NullValue_ReturnsNULLString()
   {
     // Arrange
-    var dv = DataValue.CreateNull(PrimitiveDataType.Integer);
+    var dv = DataValue.CreateNull(PrimitiveDataType.Int);
     // Act & Assert
     Assert.Equal("NULL", dv.ToString());
   }
@@ -238,15 +238,15 @@ public class DataValueTests
           // new object[] { DataValue.CreateBoolean(true), DataValue.CreateBoolean(true), true },
           // new object[] { DataValue.CreateDecimal(1.0M), DataValue.CreateDecimal(1.0M), true },
           new object[] { DataValue.CreateBlob(new byte[]{1,2}), DataValue.CreateBlob(new byte[]{1,2}), true }, // NOTE: Compares array *content* due to object.Equals usage inside DataValue.Equals
-          new object[] { DataValue.CreateNull(PrimitiveDataType.Integer), DataValue.CreateNull(PrimitiveDataType.Integer), true }, // Nulls of same type are equal
+          new object[] { DataValue.CreateNull(PrimitiveDataType.Int), DataValue.CreateNull(PrimitiveDataType.Int), true }, // Nulls of same type are equal
 
           // Unequal Cases
           new object[] { DataValue.CreateInteger(10), DataValue.CreateInteger(20), false }, // Different value
           new object[] { DataValue.CreateString("abc"), DataValue.CreateString("def"), false }, // Different value
           new object[] { DataValue.CreateBoolean(true), DataValue.CreateBoolean(false), false }, // Different value
           new object[] { DataValue.CreateInteger(10), DataValue.CreateString("10"), false }, // Different type
-          new object[] { DataValue.CreateInteger(10), DataValue.CreateNull(PrimitiveDataType.Integer), false }, // Value vs Null
-          new object[] { DataValue.CreateNull(PrimitiveDataType.Integer), DataValue.CreateNull(PrimitiveDataType.Varchar), false }, // Nulls of different types
+          new object[] { DataValue.CreateInteger(10), DataValue.CreateNull(PrimitiveDataType.Int), false }, // Value vs Null
+          new object[] { DataValue.CreateNull(PrimitiveDataType.Int), DataValue.CreateNull(PrimitiveDataType.Varchar), false }, // Nulls of different types
           new object[] { DataValue.CreateBlob(new byte[]{1,2}), DataValue.CreateBlob(new byte[]{1,3}), false }, // Different blob content
       };
 
@@ -298,7 +298,7 @@ public class DataValueTests
   public void GetHashCode_ForDifferentTypeNulls_ReturnsDifferentCode()
   {
     // Arrange
-    var nullInt = DataValue.CreateNull(PrimitiveDataType.Integer);
+    var nullInt = DataValue.CreateNull(PrimitiveDataType.Int);
     var nullStr = DataValue.CreateNull(PrimitiveDataType.Varchar);
 
     // Assert (highly likely to be different, relies on HashCode.Combine behavior)

@@ -7,7 +7,7 @@ namespace ArmDb.Core.UnitTests.SchemaDefinition; // Example test namespace
 public class ColumnDefinitionTests
 {
   // Helper reusable DataTypeInfo instances for tests
-  private static readonly DataTypeInfo IntType = new DataTypeInfo(PrimitiveDataType.Integer);
+  private static readonly DataTypeInfo IntType = new DataTypeInfo(PrimitiveDataType.Int);
   private static readonly DataTypeInfo VarcharType = new DataTypeInfo(PrimitiveDataType.Varchar, 100);
   private static readonly DataTypeInfo DecimalType = new DataTypeInfo(PrimitiveDataType.Decimal, null, 10, 2);
 

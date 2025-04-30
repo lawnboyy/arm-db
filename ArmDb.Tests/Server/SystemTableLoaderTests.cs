@@ -129,7 +129,7 @@ public class SystemTableLoaderTests
     Assert.Equal("table_id", idCol.Name);
     Assert.False(idCol.IsNullable);
     Assert.NotNull(idCol.DataType);
-    Assert.Equal(PrimitiveDataType.Integer, idCol.DataType.PrimitiveType);
+    Assert.Equal(PrimitiveDataType.Int, idCol.DataType.PrimitiveType);
     Assert.Null(idCol.DataType.MaxLength); // Check omission worked
 
 

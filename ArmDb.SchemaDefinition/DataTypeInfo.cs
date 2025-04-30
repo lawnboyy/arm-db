@@ -97,7 +97,7 @@ public sealed class DataTypeInfo : IEquatable<DataTypeInfo> // Sealed + IEquatab
         Scale = finalScale;
         break;
 
-      case PrimitiveDataType.Integer:
+      case PrimitiveDataType.Int:
       case PrimitiveDataType.Boolean:
       case PrimitiveDataType.DateTime:
       case PrimitiveDataType.Float:
@@ -135,7 +135,7 @@ public sealed class DataTypeInfo : IEquatable<DataTypeInfo> // Sealed + IEquatab
         // (not null, null) => $"DECIMAL({Precision})",
         _ => "DECIMAL" // Default if no precision/scale specified (allowed by constructor if both are null)
       },
-      PrimitiveDataType.Integer => "INTEGER",
+      PrimitiveDataType.Int => "INTEGER",
       PrimitiveDataType.Boolean => "BOOLEAN",
       PrimitiveDataType.DateTime => "DATETIME",
       PrimitiveDataType.Float => "FLOAT",

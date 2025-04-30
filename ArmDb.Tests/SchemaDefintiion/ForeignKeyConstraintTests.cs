@@ -15,7 +15,7 @@ public class ForeignKeyConstraintTests
   private static readonly string[] ReferencedCols = { "ID" };
   private static readonly string[] ReferencingColsMulti = { "OrderID", "ProductSku" };
   private static readonly string[] ReferencedColsMulti = { "ID", "Sku" };
-  private static readonly DataTypeInfo IntType = new DataTypeInfo(PrimitiveDataType.Integer);
+  private static readonly DataTypeInfo IntType = new DataTypeInfo(PrimitiveDataType.Int);
   private static readonly DataTypeInfo VarcharType = new DataTypeInfo(PrimitiveDataType.Varchar, 50);
 
   // --- Constructor and Property Tests ---

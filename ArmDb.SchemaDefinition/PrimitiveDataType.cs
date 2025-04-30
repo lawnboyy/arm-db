@@ -11,9 +11,9 @@ public enum PrimitiveDataType
   Unknown = 0,
 
   /// <summary>
-  /// Represents a 64-bit signed integer (maps to C# long).
+  /// Represents a 32-bit signed integer (maps to C# int).
   /// </summary>
-  Integer,
+  Int,
 
   /// <summary>
   /// Represents a variable-length string of characters. Will require parameters like MaxLength later.
