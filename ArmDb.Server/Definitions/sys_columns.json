@@ -3,13 +3,13 @@
   "Columns": [
     {
       "Name": "column_id",
-      "DataType": { "PrimitiveType": "Integer" },
+      "DataType": { "PrimitiveType": "Int" },
       "IsNullable": false,
       "DefaultValueExpression": null
     },
     {
       "Name": "table_id",
-      "DataType": { "PrimitiveType": "Integer" },
+      "DataType": { "PrimitiveType": "Int" },
       "IsNullable": false,
       "DefaultValueExpression": null
     },
@@ -27,7 +27,7 @@
     },
     {
       "Name": "ordinal_position",
-      "DataType": { "PrimitiveType": "Integer" },
+      "DataType": { "PrimitiveType": "Int" },
       "IsNullable": false,
       "DefaultValueExpression": null
     },

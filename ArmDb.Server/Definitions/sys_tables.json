@@ -4,7 +4,7 @@
     {
       "Name": "table_id",
       "DataType": {
-        "PrimitiveType": "Integer"
+        "PrimitiveType": "Int"
       },
       "IsNullable": false,
       "DefaultValueExpression": null
@@ -12,7 +12,7 @@
     {
       "Name": "database_id",
       "DataType": {
-        "PrimitiveType": "Integer"
+        "PrimitiveType": "Int"
       },
       "IsNullable": false,
       "DefaultValueExpression": null

@@ -118,7 +118,7 @@ public sealed class DataTypeInfo : IEquatable<DataTypeInfo> // Sealed + IEquatab
   }
 
   /// <summary>
-  /// Returns a string representation of the data type information (e.g., "VARCHAR(100)", "DECIMAL(10, 2)", "INTEGER").
+  /// Returns a string representation of the data type information (e.g., "VARCHAR(100)", "DECIMAL(10, 2)", "INT").
   /// </summary>
   public override string ToString()
   {
@@ -135,7 +135,7 @@ public sealed class DataTypeInfo : IEquatable<DataTypeInfo> // Sealed + IEquatab
         // (not null, null) => $"DECIMAL({Precision})",
         _ => "DECIMAL" // Default if no precision/scale specified (allowed by constructor if both are null)
       },
-      PrimitiveDataType.Int => "INTEGER",
+      PrimitiveDataType.Int => "INT",
       PrimitiveDataType.Boolean => "BOOLEAN",
       PrimitiveDataType.DateTime => "DATETIME",
       PrimitiveDataType.Float => "FLOAT",

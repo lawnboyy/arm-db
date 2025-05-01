@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+
 namespace ArmDb.StorageEngine;
 
 /// <summary>
@@ -66,5 +68,32 @@ public sealed class Page
     // Assign the readonly fields
     _pageId = pageId;
     _memory = memory;
+  }
+
+  /// <summary>
+  /// Writes a 32-bit signed integer (int) to the page at the specified offset
+  /// using little-endian format. Corresponds to the INT primitive type.
+  /// </summary>
+  /// <param name="offset">The zero-based byte offset within the page to write to.</param>
+  /// <param name="value">The int value to write.</param>
+  /// <exception cref="ArgumentOutOfRangeException">
+  /// Thrown if the offset is negative or if writing 4 bytes would exceed the page size.
+  /// </exception>
+  public void WriteInt32(int offset, int value)
+  {
+    const int valueSize = sizeof(int); // 4 bytes
+
+    // 1. Bounds Check
+    if ((uint)offset > (uint)(Size - valueSize)) // Efficient check for offset < 0 or offset + valueSize > Size
+    {
+      if (offset < 0)
+        throw new ArgumentOutOfRangeException(nameof(offset), $"Offset ({offset}) cannot be negative.");
+      else
+        throw new ArgumentOutOfRangeException(nameof(offset), $"Offset ({offset}) plus value size ({valueSize}) exceeds page size ({Size}).");
+    }
+
+    // 2. Get Span and Write
+    Span<byte> destination = _memory.Span.Slice(offset, valueSize);
+    BinaryPrimitives.WriteInt32LittleEndian(destination, value);
   }
 }

@@ -43,8 +43,8 @@ public class SystemTableLoaderTests
   private const string SysTablesJson_Detailed = @"{
       ""Name"": ""sys_tables"",
       ""Columns"": [
-        { ""Name"": ""table_id"", ""DataType"": { ""PrimitiveType"": ""Integer"" }, ""IsNullable"": false, ""DefaultValueExpression"": null },
-        { ""Name"": ""database_id"", ""DataType"": { ""PrimitiveType"": ""Integer"" }, ""IsNullable"": false, ""DefaultValueExpression"": null },
+        { ""Name"": ""table_id"", ""DataType"": { ""PrimitiveType"": ""Int"" }, ""IsNullable"": false, ""DefaultValueExpression"": null },
+        { ""Name"": ""database_id"", ""DataType"": { ""PrimitiveType"": ""Int"" }, ""IsNullable"": false, ""DefaultValueExpression"": null },
         { ""Name"": ""table_name"", ""DataType"": { ""PrimitiveType"": ""Varchar"", ""MaxLength"": 128 }, ""IsNullable"": false, ""DefaultValueExpression"": null },
         { ""Name"": ""creation_date"", ""DataType"": { ""PrimitiveType"": ""DateTime"" }, ""IsNullable"": false, ""DefaultValueExpression"": null }
       ],

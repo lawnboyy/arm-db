@@ -168,7 +168,7 @@ public class DataTypeInfoTests
   [InlineData(PrimitiveDataType.Decimal, null, 10, 2, "DECIMAL(10, 2)")]
   [InlineData(PrimitiveDataType.Decimal, null, 18, 0, "DECIMAL(18, 0)")] // Scale 0 should be shown
   [InlineData(PrimitiveDataType.Decimal, null, null, null, "DECIMAL")] // No precision/scale
-  [InlineData(PrimitiveDataType.Int, null, null, null, "INTEGER")]
+  [InlineData(PrimitiveDataType.Int, null, null, null, "INT")]
   [InlineData(PrimitiveDataType.Boolean, null, null, null, "BOOLEAN")]
   [InlineData(PrimitiveDataType.DateTime, null, null, null, "DATETIME")]
   [InlineData(PrimitiveDataType.Float, null, null, null, "FLOAT")]
@@ -213,7 +213,7 @@ public class DataTypeInfoTests
   {
     // Arrange
     var dt1 = new DataTypeInfo(PrimitiveDataType.Int);
-    var differentObject = "INTEGER";
+    var differentObject = "INT";
 
     // Act & Assert (using object.Equals)
     Assert.False(dt1.Equals(differentObject));
