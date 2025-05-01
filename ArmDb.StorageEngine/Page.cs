@@ -1,4 +1,4 @@
-using System.Buffers.Binary;
+using System.Runtime.InteropServices;
 
 namespace ArmDb.StorageEngine;
 
@@ -94,6 +94,51 @@ public sealed class Page
 
     // 2. Get Span and Write
     Span<byte> destination = _memory.Span.Slice(offset, valueSize);
-    BinaryPrimitives.WriteInt32LittleEndian(destination, value);
+    WriteInt32LittleEndianOptimized(destination, value);
+  }
+
+  private void WriteInt32LittleEndianOptimized(Span<byte> destination, int value)
+  {
+    const int intSize = sizeof(int);
+    if (intSize > destination.Length)
+    {
+      throw new ArgumentOutOfRangeException(nameof(destination), $"Destination span length ({destination.Length}) is less than the size of an int ({intSize}).");
+    }
+
+    int valueToWrite = value;
+
+    // This won't get called on Windows since it's already little-endian.
+    if (!BitConverter.IsLittleEndian)
+    {
+      // If the system is not little-endian, reverse the endianness of the value.
+      valueToWrite = ReverseEndianness(valueToWrite); // Reverse the endianness of the int value.
+    }
+
+    MemoryMarshal.Write(destination, in valueToWrite); // This will write the 4 bytes in the correct order.
+  }
+
+  private static int ReverseEndianness(int value)
+  {
+    // Work with unsigned integer to guarantee logical right shifts
+    uint uval = (uint)value;
+
+    // Isolate and shift each byte to its new position
+    // 1. LSB (Byte 0) -> becomes MSB (Byte 3)
+    uint byte0 = (uval & 0x000000FF) << 24;
+
+    // 2. Byte 1 -> becomes Byte 2
+    uint byte1 = (uval & 0x0000FF00) << 8; // Isolate byte 1 and shift left 8
+
+    // 3. Byte 2 -> becomes Byte 1
+    uint byte2 = (uval & 0x00FF0000) >> 8; // Isolate byte 2 and shift right 8
+
+    // 4. MSB (Byte 3) -> becomes LSB (Byte 0)
+    uint byte3 = (uval & 0xFF000000) >> 24; // Isolate byte 3 and shift right 24                                            
+
+    // Combine the rearranged bytes using bitwise OR
+    uint result = byte0 | byte1 | byte2 | byte3;
+
+    // Cast back to signed int for the final result
+    return (int)result;
   }
 }
