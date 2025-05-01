@@ -94,10 +94,10 @@ public sealed class Page
 
     // 2. Get Span and Write
     Span<byte> destination = _memory.Span.Slice(offset, valueSize);
-    WriteInt32LittleEndianOptimized(destination, value);
+    WriteInt32LittleEndian(destination, value);
   }
 
-  private void WriteInt32LittleEndianOptimized(Span<byte> destination, int value)
+  private void WriteInt32LittleEndian(Span<byte> destination, int value)
   {
     const int intSize = sizeof(int);
     if (intSize > destination.Length)
