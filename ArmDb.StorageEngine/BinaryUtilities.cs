@@ -4,6 +4,7 @@ namespace ArmDb.StorageEngine;
 
 public static class BinaryUtilities
 {
+  // --- Public Write methods (using the internal ReverseEndianness) ---
   public static void WriteInt32LittleEndian(Span<byte> destination, int value)
   {
     const int intSize = sizeof(int);
@@ -13,15 +14,11 @@ public static class BinaryUtilities
     }
 
     int valueToWrite = value;
-
-    // This won't get called on Windows since it's already little-endian.
     if (!BitConverter.IsLittleEndian)
     {
-      // If the system is not little-endian, reverse the endianness of the value.
-      valueToWrite = ReverseEndianness(valueToWrite); // Reverse the endianness of the int value.
+      valueToWrite = ReverseEndianness(valueToWrite); // Calls internal method
     }
-
-    MemoryMarshal.Write(destination, in valueToWrite); // This will write the 4 bytes in the correct order.
+    MemoryMarshal.Write(destination, in valueToWrite);
   }
 
   public static void WriteInt64LittleEndian(Span<byte> destination, long value)
@@ -33,34 +30,29 @@ public static class BinaryUtilities
     }
 
     long valueToWrite = value;
-
-    // This won't get called on Windows since it's already little-endian.
     if (!BitConverter.IsLittleEndian)
     {
-      // If the system is not little-endian, reverse the endianness of the value.
-      valueToWrite = ReverseEndianness(valueToWrite); // Reverse the endianness of the long value.
+      valueToWrite = ReverseEndianness(valueToWrite); // Calls internal method
     }
-
-    MemoryMarshal.Write(destination, in valueToWrite); // This will write the 8 bytes in the correct order.
+    MemoryMarshal.Write(destination, in valueToWrite);
   }
 
-  private static int ReverseEndianness(int value)
+  // --- Endianness Reversal Methods (Now Internal) ---
+
+  /// <summary>
+  /// Reverses the byte order (endianness) of a 32-bit signed integer.
+  /// Marked internal for testing accessibility via InternalsVisibleTo.
+  /// </summary>
+  internal static int ReverseEndianness(int value)
   {
     // Work with unsigned integer to guarantee logical right shifts
     uint uval = (uint)value;
 
     // Isolate and shift each byte to its new position
-    // 1. LSB (Byte 0) -> becomes MSB (Byte 3)
-    uint byte0 = (uval & 0x000000FF) << 24;
-
-    // 2. Byte 1 -> becomes Byte 2
-    uint byte1 = (uval & 0x0000FF00) << 8; // Isolate byte 1 and shift left 8
-
-    // 3. Byte 2 -> becomes Byte 1
-    uint byte2 = (uval & 0x00FF0000) >> 8; // Isolate byte 2 and shift right 8
-
-    // 4. MSB (Byte 3) -> becomes LSB (Byte 0)
-    uint byte3 = (uval & 0xFF000000) >> 24; // Isolate byte 3 and shift right 24                                            
+    uint byte3 = (uval >> 24);              // Byte 3 -> Byte 0 position
+    uint byte2 = (uval >> 8) & 0x0000FF00;  // Byte 2 -> Byte 1 position
+    uint byte1 = (uval << 8) & 0x00FF0000;  // Byte 1 -> Byte 2 position
+    uint byte0 = (uval << 24);              // Byte 0 -> Byte 3 position
 
     // Combine the rearranged bytes using bitwise OR
     uint result = byte0 | byte1 | byte2 | byte3;
@@ -69,29 +61,29 @@ public static class BinaryUtilities
     return (int)result;
   }
 
-  private static long ReverseEndianness(long value)
+  /// <summary>
+  /// Reverses the byte order (endianness) of a 64-bit signed integer.
+  /// Marked internal for testing accessibility via InternalsVisibleTo.
+  /// Includes correction for handling all 8 bytes.
+  /// </summary>
+  internal static long ReverseEndianness(long value)
   {
     // Work with unsigned long to guarantee logical right shifts
     ulong uval = (ulong)value;
 
     // Isolate and shift each byte to its new position
-    // 1. LSB (Byte 0) -> becomes MSB (Byte 7)
-    ulong byte0 = (uval & 0x00000000000000FF) << 56;
-
-    // 2. Byte 1 -> becomes Byte 6
-    ulong byte1 = (uval & 0x000000000000FF00) << 40; // Isolate byte 1 and shift left 40
-
-    // 3. Byte 2 -> becomes Byte 5
-    ulong byte2 = (uval & 0x00000000FF000000) << 24; // Isolate byte 2 and shift left 24
-
-    // 4. Byte 3 -> becomes Byte 4
-    ulong byte3 = (uval & 0x00FF000000000000) << 8; // Isolate byte 3 and shift left 8
-
-    // 5. MSB (Byte 7) -> becomes LSB (Byte 0)
-    ulong byte7 = (uval & 0xFF00000000000000) >> 56; // Isolate byte 7 and shift right 56
+    // Use UL suffix for hex constants to ensure ulong operations
+    ulong byte7 = uval >> 56;                         // Byte 7 -> Byte 0
+    ulong byte6 = (uval >> 40) & 0x000000000000FF00UL; // Byte 6 -> Byte 1
+    ulong byte5 = (uval >> 24) & 0x0000000000FF0000UL; // Byte 5 -> Byte 2
+    ulong byte4 = (uval >> 8) & 0x00000000FF000000UL;  // Byte 4 -> Byte 3
+    ulong byte3 = (uval << 8) & 0x000000FF00000000UL;  // Byte 3 -> Byte 4
+    ulong byte2 = (uval << 24) & 0x0000FF0000000000UL; // Byte 2 -> Byte 5
+    ulong byte1 = (uval << 40) & 0x00FF000000000000UL; // Byte 1 -> Byte 6
+    ulong byte0 = uval << 56;                         // Byte 0 -> Byte 7
 
     // Combine the rearranged bytes using bitwise OR
-    ulong result = byte0 | byte1 | byte2 | byte3 | byte7;
+    ulong result = byte0 | byte1 | byte2 | byte3 | byte4 | byte5 | byte6 | byte7;
 
     // Cast back to signed long for the final result
     return (long)result;
