@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 
 namespace ArmDb.StorageEngine;
@@ -95,6 +96,33 @@ public sealed class Page
     // 2. Get Span and Write
     Span<byte> destination = _memory.Span.Slice(offset, valueSize);
     WriteInt32LittleEndian(destination, value);
+  }
+
+  /// <summary>
+  /// Writes a 64-bit signed integer (long) to the page at the specified offset
+  /// using little-endian format. Useful for internal IDs, LSNs, DateTime ticks, or a BIGINT SQL type.
+  /// </summary>
+  /// <param name="offset">The zero-based byte offset within the page to write to.</param>
+  /// <param name="value">The long value to write.</param>
+  /// <exception cref="ArgumentOutOfRangeException">
+  /// Thrown if the offset is negative or if writing 8 bytes would exceed the page size.
+  /// </exception>
+  public void WriteInt64(int offset, long value)
+  {
+    const int valueSize = sizeof(long); // 8 bytes
+
+    // 1. Bounds Check
+    if ((uint)offset > (uint)(Size - valueSize)) // Efficient combined check
+    {
+      if (offset < 0)
+        throw new ArgumentOutOfRangeException(nameof(offset), $"Offset ({offset}) cannot be negative.");
+      else
+        throw new ArgumentOutOfRangeException(nameof(offset), $"Offset ({offset}) plus value size ({valueSize}) exceeds page size ({Size}).");
+    }
+
+    // 2. Get Span and Write
+    Span<byte> destination = _memory.Span.Slice(offset, valueSize);
+    BinaryPrimitives.WriteInt64LittleEndian(destination, value);
   }
 
   private void WriteInt32LittleEndian(Span<byte> destination, int value)
