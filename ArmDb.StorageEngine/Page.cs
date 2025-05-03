@@ -73,7 +73,7 @@ public sealed class Page
   /// <summary>
   /// Writes a single boolean (as a byte) to the page at the specified offset.
   /// </summary>
-  /// <param name="offset">The zero-based page (byte) offset to write to.</param>
+  /// <param name="offset">The zero-based offset to write to.</param>
   /// <param name="value">The boolean value to write.</param>
   /// <exception cref="ArgumentOutOfRangeException"></exception>
   public void WriteBoolean(int offset, bool value)
@@ -81,6 +81,11 @@ public sealed class Page
     WriteByte(offset, value ? (byte)1 : (byte)0);
   }
 
+  /// <summary>
+  /// Writes a DateTime value to the page at the specified offset.
+  /// </summary>
+  /// <param name="offset">The zero-based offset to write to.</param>
+  /// <param name="value">The DateTime value to write.</param>
   public void WriteDateTime(int offset, DateTime value)
   {
     // Use the ToBinary method to maintain the DateTimeKind information.
