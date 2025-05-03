@@ -71,6 +71,26 @@ public sealed class Page
   }
 
   /// <summary>
+  /// Reads a single byte from the page at the specified offset.
+  /// </summary>
+  /// <param name="offset">The zero-based byte offset within the page to read from.</param>
+  /// <returns>The byte value read.</returns>
+  /// <exception cref="ArgumentOutOfRangeException">
+  /// Thrown if the offset is negative or greater than or equal to the page size.
+  /// </exception>
+  public byte ReadByte(int offset)
+  {
+    // Bounds Check: Ensure offset is a valid index [0..Size-1]
+    if ((uint)offset >= Size) // Same efficient check as WriteByte
+    {
+      throw new ArgumentOutOfRangeException(nameof(offset), $"Offset ({offset}) must be within the range [0..{Size - 1}] for a 1-byte read.");
+    }
+
+    // Read directly from the span at the index
+    return _memory.Span[offset];
+  }
+
+  /// <summary>
   /// Reads a 32-bit signed integer (int) from the page at the specified offset,
   /// interpreting the bytes using little-endian format.
   /// </summary>

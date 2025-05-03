@@ -247,7 +247,6 @@ public partial class PageTests
   }
 
   [Theory]
-  // Invalid Offset Values
   [InlineData(-1)]             // Negative offset
   [InlineData(Page.Size - 7)]  // Offset too large (needs 8 bytes, only 7 remain)
   [InlineData(Page.Size - 1)]  // Offset too large (needs 8 bytes, only 1 remains)
@@ -258,9 +257,6 @@ public partial class PageTests
   {
     // Arrange
     var (page, buffer) = CreateTestPage();
-    // Optionally pre-fill buffer with some data, though not strictly necessary
-    // as the bounds check should happen before attempting to read.
-    // WriteInt64ToBuffer(buffer, 0, 12345L);
 
     // Act & Assert
     // Expect ArgumentOutOfRangeException due to invalid offset

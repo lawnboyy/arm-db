@@ -203,4 +203,65 @@ public partial class PageTests
     page.WriteBoolean(offset, valueToWrite);
     Assert.Equal((byte)0, buffer[offset]);
   }
+
+  [Theory]
+  // Offset, Value to Write/Expect
+  [InlineData(0, (byte)0xDE)]         // Read from start
+  [InlineData(1024, (byte)0xAD)]      // Read from middle
+  [InlineData(Page.Size - 1, (byte)0xBE)] // Read from end
+  [InlineData(500, (byte)0x00)]       // Read zero
+  [InlineData(600, byte.MaxValue)] // Read max byte value (255)
+  public void ReadByte_ValidOffset_ReturnsCorrectValue(int offset, byte expectedValue)
+  {
+    // Arrange
+    var (page, buffer) = CreateTestPage();
+    // Manually place the byte in the buffer for the test
+    buffer[offset] = expectedValue;
+
+    // Act
+    byte result = page.ReadByte(offset);
+
+    // Assert
+    Assert.Equal(expectedValue, result);
+  }
+
+  [Fact]
+  public void ReadByte_ReadsCorrectValue_DoesNotAffectBuffer()
+  {
+    // Arrange
+    var (page, buffer) = CreateTestPage();
+    int offset = 300;
+    byte neighborBefore = 0xAA;
+    byte expectedValue = 0xBB;
+    byte neighborAfter = 0xCC;
+
+    buffer[offset - 1] = neighborBefore;
+    buffer[offset] = expectedValue;
+    buffer[offset + 1] = neighborAfter;
+
+    var bufferBeforeRead = buffer.ToArray(); // Copy buffer state before reading
+
+    // Act
+    byte result = page.ReadByte(offset);
+
+    // Assert
+    Assert.Equal(expectedValue, result);     // Ensure correct value was read
+    Assert.Equal(bufferBeforeRead, buffer);  // Ensure the underlying buffer remains unchanged
+  }
+
+  [Theory]
+  // Invalid Offset Values
+  [InlineData(-1)]             // Negative offset
+  [InlineData(Page.Size)]      // Exactly at end (invalid index)
+  [InlineData(Page.Size + 10)] // Beyond end
+  [InlineData(int.MinValue)]   // Extreme negative
+  public void ReadByte_InvalidOffset_ThrowsArgumentOutOfRangeException(int invalidOffset)
+  {
+    // Arrange
+    var (page, buffer) = CreateTestPage();
+
+    // Act & Assert
+    // Expect ArgumentOutOfRangeException due to invalid offset
+    Assert.Throws<ArgumentOutOfRangeException>("offset", () => page.ReadByte(invalidOffset));
+  }
 }
