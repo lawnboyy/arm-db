@@ -27,12 +27,12 @@ public sealed class Page
   /// <summary>
   /// The unique identifier of this page within the database instance.
   /// </summary>
-  private readonly long _pageId;
+  private readonly PageId _pageId;
 
   /// <summary>
-  /// Gets the unique, non-negative identifier of this page.
+  /// Gets the unique identifier of this page which is a combination of the table ID and page index.
   /// </summary>
-  public long Id => _pageId;
+  public PageId Id => _pageId;
 
   /// <summary>
   /// Gets the underlying memory buffer holding the page's data.
@@ -50,15 +50,12 @@ public sealed class Page
   /// Initializes a new instance of the <see cref="Page"/> class.
   /// Should be called by components managing page buffers (like BufferPoolManager).
   /// </summary>
-  /// <param name="pageId">The unique, non-negative identifier for this page.</param>
+  /// <param name="pageId">The unique page identifier consistenting of the table ID and the zero-based page index.</param>
   /// <param name="memory">The Memory<byte> slice representing the page's data buffer. Its length MUST match Page.Size.</param>
   /// <exception cref="ArgumentOutOfRangeException">Thrown if pageId is negative.</exception>
   /// <exception cref="ArgumentException">Thrown if the provided memory slice length does not match Page.Size.</exception>
-  internal Page(long pageId, Memory<byte> memory)
+  internal Page(PageId pageId, Memory<byte> memory)
   {
-    // Validate Page ID
-    ArgumentOutOfRangeException.ThrowIfNegative(pageId);
-
     // Validate Memory buffer size
     if (memory.Length != Size)
     {
