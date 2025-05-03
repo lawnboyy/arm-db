@@ -4,7 +4,6 @@ namespace ArmDb.StorageEngine;
 
 public static class BinaryUtilities
 {
-  // --- Public Write methods (using the internal ReverseEndianness) ---
   public static void WriteInt32LittleEndian(Span<byte> destination, int value)
   {
     const int intSize = sizeof(int);
@@ -36,8 +35,6 @@ public static class BinaryUtilities
     }
     MemoryMarshal.Write(destination, in valueToWrite);
   }
-
-  // --- Endianness Reversal Methods (Now Internal) ---
 
   /// <summary>
   /// Reverses the byte order (endianness) of a 32-bit signed integer.

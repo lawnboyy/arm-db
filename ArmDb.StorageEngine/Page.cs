@@ -71,6 +71,23 @@ public sealed class Page
   }
 
   /// <summary>
+  /// Writes a single byte to the page at the specified offset.
+  /// </summary>
+  /// <param name="offset">The zero-based page (byte) offset to write to.</param>
+  /// <param name="value">The byte value to write.</param>
+  /// <exception cref="ArgumentOutOfRangeException"></exception>
+  public void WriteByte(int offset, byte value)
+  {
+    if ((uint)offset >= Size)
+    {
+      throw new ArgumentOutOfRangeException(nameof(offset), $"Offset ({offset}) is not within the range [0..{Size - 1}]");
+    }
+
+    var pageSpan = _memory.Span;
+    pageSpan[offset] = value;
+  }
+
+  /// <summary>
   /// Writes a 32-bit signed integer (int) to the page at the specified offset
   /// using little-endian format. Corresponds to the INT primitive type.
   /// </summary>
@@ -84,7 +101,7 @@ public sealed class Page
     const int valueSize = sizeof(int); // 4 bytes
 
     // 1. Bounds Check
-    if ((uint)offset > (uint)(Size - valueSize)) // Efficient check for offset < 0 or offset + valueSize > Size
+    if ((uint)offset > (Size - valueSize)) // Efficient check for offset < 0 or offset + valueSize > Size
     {
       if (offset < 0)
         throw new ArgumentOutOfRangeException(nameof(offset), $"Offset ({offset}) cannot be negative.");
@@ -111,7 +128,7 @@ public sealed class Page
     const int valueSize = sizeof(long); // 8 bytes
 
     // 1. Bounds Check
-    if ((uint)offset > (uint)(Size - valueSize)) // Efficient combined check
+    if ((uint)offset > (Size - valueSize)) // Efficient combined check
     {
       if (offset < 0)
         throw new ArgumentOutOfRangeException(nameof(offset), $"Offset ({offset}) cannot be negative.");
