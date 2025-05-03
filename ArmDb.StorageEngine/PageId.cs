@@ -4,6 +4,7 @@ namespace ArmDb.StorageEngine;
 /// Represents a unique identifier for a page within the database.
 /// Consists of the identifier for the table the page belongs to
 /// and the zero-based index of the page within that table's file.
+/// This assumes a single file per table.
 /// </summary>
 public readonly record struct PageId
 {
