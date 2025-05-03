@@ -21,6 +21,23 @@ public static class BinaryUtilities
     return value;
   }
 
+  public static long ReadInt64LittleEndian(ReadOnlySpan<byte> source)
+  {
+    const int longSize = sizeof(long);
+    if (source.Length < longSize)
+    {
+      throw new ArgumentOutOfRangeException(nameof(source), $"Source size ({source.Length}) is less than the size of an int ({longSize}).");
+    }
+
+    var value = MemoryMarshal.Read<long>(source);
+    if (!BitConverter.IsLittleEndian)
+    {
+      value = ReverseEndianness(value);
+    }
+
+    return value;
+  }
+
   public static void WriteInt32LittleEndian(Span<byte> destination, int value)
   {
     const int intSize = sizeof(int);

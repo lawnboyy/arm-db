@@ -200,15 +200,80 @@ public partial class PageTests
   {
     // Arrange
     var (page, buffer) = CreateTestPage();
-    // Optionally write some data, though not strictly necessary as bounds check should happen first
-    // WriteInt32ToBuffer(buffer, 0, 999);
 
     // Act & Assert
     Assert.Throws<ArgumentOutOfRangeException>("offset", () => page.ReadInt32(invalidOffset));
   }
 
+  [Theory]
+  // Offset, Expected Value to Read
+  [InlineData(0, 0x1122334455667788L)]
+  [InlineData(100, -1L)]                      // Test negative
+  [InlineData(200, 0L)]                       // Test zero
+  [InlineData(300, long.MaxValue)]            // Test max value
+  [InlineData(400, long.MinValue)]            // Test min value
+  [InlineData(Page.Size - 8, unchecked((long)0xAABBCCDDEEFF0011L))] // Test last possible position
+  public void ReadInt64_ValidOffset_ReturnsCorrectValue(int offset, long expectedValue)
+  {
+    // Arrange
+    var (page, buffer) = CreateTestPage();
+    // Write the expected value's byte pattern into the buffer at the offset
+    // using standard primitives to ensure correct LE representation.
+    WriteInt64ToBuffer(buffer, offset, expectedValue);
+
+    // Act
+    long result = page.ReadInt64(offset);
+
+    // Assert
+    Assert.Equal(expectedValue, result);
+  }
+
+  [Fact]
+  public void ReadInt64_ReadsCorrectValue_DoesNotAffectBuffer()
+  {
+    // Arrange
+    var (page, buffer) = CreateTestPage();
+    int offset = 150;
+    long expectedValue = unchecked((long)0xFEEDBEEFCAFEF00DL); // Some distinct test value
+    WriteInt64ToBuffer(buffer, offset, expectedValue);
+    var bufferBeforeRead = buffer.ToArray(); // Copy buffer state before reading
+
+    // Act
+    long result = page.ReadInt64(offset);
+
+    // Assert
+    Assert.Equal(expectedValue, result);     // Ensure correct value was read
+    Assert.Equal(bufferBeforeRead, buffer);  // Ensure the underlying buffer remains unchanged by the read operation
+  }
+
+  [Theory]
+  // Invalid Offset Values
+  [InlineData(-1)]             // Negative offset
+  [InlineData(Page.Size - 7)]  // Offset too large (needs 8 bytes, only 7 remain)
+  [InlineData(Page.Size - 1)]  // Offset too large (needs 8 bytes, only 1 remains)
+  [InlineData(Page.Size)]      // Offset exactly at the end (needs 8 bytes, 0 remain)
+  [InlineData(Page.Size + 10)] // Offset beyond the end
+  [InlineData(int.MinValue)]   // Extreme negative offset
+  public void ReadInt64_InvalidOffset_ThrowsArgumentOutOfRangeException(int invalidOffset)
+  {
+    // Arrange
+    var (page, buffer) = CreateTestPage();
+    // Optionally pre-fill buffer with some data, though not strictly necessary
+    // as the bounds check should happen before attempting to read.
+    // WriteInt64ToBuffer(buffer, 0, 12345L);
+
+    // Act & Assert
+    // Expect ArgumentOutOfRangeException due to invalid offset
+    Assert.Throws<ArgumentOutOfRangeException>("offset", () => page.ReadInt64(invalidOffset));
+  }
+
   private void WriteInt32ToBuffer(byte[] buffer, int offset, int value)
   {
     BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(offset), value);
+  }
+
+  private void WriteInt64ToBuffer(byte[] buffer, int offset, long value)
+  {
+    BinaryPrimitives.WriteInt64LittleEndian(buffer.AsSpan(offset), value);
   }
 }

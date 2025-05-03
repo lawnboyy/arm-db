@@ -94,6 +94,29 @@ public sealed class Page
   }
 
   /// <summary>
+  /// Reads a 64-bit signed integer (int) from the page at the specified offset,
+  /// interpreting the bytes using little-endian format.
+  /// </summary>
+  /// <param name="offset">The zero-based byte offset within the page to read from.</param>
+  /// <returns>The int value read.</returns>
+  /// <exception cref="ArgumentOutOfRangeException">
+  /// Thrown if the offset is negative or if reading 4 bytes would exceed the page size.
+  /// </exception>
+  public long ReadInt64(int offset)
+  {
+    const int valueSize = sizeof(long);
+
+    if ((uint)offset > (Size - valueSize))
+    {
+      if (offset < 0) throw new ArgumentOutOfRangeException(nameof(offset), $"Offset ({offset}) cannot be negative.");
+      else throw new ArgumentOutOfRangeException(nameof(offset), $"Offset ({offset}) plus value size ({valueSize}) exceeds page size ({Size}).");
+    }
+
+    ReadOnlySpan<byte> sourceSpan = _memory.Span.Slice(offset, valueSize);
+    return BinaryUtilities.ReadInt64LittleEndian(sourceSpan);
+  }
+
+  /// <summary>
   /// Writes a single boolean (as a byte) to the page at the specified offset.
   /// </summary>
   /// <param name="offset">The zero-based offset to write to.</param>

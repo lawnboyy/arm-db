@@ -103,4 +103,58 @@ public class BinaryUtilitiesTests
     // Assert
     Assert.Equal(expectedValue, result);
   }
+
+  [Theory]
+  // Expected Value                       Input Little-Endian Bytes (8 bytes)
+  [InlineData(0x1122334455667788L, new byte[] { 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11 })]
+  [InlineData(0L, new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 })]
+  [InlineData(-1L, new byte[] { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF })]
+  [InlineData(long.MaxValue, new byte[] { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F })]
+  [InlineData(long.MinValue, new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80 })]
+  [InlineData(unchecked((long)0xAABBCCDDEEFF0011L), new byte[] { 0x11, 0x00, 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA })]
+  [InlineData(1L, new byte[] { 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 })]
+  [InlineData(256L, new byte[] { 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 })]
+  [InlineData(65536L, new byte[] { 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00 })]
+  public void ReadInt64LittleEndian_ValidSpan_ReturnsCorrectValue(long expectedValue, byte[] sourceBytes)
+  {
+    // Arrange
+    ReadOnlySpan<byte> sourceSpan = sourceBytes.AsSpan();
+
+    // Act
+    long result = BinaryUtilities.ReadInt64LittleEndian(sourceSpan);
+
+    // Assert
+    Assert.Equal(expectedValue, result);
+  }
+
+  [Theory]
+  [InlineData(0)] // Empty span
+  [InlineData(1)] // Too short
+  [InlineData(4)] // Too short
+  [InlineData(7)] // Too short
+  public void ReadInt64LittleEndian_SpanTooShort_ThrowsArgumentOutOfRangeException(int length)
+  {
+    // Arrange
+    byte[] sourceBytes = new byte[length];
+
+    // Act & Assert
+    Assert.Throws<ArgumentOutOfRangeException>("source", () => BinaryUtilities.ReadInt64LittleEndian(sourceBytes));
+  }
+
+  [Fact]
+  public void ReadInt64LittleEndian_ReadsFromCorrectSpanLocation()
+  {
+    // Arrange
+    byte[] buffer = { 0xFF, 0xFF, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0xFF, 0xFF };
+    long expectedValue = 0x1122334455667788L;
+    int offset = 2;
+    int length = sizeof(long);
+    ReadOnlySpan<byte> sourceSpan = buffer.AsSpan(offset, length); // Pass only the relevant slice
+
+    // Act
+    long result = BinaryUtilities.ReadInt64LittleEndian(sourceSpan);
+
+    // Assert
+    Assert.Equal(expectedValue, result);
+  }
 }
