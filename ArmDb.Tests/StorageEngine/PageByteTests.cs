@@ -165,4 +165,17 @@ public partial class PageTests
     Assert.Throws<ArgumentOutOfRangeException>(() => page.WriteBytes(offset, sourceData.AsSpan()));
     // We won't check ParamName as the exception source might be complex (offset check, length check, slice)
   }
+
+  [Fact]
+  public void WriteBytes_SourceLengthLargerThanPageSize_ThrowsArgumentOutOfRangeException()
+  {
+    // Arrange
+    var (page, buffer) = CreateTestPage();
+    int offset = 10; // A valid starting offset
+    // Create source data that is explicitly larger than the entire page
+    byte[] sourceData = new byte[Page.Size + 100]; // e.g., 8192 + 100 = 8292 bytes
+
+    // Act & Assert
+    Assert.Throws<ArgumentOutOfRangeException>(() => page.WriteBytes(offset, sourceData.AsSpan()));
+  }
 }
