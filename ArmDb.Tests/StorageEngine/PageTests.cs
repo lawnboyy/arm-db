@@ -84,7 +84,7 @@ public class PageTests
   [InlineData(1024, long.MaxValue, new byte[] { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F })]
   [InlineData(2048, long.MinValue, new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80 })]
   // Write at the last possible valid offset for an 8-byte value
-  [InlineData(Page.Size - 8, -6144092013047381999 /* Hex: 0xAABBCCDDEEFF0011 */, new byte[] { 0x11, 0x00, 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA })]
+  [InlineData(Page.Size - 8, unchecked((long)0xAABBCCDDEEFF0011), new byte[] { 0x11, 0x00, 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA })]
   public void WriteInt64_ValidOffsetAndValue_WritesCorrectBytesLittleEndian(int offset, long valueToWrite, byte[] expectedBytes)
   {
     // Arrange
