@@ -178,4 +178,29 @@ public partial class PageTests
     // Act & Assert
     Assert.Throws<ArgumentOutOfRangeException>(() => page.WriteBytes(offset, sourceData.AsSpan()));
   }
+
+  [Fact]
+  public void WriteBoolean_CorrectlyWritesBooleanAtOffset()
+  {
+    var (page, buffer) = CreateTestPage();
+
+    // Write true at offset 10
+    int offset = 10;
+    bool valueToWrite = true;
+
+    page.WriteBoolean(offset, valueToWrite);
+    Assert.Equal((byte)1, buffer[offset]);
+
+    // Write false at offset 20
+    offset = 20;
+    valueToWrite = false;
+    page.WriteBoolean(offset, valueToWrite);
+    Assert.Equal((byte)0, buffer[offset]);
+
+    // Overwrite existing value at offset 10 with false
+    offset = 10;
+    valueToWrite = false;
+    page.WriteBoolean(offset, valueToWrite);
+    Assert.Equal((byte)0, buffer[offset]);
+  }
 }

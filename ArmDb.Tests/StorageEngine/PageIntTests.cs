@@ -130,4 +130,20 @@ public partial class PageTests
     // Act & Assert
     Assert.Throws<ArgumentOutOfRangeException>("offset", () => page.WriteInt64(invalidOffset, valueToWrite));
   }
+
+  [Fact]
+  public void WriteDateTime_CorrectWritesDateTimeAtOffset()
+  {
+    // Arrange
+    var (page, buffer) = CreateTestPage();
+    DateTime dateTimeToWrite = new DateTime(2023, 10, 1, 12, 30, 45, DateTimeKind.Utc);
+    byte[] expectedBytes = BitConverter.GetBytes(dateTimeToWrite.ToBinary()); // Little Endian
+
+    // Act
+    page.WriteDateTime(0, dateTimeToWrite);
+
+    // Assert
+    var writtenBytes = buffer.AsSpan(0, sizeof(long)).ToArray();
+    Assert.Equal(expectedBytes, writtenBytes); // Compare written bytes with expected bytes
+  }
 }
