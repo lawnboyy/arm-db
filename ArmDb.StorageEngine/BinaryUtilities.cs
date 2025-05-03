@@ -4,6 +4,23 @@ namespace ArmDb.StorageEngine;
 
 public static class BinaryUtilities
 {
+  public static int ReadInt32LittleEndian(ReadOnlySpan<byte> source)
+  {
+    const int intSize = sizeof(int);
+    if (source.Length < intSize)
+    {
+      throw new ArgumentOutOfRangeException(nameof(source), $"Source size ({source.Length}) is less than the size of an int ({intSize}).");
+    }
+
+    int value = MemoryMarshal.Read<int>(source);
+    if (!BitConverter.IsLittleEndian)
+    {
+      value = ReverseEndianness(value);
+    }
+
+    return value;
+  }
+
   public static void WriteInt32LittleEndian(Span<byte> destination, int value)
   {
     const int intSize = sizeof(int);

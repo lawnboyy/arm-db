@@ -48,4 +48,59 @@ public class BinaryUtilitiesTests
     // Hex strings for clear failure messages.
     Assert.Equal($"{expectedValue:X16}", $"{result:X16}");
   }
+
+  [Theory]
+  // Expected Value        Input Little-Endian Bytes
+  [InlineData(0x12345678, new byte[] { 0x78, 0x56, 0x34, 0x12 })]
+  [InlineData(0, new byte[] { 0x00, 0x00, 0x00, 0x00 })]
+  [InlineData(-1, new byte[] { 0xFF, 0xFF, 0xFF, 0xFF })]
+  [InlineData(int.MaxValue, new byte[] { 0xFF, 0xFF, 0xFF, 0x7F })] // 0x7FFFFFFF
+  [InlineData(int.MinValue, new byte[] { 0x00, 0x00, 0x00, 0x80 })] // 0x80000000
+  [InlineData(unchecked((int)0xABCDEF01), new byte[] { 0x01, 0xEF, 0xCD, 0xAB })] // Test specific negative pattern
+  [InlineData(1, new byte[] { 0x01, 0x00, 0x00, 0x00 })]
+  [InlineData(256, new byte[] { 0x00, 0x01, 0x00, 0x00 })] // 0x0100
+  public void ReadInt32LittleEndian_ValidSpan_ReturnsCorrectValue(int expectedValue, byte[] sourceBytes)
+  {
+    // Arrange
+    ReadOnlySpan<byte> sourceSpan = sourceBytes.AsSpan();
+
+    // Act
+    // Assumes the method correctly handles endianness internally if needed
+    int result = BinaryUtilities.ReadInt32LittleEndian(sourceSpan);
+
+    // Assert
+    Assert.Equal(expectedValue, result);
+  }
+
+  [Theory]
+  [InlineData(0)] // Empty span
+  [InlineData(1)] // Too short
+  [InlineData(2)] // Too short
+  [InlineData(3)] // Too short
+  public void ReadInt32LittleEndian_SpanTooShort_ThrowsArgumentOutOfRangeException(int length)
+  {
+    // Arrange
+    byte[] sourceBytes = new byte[length];
+
+    // Act & Assert
+    Assert.Throws<ArgumentOutOfRangeException>("source", () => BinaryUtilities.ReadInt32LittleEndian(sourceBytes));
+  }
+
+  [Fact]
+  public void ReadInt32LittleEndian_ReadsFromCorrectSpanLocation()
+  {
+    // Arrange
+    // Create a buffer larger than needed, place data in the middle
+    byte[] buffer = { 0xFF, 0xFF, 0x78, 0x56, 0x34, 0x12, 0xFF, 0xFF };
+    int expectedValue = 0x12345678;
+    int offset = 2; // Start reading from index 2
+    int length = sizeof(int);
+    ReadOnlySpan<byte> sourceSpan = buffer.AsSpan(offset, length); // Pass only the relevant slice
+
+    // Act
+    int result = BinaryUtilities.ReadInt32LittleEndian(sourceSpan);
+
+    // Assert
+    Assert.Equal(expectedValue, result);
+  }
 }

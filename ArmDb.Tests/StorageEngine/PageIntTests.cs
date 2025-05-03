@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using ArmDb.StorageEngine; // Target namespace
 
 namespace ArmDb.UnitTests.StorageEngine; // Test namespace
@@ -145,5 +146,69 @@ public partial class PageTests
     // Assert
     var writtenBytes = buffer.AsSpan(0, sizeof(long)).ToArray();
     Assert.Equal(expectedBytes, writtenBytes); // Compare written bytes with expected bytes
+  }
+
+  [Theory]
+  // Offset, Expected Value, Little-Endian bytes (for reference/setup)
+  [InlineData(0, 0x12345678)]
+  [InlineData(100, -1)]
+  [InlineData(200, 0)]
+  [InlineData(300, int.MaxValue)]
+  [InlineData(400, int.MinValue)]
+  [InlineData(Page.Size - 4, 0xABCDEF01)] // Last possible position
+  public void ReadInt32_ValidOffset_ReturnsCorrectValue(int offset, int expectedValue)
+  {
+    // Arrange
+    var (page, buffer) = CreateTestPage();
+    // Write the expected value into the buffer at the offset using standard primitives
+    WriteInt32ToBuffer(buffer, offset, expectedValue);
+
+    // Act
+    int result = page.ReadInt32(offset);
+
+    // Assert
+    Assert.Equal(expectedValue, result);
+  }
+
+  [Fact]
+  public void ReadInt32_ReadsCorrectValue_DoesNotAffectBuffer()
+  {
+    // Arrange
+    var (page, buffer) = CreateTestPage();
+    int offset = 50;
+    int expectedValue = unchecked((int)0xCAFEBABE);
+    WriteInt32ToBuffer(buffer, offset, expectedValue);
+    var bufferBeforeRead = buffer.ToArray(); // Copy buffer state
+
+    // Act
+    int result = page.ReadInt32(offset);
+
+    // Assert
+    Assert.Equal(expectedValue, result); // Correct value read
+    Assert.Equal(bufferBeforeRead, buffer); // Ensure the buffer itself was not modified by read
+  }
+
+  [Theory]
+  // Invalid Offset Values
+  [InlineData(-1)]             // Negative offset
+  [InlineData(Page.Size - 3)]  // Offset too large (needs 4 bytes, only 3 remain)
+  [InlineData(Page.Size - 1)]  // Offset too large (needs 4 bytes, only 1 remains)
+  [InlineData(Page.Size)]      // Offset exactly at the end (needs 4 bytes, 0 remain)
+  [InlineData(Page.Size + 10)] // Offset beyond the end
+  [InlineData(int.MinValue)]   // Extreme negative
+  public void ReadInt32_InvalidOffset_ThrowsArgumentOutOfRangeException(int invalidOffset)
+  {
+    // Arrange
+    var (page, buffer) = CreateTestPage();
+    // Optionally write some data, though not strictly necessary as bounds check should happen first
+    // WriteInt32ToBuffer(buffer, 0, 999);
+
+    // Act & Assert
+    Assert.Throws<ArgumentOutOfRangeException>("offset", () => page.ReadInt32(invalidOffset));
+  }
+
+  private void WriteInt32ToBuffer(byte[] buffer, int offset, int value)
+  {
+    BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(offset), value);
   }
 }
