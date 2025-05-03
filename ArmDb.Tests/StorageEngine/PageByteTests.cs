@@ -67,4 +67,102 @@ public partial class PageTests
     // Optional: Check message for clarity
     Assert.Contains($"Offset ({invalidOffset}) is not within the range [0..{Page.Size - 1}]", ex.Message);
   }
+
+  // --- Test Data for Valid WriteBytes ---
+  public static IEnumerable<object[]> ValidWriteBytesData =>
+      new List<object[]>
+      {
+            // Offset, Source Data, Expected Slice (should match source)
+            new object[] { 0, new byte[] { 0xDE, 0xAD }, new byte[] { 0xDE, 0xAD } }, // Write at start
+            new object[] { 500, new byte[] { 1, 2, 3, 4, 5 }, new byte[] { 1, 2, 3, 4, 5 } }, // Write in middle
+            new object[] { Page.Size - 3, new byte[] { 0xAA, 0xBB, 0xCC }, new byte[] { 0xAA, 0xBB, 0xCC } }, // Write exactly at end
+            new object[] { 0, new byte[Page.Size], new byte[Page.Size] }, // Write full page (check length mainly)
+            new object[] { 0, Array.Empty<byte>(), Array.Empty<byte>() }, // Write empty array at start (no-op)
+            new object[] { Page.Size / 2, Array.Empty<byte>(), Array.Empty<byte>() }, // Write empty array in middle (no-op)
+            new object[] { Page.Size, Array.Empty<byte>(), Array.Empty<byte>() }, // Write empty array *at* end (offset == Size is valid for zero length)
+      };
+
+  [Theory]
+  [MemberData(nameof(ValidWriteBytesData))]
+  public void WriteBytes_ValidOffsetAndData_WritesCorrectBytes(int offset, byte[] sourceData, byte[] expectedSlice)
+  {
+    // Arrange
+    var (page, buffer) = CreateTestPage();
+    var bufferOriginal = buffer.ToArray(); // For checking no-op cases
+
+    // Act
+    page.WriteBytes(offset, sourceData.AsSpan());
+
+    // Assert
+    if (expectedSlice.Length > 0)
+    {
+      // Extract the slice from the buffer where data should have been written
+      var writtenSlice = buffer.AsSpan(offset, sourceData.Length).ToArray();
+      Assert.Equal(expectedSlice, writtenSlice); // Compare byte content
+    }
+    else
+    {
+      // If source was empty, ensure buffer is unchanged
+      Assert.Equal(bufferOriginal, buffer);
+    }
+  }
+
+  [Fact]
+  public void WriteBytes_OverwritesExistingData_DoesNotAffectNeighbors()
+  {
+    // Arrange
+    var (page, buffer) = CreateTestPage();
+    int offset = 400;
+    byte[] sourceData = { 0x11, 0x22, 0x33, 0x44 };
+    byte initialBefore = 0xAA;
+    byte initialAfter = 0xBB;
+
+    // Pre-fill surrounding area
+    Array.Fill(buffer, (byte)0xFF); // Fill page first
+    buffer[offset - 1] = initialBefore; // Set byte before target area
+    buffer[offset + sourceData.Length] = initialAfter; // Set byte after target area
+
+    // Act
+    page.WriteBytes(offset, sourceData.AsSpan());
+
+    // Assert
+    // Check written data
+    var writtenSlice = buffer.AsSpan(offset, sourceData.Length).ToArray();
+    Assert.Equal(sourceData, writtenSlice);
+    // Check neighbors are untouched
+    Assert.Equal(initialBefore, buffer[offset - 1]);
+    Assert.Equal(initialAfter, buffer[offset + sourceData.Length]);
+  }
+
+  // --- Test Data for Invalid WriteBytes ---
+  public static IEnumerable<object[]> InvalidWriteBytesData =>
+     new List<object[]>
+     {
+            // Offset, Source Data Length
+            new object[] { -1, 10 },             // Negative offset
+            new object[] { 0, Page.Size + 1 },   // Data longer than page
+            new object[] { 1, Page.Size },       // Offset + Data longer than page
+            new object[] { Page.Size - 5, 6 },   // Starts ok, extends exactly 1 byte beyond end
+            new object[] { Page.Size, 1 },       // Starts exactly at end (needs 1 byte, 0 available)
+            new object[] { Page.Size + 1, 1 },   // Starts beyond end
+            new object[] { int.MinValue, 1 },    // Extreme negative offset
+            new object[] { Page.Size + 1, 0 }    // Writing zero bytes PAST Page.Size is invalid offset
+     };
+
+
+  [Theory]
+  [MemberData(nameof(InvalidWriteBytesData))]
+  public void WriteBytes_InvalidOffsetOrLength_ThrowsArgumentOutOfRangeException(int offset, int length)
+  {
+    // Arrange
+    var (page, buffer) = CreateTestPage();
+    // Create dummy source data - content doesn't matter, only length
+    // Ensure length is not negative for array creation itself
+    byte[] sourceData = new byte[Math.Max(0, length)];
+
+    // Act & Assert
+    // The exception should be ArgumentOutOfRangeException based on our bounds check logic
+    Assert.Throws<ArgumentOutOfRangeException>(() => page.WriteBytes(offset, sourceData.AsSpan()));
+    // We won't check ParamName as the exception source might be complex (offset check, length check, slice)
+  }
 }

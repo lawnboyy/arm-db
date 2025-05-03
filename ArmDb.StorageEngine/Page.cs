@@ -88,6 +88,26 @@ public sealed class Page
   }
 
   /// <summary>
+  /// Writes a span of bytes to the page at the specified offset.
+  /// </summary>
+  /// <param name="offset">The zero-based offset within the page to write to.</param>
+  /// <param name="source">The source span of bytes to write.</param>
+  /// <exception cref="ArgumentOutOfRangeException"></exception>
+  public void WriteBytes(int offset, ReadOnlySpan<byte> source)
+  {
+    if ((uint)offset > (Size - source.Length)) // Efficient check for offset < 0 or offset + source.Length > Size
+    {
+      if (offset < 0)
+        throw new ArgumentOutOfRangeException(nameof(offset), $"Offset ({offset}) cannot be negative.");
+      else
+        throw new ArgumentOutOfRangeException(nameof(offset), $"Offset ({offset}) plus source length ({source.Length}) exceeds page size ({Size}).");
+    }
+
+    Span<byte> destination = _memory.Span.Slice(offset, source.Length);
+    source.CopyTo(destination);
+  }
+
+  /// <summary>
   /// Writes a 32-bit signed integer (int) to the page at the specified offset
   /// using little-endian format. Corresponds to the INT primitive type.
   /// </summary>
