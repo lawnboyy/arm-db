@@ -264,4 +264,82 @@ public partial class PageTests
     // Expect ArgumentOutOfRangeException due to invalid offset
     Assert.Throws<ArgumentOutOfRangeException>("offset", () => page.ReadByte(invalidOffset));
   }
+
+  [Theory]
+  [InlineData(0, 10)]         // Slice at start
+  [InlineData(100, 50)]       // Slice in middle
+  [InlineData(Page.Size - 10, 10)] // Slice exactly at end
+  public void GetReadOnlySpan_ValidSlice_ReturnsCorrectLengthAndView(int offset, int length)
+  {
+    // Arrange
+    var (page, buffer) = CreateTestPage();
+    // Fill buffer with predictable data (e.g., index value)
+    for (int i = 0; i < buffer.Length; i++) buffer[i] = (byte)(i % 251); // Use prime for pattern
+
+    // Create expected slice manually for comparison
+    var expectedSlice = buffer.AsSpan(offset, length).ToArray();
+
+    // Act
+    ReadOnlySpan<byte> resultSpan = page.GetReadOnlySpan(offset, length);
+
+    // Assert
+    Assert.Equal(length, resultSpan.Length);
+    Assert.True(resultSpan.SequenceEqual(expectedSlice)); // Verify content
+  }
+
+  [Fact]
+  public void GetReadOnlySpan_FullPage_ReturnsCorrectView()
+  {
+    // Arrange
+    var (page, buffer) = CreateTestPage();
+    // Fill buffer with some data
+    for (int i = 0; i < buffer.Length; i++) buffer[i] = (byte)i;
+    var expectedSlice = buffer.ToArray(); // Copy for comparison
+
+    // Act
+    ReadOnlySpan<byte> resultSpan = page.GetReadOnlySpan(0, Page.Size);
+
+    // Assert
+    Assert.Equal(Page.Size, resultSpan.Length);
+    Assert.True(resultSpan.SequenceEqual(expectedSlice)); // Compare content
+  }
+
+  [Theory]
+  [InlineData(0)]
+  [InlineData(100)]
+  [InlineData(Page.Size)] // Getting zero bytes AT the end offset is valid
+  public void GetReadOnlySpan_ZeroLength_ReturnsEmptySpan(int offset)
+  {
+    // Arrange
+    var (page, buffer) = CreateTestPage();
+
+    // Act
+    ReadOnlySpan<byte> resultSpan = page.GetReadOnlySpan(offset, 0);
+
+    // Assert
+    Assert.True(resultSpan.IsEmpty);
+    Assert.Equal(0, resultSpan.Length);
+  }
+
+  [Theory]
+  // Invalid Offset, Invalid Length
+  [InlineData(-1, 10)]             // Negative offset
+  [InlineData(0, -1)]              // Negative length
+  [InlineData(Page.Size + 1, 0)]   // Offset past end (even for zero length)
+  [InlineData(Page.Size, 1)]       // Offset at end, positive length (needs 1 byte, 0 available)
+  [InlineData(Page.Size - 5, 6)]   // Offset + length exceeds size by 1
+  [InlineData(10, Page.Size)]      // Offset + length exceeds size (10 + 8192 > 8192)
+  [InlineData(0, Page.Size + 1)]   // Length exceeds size
+  [InlineData(int.MinValue, 1)]    // Extreme negative offset
+  [InlineData(0, int.MinValue)]    // Extreme negative length
+  public void GetReadOnlySpan_InvalidOffsetOrLength_ThrowsArgumentOutOfRangeException(int offset, int length)
+  {
+    // Arrange
+    var (page, buffer) = CreateTestPage();
+
+    // Act & Assert
+    // The exception parameter name might depend on which specific check fails first
+    // in the implementation, so we don't assert the parameter name here.
+    Assert.Throws<ArgumentOutOfRangeException>(() => page.GetReadOnlySpan(offset, length));
+  }
 }

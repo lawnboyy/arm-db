@@ -71,6 +71,45 @@ public sealed class Page
   }
 
   /// <summary>
+  /// Gets a read-only span representing a slice of the page's data.
+  /// This provides efficient, zero-copy access to the underlying page memory.
+  /// </summary>
+  /// <param name="offset">The zero-based byte offset within the page to start the slice from.</param>
+  /// <param name="length">The desired length of the slice in bytes.</param>
+  /// <returns>A ReadOnlySpan<byte> viewing the specified portion of the page data.</returns>
+  /// <exception cref="ArgumentOutOfRangeException">
+  /// Thrown if the offset or length are negative, or if the combination of offset and length
+  /// references memory outside the bounds of the page.
+  /// </exception>
+  public ReadOnlySpan<byte> GetReadOnlySpan(int offset, int length)
+  {
+    // Combined bounds check:
+    // 1. Checks offset < 0 (uint cast makes it large)
+    // 2. Checks length < 0 (uint cast makes it large)
+    // 3. Checks offset + length > Size (including overflow cases if offset+length wraps)
+    // This single check correctly validates all boundary conditions.
+    if ((uint)offset > Size || (uint)length > (uint)(Size - offset))
+    {
+      // Provide a detailed error message
+      if (offset < 0 || length < 0) // Check explicitly for negative inputs
+        throw new ArgumentOutOfRangeException(offset < 0 ? nameof(offset) : nameof(length), "Offset and length must be non-negative.");
+      // If inputs are non-negative, the failure must be due to exceeding page size
+      else
+        throw new ArgumentOutOfRangeException(nameof(length), $"The combination of offset ({offset}) and length ({length}) exceeds the page size ({Size}).");
+    }
+
+    // If length is 0, return an empty span. Slicing with 0 length is valid.
+    if (length == 0)
+    {
+      return ReadOnlySpan<byte>.Empty;
+    }
+
+    // Return the requested slice of the underlying memory's span.
+    // The conversion from Span<byte> to ReadOnlySpan<byte> is implicit and safe.
+    return _memory.Span.Slice(offset, length);
+  }
+
+  /// <summary>
   /// Reads a single byte from the page at the specified offset.
   /// </summary>
   /// <param name="offset">The zero-based byte offset within the page to read from.</param>
