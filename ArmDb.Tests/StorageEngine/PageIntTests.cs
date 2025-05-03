@@ -155,7 +155,7 @@ public partial class PageTests
   [InlineData(200, 0)]
   [InlineData(300, int.MaxValue)]
   [InlineData(400, int.MinValue)]
-  [InlineData(Page.Size - 4, 0xABCDEF01)] // Last possible position
+  [InlineData(Page.Size - 4, unchecked((int)0xABCDEF01))] // Last possible position
   public void ReadInt32_ValidOffset_ReturnsCorrectValue(int offset, int expectedValue)
   {
     // Arrange
