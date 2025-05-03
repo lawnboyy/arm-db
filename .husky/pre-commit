@@ -1,0 +1,8 @@
+#!/bin/sh
+# Executes from the repository root by default when run by Git/Husky
+
+echo "Running .NET tests (husky pre-commit hook)..."
+dotnet test ArmDb.sln --logger "console;verbosity=minimal" || exit 1
+
+# If the tests pass (exit code 0), the script will implicitly exit 0.
+# If tests fail (exit code non-zero), the "|| exit 1" triggers, aborting commit.
