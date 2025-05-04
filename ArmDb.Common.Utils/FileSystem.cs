@@ -1,4 +1,5 @@
 ﻿using ArmDb.Common.Abstractions;
+using Microsoft.Win32.SafeHandles;
 
 namespace ArmDb.Common.Utils;
 
@@ -29,21 +30,6 @@ public sealed class FileSystem : IFileSystem
   }
 
   /// <summary>
-  /// Asynchronously opens a text file, reads all the text in the file, and then closes the file.
-  /// </summary>
-  /// <param name="path">The file to open for reading.</param>
-  /// <returns>A task that represents the asynchronous read operation, which wraps the string containing all text in the file.</returns>
-  /// <exception cref="System.IO.IOException">An I/O error occurred while opening the file.</exception>
-  /// <exception cref="System.UnauthorizedAccessException">The caller does not have the required permission.</exception>
-  /// <exception cref="System.IO.FileNotFoundException">The file specified in path was not found.</exception>
-  /// <exception cref="System.Security.SecurityException">The caller does not have the required permission.</exception>
-  /// <exception cref="System.IO.DirectoryNotFoundException">The specified path is invalid (for example, it is on an unmapped drive).</exception>
-  public Task<string> ReadAllTextAsync(string path)
-  {
-    return File.ReadAllTextAsync(path);
-  }
-
-  /// <summary>
   /// Combines two strings into a path.
   /// </summary>
   /// <param name="path1">The first path to combine.</param>
@@ -52,5 +38,68 @@ public sealed class FileSystem : IFileSystem
   public string CombinePath(string path1, string path2)
   {
     return Path.Combine(path1, path2);
+  }
+
+  public void EnsureDirectoryExists(string path)
+  {
+    Directory.CreateDirectory(path);
+  }
+
+  public Task<long> GetFileLengthAsync(string path)
+  {
+    return Task.Run(() =>
+    {
+      // Each call executes this lambda on a ThreadPool thread
+      using SafeFileHandle handle = File.OpenHandle(
+          path,
+          FileMode.Open,      // Opens existing file
+          FileAccess.Read,    // Read-only access needed
+          FileShare.Read,     // <-- Allows other readers
+          FileOptions.None);
+      // GetLength is sync once handle is acquired
+      return RandomAccess.GetLength(handle);
+    });
+  }
+
+  public Task SetFileLengthAsync(string path, long length)
+  {
+    // Validate arguments before offloading
+    ArgumentOutOfRangeException.ThrowIfNegative(length);
+    ArgumentException.ThrowIfNullOrWhiteSpace(path); // Basic path check
+
+    return Task.Run(() =>
+    {
+      // Open the stream, set length, and ensure disposal
+      // Use FileShare.None for safety during resize operation, although
+      // this increases potential for IOException if file is in use elsewhere.
+      using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.None))
+      {
+        fs.SetLength(length);
+        // Flush might be needed on some OSes? Generally SetLength handles it.
+        // fs.Flush(flushToDisk: true); // Consider if needed
+      }
+      // Exceptions (FileNotFound, IO, UnauthorizedAccess, etc.) from FileStream/SetLength
+      // will propagate via the Task returned by Task.Run.
+    });
+  }
+
+  public Task<string> ReadAllTextAsync(string path)
+  {
+    return File.ReadAllTextAsync(path);
+  }
+
+  public Task<int> ReadFileAsync(string path, long fileOffset, Memory<byte> destination)
+  {
+    throw new NotImplementedException();
+  }
+
+  public Task WriteFileAsync(string path, long fileOffset, ReadOnlyMemory<byte> source)
+  {
+    throw new NotImplementedException();
+  }
+
+  public Task DeleteFileAsync(string path)
+  {
+    throw new NotImplementedException();
   }
 }

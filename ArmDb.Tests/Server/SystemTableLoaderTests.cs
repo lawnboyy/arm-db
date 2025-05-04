@@ -28,6 +28,36 @@ public class MockFileSystem : IFileSystem
   public void AddFile(string path, string content) => Files[path] = content;
   // Helper to add a directory
   public void AddDirectory(string path) => ExistingDirectories.Add(path);
+
+  public void EnsureDirectoryExists(string path)
+  {
+    throw new NotImplementedException();
+  }
+
+  public Task<long> GetFileLengthAsync(string path)
+  {
+    throw new NotImplementedException();
+  }
+
+  public Task SetFileLengthAsync(string path, long length)
+  {
+    throw new NotImplementedException();
+  }
+
+  public Task<int> ReadFileAsync(string path, long fileOffset, Memory<byte> destination)
+  {
+    throw new NotImplementedException();
+  }
+
+  public Task WriteFileAsync(string path, long fileOffset, ReadOnlyMemory<byte> source)
+  {
+    throw new NotImplementedException();
+  }
+
+  public Task DeleteFileAsync(string path)
+  {
+    throw new NotImplementedException();
+  }
 }
 
 
