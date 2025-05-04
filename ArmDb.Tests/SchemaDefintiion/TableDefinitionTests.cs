@@ -1,6 +1,6 @@
 using ArmDb.SchemaDefinition; // Namespace of the classes under test
 
-namespace ArmDb.Core.UnitTests.SchemaDefinition; // Example test namespace
+namespace ArmDb.UnitTests.SchemaDefinition; // Example test namespace
 
 public class TableDefinitionTests
 {

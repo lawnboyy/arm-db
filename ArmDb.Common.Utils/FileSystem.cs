@@ -113,13 +113,35 @@ public sealed class FileSystem : IFileSystem
     // will propagate up the call stack naturally.
   }
 
-  public Task WriteFileAsync(string path, long fileOffset, ReadOnlyMemory<byte> source)
+  public async Task WriteFileAsync(string path, long fileOffset, ReadOnlyMemory<byte> source)
   {
-    throw new NotImplementedException();
+    ArgumentException.ThrowIfNullOrWhiteSpace(path);
+    ArgumentOutOfRangeException.ThrowIfNegative(fileOffset);
+
+    using (SafeFileHandle handle = File.OpenHandle(
+        path,
+        FileMode.OpenOrCreate, // Create if not exists
+        FileAccess.Write,      // Only need to write
+        FileShare.None,        // No sharing during write
+        FileOptions.Asynchronous // Enable async I/O for the handle
+    ))
+    {
+      await RandomAccess.WriteAsync(handle, source, fileOffset);
+    }
   }
 
   public Task DeleteFileAsync(string path)
   {
-    throw new NotImplementedException();
+    // Validate arguments before offloading to Task.Run
+    ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+    return Task.Run(() =>
+    {
+      // File.Delete is synchronous and idempotent regarding non-existence.
+      // It will throw for other errors (permissions, path is directory, etc.)
+      File.Delete(path);
+
+      // Exceptions are propagated via the Task.
+    });
   }
 }
