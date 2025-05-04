@@ -88,9 +88,29 @@ public sealed class FileSystem : IFileSystem
     return File.ReadAllTextAsync(path);
   }
 
-  public Task<int> ReadFileAsync(string path, long fileOffset, Memory<byte> destination)
+  public async Task<int> ReadFileAsync(string path, long fileOffset, Memory<byte> destination)
   {
-    throw new NotImplementedException();
+    // Validate arguments
+    ArgumentException.ThrowIfNullOrWhiteSpace(path);
+    ArgumentOutOfRangeException.ThrowIfNegative(fileOffset);
+    // Reading 0 bytes into an empty buffer is valid, ReadAsync handles it.
+
+    // This ensures the handle is properly disposed even if exceptions occur.
+    using (SafeFileHandle handle = File.OpenHandle(
+        path,
+        FileMode.Open,           // File must exist
+        FileAccess.Read,         // Only need to read
+        FileShare.Read,          // Allow other concurrent readers
+        FileOptions.Asynchronous // Enable async I/O for the handle
+                                 // Note: Buffer size option is not relevant for OpenHandle directly
+    ))
+    {
+      // Perform the asynchronous read operation using RandomAccess static methods
+      int bytesRead = await RandomAccess.ReadAsync(handle, destination, fileOffset);
+      return bytesRead;
+    }
+    // Exceptions from OpenHandle or ReadAsync (FileNotFound, UnauthorizedAccess, IO, etc.)
+    // will propagate up the call stack naturally.
   }
 
   public Task WriteFileAsync(string path, long fileOffset, ReadOnlyMemory<byte> source)
