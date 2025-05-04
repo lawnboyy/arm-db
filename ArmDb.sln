@@ -5,7 +5,7 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.SchemaDefinition", "ArmDb.SchemaDefinition\ArmDb.SchemaDefinition.csproj", "{ADB6A2D6-0751-4039-840E-C3624E5F89A6}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.CLI", "ArmDb.CLI\ArmDb.CLI.csproj", "{5F925906-2E55-4E42-B917-C697DC4B60D2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.Cli", "ArmDb.Cli\ArmDb.Cli.csproj", "{5F925906-2E55-4E42-B917-C697DC4B60D2}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.Tests", "ArmDb.Tests\ArmDb.Tests.csproj", "{5015DDA0-5520-4901-A2BC-CB558E09DF18}"
 EndProject
