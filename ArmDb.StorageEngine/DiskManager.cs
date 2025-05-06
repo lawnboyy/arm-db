@@ -165,21 +165,38 @@ internal sealed class DiskManager
 
   /// <summary>
   /// Writes a specific page's data from a buffer to the corresponding table file on disk.
+  /// Creates or extends the file as necessary (handled by the underlying IFileSystem implementation).
   /// </summary>
-  /// <param name="pageId">The PageId (TableId, PageIndex) to write.</param>
-  /// <param name="buffer">The read-only memory buffer containing the page data to write (must be Page.Size).</param>
-  /// <returns>Task representing the async operation.</returns>
+  /// <param name="pageId">The PageId (TableId, PageIndex) indicating where to write.</param>
+  /// <param name="buffer">The read-only memory buffer containing the page data to write. Must be exactly Page.Size.</param>
+  /// <returns>Task representing the asynchronous write operation.</returns>
   /// <exception cref="ArgumentException">Thrown if buffer size is incorrect.</exception>
+  /// <exception cref="System.IO.IOException">Propagated on I/O errors during write.</exception>
+  /// <exception cref="System.UnauthorizedAccessException">Propagated if permissions are insufficient.</exception>
+  /// <exception cref="System.Exception">Other exceptions from the underlying file system write.</exception>
   internal Task WriteDiskPageAsync(PageId pageId, ReadOnlyMemory<byte> buffer)
   {
     if (buffer.Length != _pageSize)
-      throw new ArgumentException($"Buffer must be Page Size ({_pageSize} bytes).", nameof(buffer));
+    {
+      throw new ArgumentException($"Write buffer must be exactly Page Size ({_pageSize} bytes), but was {buffer.Length} bytes.", nameof(buffer));
+    }
 
     string filePath = GetTableFilePath(pageId.TableId);
     long fileOffset = (long)pageId.PageIndex * _pageSize;
+
     _logger.LogTrace("Writing disk page: {PageId} to {File} at offset {Offset}", pageId, filePath, fileOffset);
-    // Delegate directly to IFileSystem implementation
-    return _fileSystem.WriteFileAsync(filePath, fileOffset, buffer);
+
+    try
+    {
+      // The underlying WriteFileAsync should handle FileMode.OpenOrCreate and writing at the offset.
+      // Return the Task directly. Exceptions within the async operation will be in the task.
+      return _fileSystem.WriteFileAsync(filePath, fileOffset, buffer);
+    }
+    catch (Exception ex) // Catch only synchronous exceptions here, e.g. from GetTableFilePath if it could throw (it doesn't currently)
+    {
+      _logger.LogError(ex, "Error occurred synchronously before initiating write for page {PageId} to {File} at offset {Offset}", pageId, filePath, fileOffset);
+      throw;
+    }
   }
 
   /// <summary>

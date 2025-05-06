@@ -7,21 +7,6 @@ namespace ArmDb.UnitTests.StorageEngine;
 
 public partial class DiskManagerTests : IDisposable
 {
-  private readonly IFileSystem _fileSystem;
-  private readonly DiskManager _diskManager;
-  private readonly string _baseTestDir;
-  private const int PageSize = Page.Size; // Use defined page size
-  private readonly byte[] _sampleData; // Reusable test data
-
-  public DiskManagerTests() // Constructor name matches class
-  {
-    _fileSystem = new FileSystem();
-    _baseTestDir = Path.Combine(Path.GetTempPath(), $"ArmDb_DM_Tests_{Guid.NewGuid()}");
-    var logger = NullLogger<DiskManager>.Instance;
-    _diskManager = new DiskManager(_fileSystem, logger, _baseTestDir);
-    _sampleData = Enumerable.Range(0, 256).Select(i => (byte)i).ToArray(); // Initialize sample data
-  }
-
   [Fact]
   public async Task ReadDiskPageAsync_ReadsExistingPageZero_ReturnsCorrectData()
   {
@@ -100,56 +85,5 @@ public partial class DiskManagerTests : IDisposable
     // Act & Assert
     await Assert.ThrowsAsync<IOException>(() =>
         _diskManager.ReadDiskPageAsync(pageId, buffer));
-  }
-
-  // --- IDisposable Implementation for Cleanup ---
-  private bool _disposed = false;
-  public void Dispose()
-  {
-    Dispose(true);
-    GC.SuppressFinalize(this);
-  }
-
-  protected virtual void Dispose(bool disposing)
-  {
-    if (!_disposed)
-    {
-      try { if (Directory.Exists(_baseTestDir)) { Directory.Delete(_baseTestDir, recursive: true); } }
-      catch (Exception ex) { Console.WriteLine($"Error cleaning up test directory '{_baseTestDir}': {ex.Message}"); }
-      _disposed = true;
-    }
-  }
-
-  // Finalizer matches the new class name
-  ~DiskManagerTests()
-  {
-    Dispose(disposing: false);
-  }
-
-  private string GetExpectedTablePath(int tableId) => Path.Combine(_baseTestDir, $"{tableId}{DiskManager.TableFileExtension}");
-
-  // Helper to create a test file with specific page content
-  private async Task CreateTestTableFileAsync(int tableId, int numPages, Func<int, byte> pageContentPattern)
-  {
-    var filePath = GetExpectedTablePath(tableId);
-    await using (var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, PageSize, useAsync: true))
-    {
-      if (numPages > 0)
-      {
-        fs.SetLength((long)numPages * PageSize);
-        for (int p = 0; p < numPages; p++)
-        {
-          fs.Position = (long)p * PageSize;
-          byte[] pageData = new byte[PageSize];
-          byte fillValue = pageContentPattern(p);
-          Array.Fill(pageData, fillValue);
-          await fs.WriteAsync(pageData, 0, PageSize);
-        }
-      }
-      else
-      {
-        fs.SetLength(0);
-      }
-    }
   }
 }
