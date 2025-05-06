@@ -211,6 +211,13 @@ internal sealed class DiskManager
     _logger.LogTrace("Allocating new disk page for table {TableId} in file {File}", tableId, filePath);
 
     long currentLength;
+
+    if (!TableFileExists(tableId))
+    {
+      _logger.LogDebug("File {File} does not exist. Creating new file for table {TableId}.", filePath, tableId);
+      await CreateTableFileAsync(tableId);
+    }
+
     try
     {
       // Need the length to determine the next page index
