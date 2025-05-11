@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using ArmDb.Common.Abstractions;
 using Microsoft.Extensions.Logging;
 
@@ -14,6 +15,7 @@ internal sealed class DiskManager
   private readonly ILogger<DiskManager> _logger;
   private readonly int _pageSize;
   private readonly string _baseDataDirectory; // Set in constructor and readonly
+  private readonly ConcurrentDictionary<int, SemaphoreSlim> _tableAllocationLocks = new();
 
   // File extension for table data files
   internal const string TableFileExtension = ".tbl";
@@ -207,52 +209,62 @@ internal sealed class DiskManager
   /// <returns>The PageId of the newly allocated page.</returns>
   internal async Task<PageId> AllocateNewDiskPageAsync(int tableId)
   {
-    string filePath = GetTableFilePath(tableId);
-    _logger.LogTrace("Allocating new disk page for table {TableId} in file {File}", tableId, filePath);
+    // Prevent multiple threads from allocating pages for the same table file simultaneously.
+    SemaphoreSlim tableLock = _tableAllocationLocks.GetOrAdd(tableId, _ => new SemaphoreSlim(1, 1));
 
-    long currentLength;
+    _logger.LogTrace("Attempting to acquire allocation lock for TableId {TableId}", tableId);
 
-    if (!TableFileExists(tableId))
-    {
-      _logger.LogDebug("File {File} does not exist. Creating new file for table {TableId}.", filePath, tableId);
-      await CreateTableFileAsync(tableId);
-    }
+    // Acquire the lock
+    await tableLock.WaitAsync(); // Waits if another thread holds the lock for THIS tableId
+    _logger.LogTrace("Allocation lock acquired for TableId {TableId}", tableId);
 
     try
     {
-      // Need the length to determine the next page index
-      currentLength = await _fileSystem.GetFileLengthAsync(filePath);
-    }
-    catch (FileNotFoundException)
-    {
-      _logger.LogWarning("File {File} not found during page allocation for table {TableId}. Assuming new file (length 0). CreateTableFileAsync should ideally be called first.", filePath, tableId);
-      currentLength = 0; // Treat as empty/new file
-    }
+      // --- CRITICAL SECTION START ---
+      // All operations determining current file state, calculating next page,
+      // and updating file state (like extending it) must happen here.
 
-    // Calculate next index. Integer division handles alignment.
-    int nextPageIndex = (int)(currentLength / _pageSize);
-    // If file length is not a multiple of page size, something is wrong, but
-    // we'll allocate starting after the last full page for recovery perhaps.
-    if (currentLength % _pageSize != 0)
-    {
-      _logger.LogWarning("File {File} size ({Length}) is not a multiple of page size ({PageSize}). Potential corruption or incomplete write.", filePath, currentLength, _pageSize);
-      // Still allocate based on integer division, essentially allocating the potentially partial page.
-    }
+      string filePath = GetTableFilePath(tableId);
+      _logger.LogTrace("Inside critical section for allocating new disk page for table {TableId} in file {File}", tableId, filePath);
 
-    // Pre-extend the file to ensure space (recommended)
-    long requiredLength = (long)(nextPageIndex + 1) * _pageSize;
-    if (currentLength < requiredLength)
-    {
-      _logger.LogTrace("Extending file {File} to {Length} bytes for new page index {PageIndex}", filePath, requiredLength, nextPageIndex);
-      await _fileSystem.SetFileLengthAsync(filePath, requiredLength);
-    }
+      long currentLength = 0;
 
-    var newPageId = new PageId(tableId, nextPageIndex);
-    _logger.LogDebug("Allocated new page identifier {PageId}", newPageId);
-    return newPageId;
+      if (!TableFileExists(tableId))
+      {
+        _logger.LogDebug("File {File} does not exist. Creating new file for table {TableId}.", filePath, tableId);
+        await CreateTableFileAsync(tableId);
+      }
+      else
+      {
+        currentLength = await _fileSystem.GetFileLengthAsync(filePath);
+      }
+
+      int nextPageIndex = (int)(currentLength / _pageSize);
+      if (currentLength > 0 && currentLength % _pageSize != 0)
+      {
+        _logger.LogWarning("File {File} size ({Length}) is not a multiple of page size ({PageSize}). Potential corruption or incomplete write. Allocating page index {PageIndex}.", filePath, currentLength, _pageSize, nextPageIndex);
+      }
+
+      long requiredLength = (long)(nextPageIndex + 1) * _pageSize;
+      if (currentLength < requiredLength)
+      {
+        _logger.LogTrace("Extending file {File} from {CurrentLength} to {RequiredLength} bytes for new page index {PageIndex}", filePath, currentLength, requiredLength, nextPageIndex);
+        await _fileSystem.SetFileLengthAsync(filePath, requiredLength);
+      }
+
+      var newPageId = new PageId(tableId, nextPageIndex);
+      _logger.LogDebug("Allocated new page identifier {PageId}", newPageId);
+      return newPageId;
+      // --- CRITICAL SECTION END ---
+    }
+    finally
+    {
+      // Release the lock, making sure it ALWAYS happens
+      tableLock.Release();
+      _logger.LogTrace("Released allocation lock for TableId {TableId}", tableId);
+    }
   }
 
-  // --- Private Helper for file paths (Check removed) ---
   private string GetTableFilePath(int tableId)
   {
     // Constructor ensures _baseDataDirectory is initialized

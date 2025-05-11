@@ -117,10 +117,86 @@ public partial class DiskManagerTests : IDisposable
     Assert.Equal(PageSize * 2, await _fileSystem.GetFileLengthAsync(filePath));
   }
 
-  // Note: Testing concurrent calls would require more complex setup with multiple threads/tasks
-  // calling AllocateNewDiskPageAsync simultaneously and verifying atomicity, which might
-  // need locking mechanisms within DiskManager (currently deferred).
+  [Fact]
+  public async Task AllocateNewDiskPageAsync_ConcurrentCallsForSameTable_ReturnsUniqueAndSequentialPageIndices()
+  {
+    // Arrange
+    int tableId = 301; // A unique table ID for this test
+    int numberOfAllocations = 5; // How many pages to allocate concurrently
+    var allocationTasks = new List<Task<PageId>>(numberOfAllocations);
+    var filePath = GetExpectedTablePath(tableId);
 
-  // --- IDisposable Implementation (If class is not partial and needs cleanup) ---
-  // ... (Keep the Dispose/Finalizer logic as defined previously) ...
+    // Ensure a clean state for the file (optional, as AllocateNew... should create it)
+    if (_fileSystem.FileExists(filePath))
+    {
+      await _fileSystem.DeleteFileAsync(filePath);
+    }
+
+    // Act
+    // Launch all allocation tasks without awaiting them individually
+    for (int i = 0; i < numberOfAllocations; i++)
+    {
+      allocationTasks.Add(_diskManager.AllocateNewDiskPageAsync(tableId));
+    }
+
+    // Now await all tasks to complete
+    PageId[] allocatedPageIds = await Task.WhenAll(allocationTasks);
+
+    // Assert
+    // 1. Check if all tasks completed and we got the expected number of PageIds
+    Assert.Equal(numberOfAllocations, allocatedPageIds.Length);
+
+    // 2. Extract PageIndex values and check for uniqueness
+    var pageIndices = allocatedPageIds.Select(pid => pid.PageIndex).ToList();
+    Assert.Equal(numberOfAllocations, pageIndices.Distinct().Count());
+
+    // 3. Check for sequential PageIndex values starting from 0
+    pageIndices.Sort(); // Sort them to check sequence
+    for (int i = 0; i < numberOfAllocations; i++)
+    {
+      Assert.Equal(i, pageIndices[i]);
+    }
+
+    // 4. Verify all PageIds are for the correct table
+    Assert.All(allocatedPageIds, pid => Assert.Equal(tableId, pid.TableId));
+
+    // 5. Verify the final file length on disk
+    Assert.True(_fileSystem.FileExists(filePath));
+    long expectedFileLength = (long)numberOfAllocations * PageSize;
+    Assert.Equal(expectedFileLength, await _fileSystem.GetFileLengthAsync(filePath));
+  }
+
+  [Fact]
+  public async Task AllocateNewDiskPageAsync_ConcurrentCallsForDifferentTables_SucceedsIndependently()
+  {
+    // Arrange
+    int tableId1 = 401;
+    int tableId2 = 402;
+    int allocationsPerTable = 3;
+    var tasks = new List<Task<PageId>>();
+
+    // Ensure clean state
+    if (_fileSystem.FileExists(GetExpectedTablePath(tableId1))) await _fileSystem.DeleteFileAsync(GetExpectedTablePath(tableId1));
+    if (_fileSystem.FileExists(GetExpectedTablePath(tableId2))) await _fileSystem.DeleteFileAsync(GetExpectedTablePath(tableId2));
+
+    // Act: Interleave calls for different tables
+    for (int i = 0; i < allocationsPerTable; i++)
+    {
+      tasks.Add(_diskManager.AllocateNewDiskPageAsync(tableId1));
+      tasks.Add(_diskManager.AllocateNewDiskPageAsync(tableId2));
+    }
+    PageId[] results = await Task.WhenAll(tasks);
+
+    // Assert for tableId1
+    var table1PageIds = results.Where(pid => pid.TableId == tableId1).Select(pid => pid.PageIndex).OrderBy(idx => idx).ToList();
+    Assert.Equal(allocationsPerTable, table1PageIds.Count);
+    for (int i = 0; i < allocationsPerTable; i++) Assert.Equal(i, table1PageIds[i]);
+    Assert.Equal((long)allocationsPerTable * PageSize, await _fileSystem.GetFileLengthAsync(GetExpectedTablePath(tableId1)));
+
+    // Assert for tableId2
+    var table2PageIds = results.Where(pid => pid.TableId == tableId2).Select(pid => pid.PageIndex).OrderBy(idx => idx).ToList();
+    Assert.Equal(allocationsPerTable, table2PageIds.Count);
+    for (int i = 0; i < allocationsPerTable; i++) Assert.Equal(i, table2PageIds[i]);
+    Assert.Equal((long)allocationsPerTable * PageSize, await _fileSystem.GetFileLengthAsync(GetExpectedTablePath(tableId2)));
+  }
 }
