@@ -12,6 +12,7 @@
     <ProjectReference Include="..\ArmDb.DataModel\ArmDb.DataModel.csproj" />
     <ProjectReference Include="..\ArmDb.Common.Utils\ArmDb.Common.Utils.csproj" />
     <ProjectReference Include="..\ArmDb.Common.Abstractions\ArmDb.Common.Abstractions.csproj" />
+    <ProjectReference Include="..\ArmDb.StorageEngine\ArmDb.StorageEngine.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -21,7 +22,13 @@
   <ItemGroup>
     <Content Include="Definitions\**\*.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </Content>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="appsettings.json">
+      <CopyToOutputDirectory>CopyIfNewer</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

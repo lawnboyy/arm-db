@@ -5,13 +5,19 @@ using ArmDb.Common.Utils;
 using ArmDb.SchemaDefinition;
 using ArmDb.Server.Bootstrap;
 using ArmDb.Common.Abstractions;
-// Add using for ArmDb.StorageEngine interfaces when defined
-// Add using for ArmDb.DataModel when needed for row generation
+using ArmDb.StorageEngine;
 
 // Use default builder which sets up logging, config, DI
 var builder = Host.CreateApplicationBuilder(args);
 
 // --- Configuration ---
+
+// Bind the "BufferPoolManager" section from configuration to BufferPoolManagerOptions
+// This makes IOptions<BufferPoolManagerOptions> available via DI
+builder.Services.Configure<BufferPoolManagerOptions>(
+    builder.Configuration.GetSection("BufferPoolManager")
+);
+
 // Reads appsettings.json, environment variables, command line args by default
 var bootstrapConfig = builder.Configuration.GetSection("Bootstrap");
 // Get path to definition files, default to "./definitions" relative to app execution

@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
+
 namespace ArmDb.StorageEngine;
 
 /// <summary>
@@ -8,6 +11,39 @@ namespace ArmDb.StorageEngine;
 /// </summary>
 internal sealed class BufferPoolManager : IAsyncDisposable
 {
+  private readonly DiskManager _diskManager;
+  private readonly ILogger<BufferPoolManager> _logger;
+
+  // --- Configuration ---
+  private readonly int _poolSizeInPages; // Total number of frames in the pool
+
+  /// <summary>
+  /// The array of frames that make up the buffer pool. Each frame holds page data and metadata.
+  /// The index in this array acts as the Frame ID.
+  /// </summary>
+  private readonly Frame[] _frames;
+
+  /// <summary>
+  /// Maps a PageId (identifying a unique disk page) to the index of the frame
+  /// in the _frames array where that page is currently loaded.
+  /// This allows for quick O(1) average time lookup to check if a page is in the buffer pool.
+  /// </summary>
+  private readonly ConcurrentDictionary<PageId, int> _pageTable;
+
+  /// <summary>
+  /// A thread-safe queue holding the indices of frames that are currently free and
+  /// available for use (e.g., to load a new page from disk).
+  /// Initially, all frames are free.
+  /// </summary>
+  private readonly ConcurrentQueue<int> _freeFrameIndices;
+
+  // --- Page Replacement Policy State ---
+  // We'll need data structures to implement our chosen page replacement policy (e.g., LRU, Clock).
+  // For an LRU (Least Recently Used) policy, we might have:
+  private readonly LinkedList<int> _lruList; // Stores frame indices. MRU at one end, LRU at the other.
+  private readonly Dictionary<int, LinkedListNode<int>> _lruNodeLookup; // Maps frame index to its node in _lruList for O(1) move/remove.
+  private readonly object _replacerLock = new object(); // Lock to protect _lruList and _lruNodeLookup as they are not thread-safe.
+
   /// <summary>
   /// Asynchronously disposes of resources managed by the BufferPoolManager,
   /// such as flushing all dirty pages to disk and potentially returning
