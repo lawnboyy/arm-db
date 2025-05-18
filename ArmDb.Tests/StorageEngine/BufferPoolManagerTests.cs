@@ -52,58 +52,58 @@ public class BufferPoolManagerTests : IDisposable
     Assert.True(fetchedPage.Data.Span.SequenceEqual(diskPageData), "Page content does not match disk content."); // Verify content
   }
 
-  // [Fact]
-  // public async Task FetchPageAsync_PageAlreadyCached_ReturnsFromCacheAndIncrementsPin()
-  // {
-  //   // Arrange
-  //   int tableId = 10;
-  //   int pageIndex = 0;
-  //   var pageId = new PageId(tableId, pageIndex);
+  [Fact]
+  public async Task FetchPageAsync_PageAlreadyCached_ReturnsFromCacheAndIncrementsPin()
+  {
+    // Arrange
+    int tableId = 10;
+    int pageIndex = 0;
+    var pageId = new PageId(tableId, pageIndex);
 
-  //   // Create sample page data and write it to a mock disk file
-  //   byte[] diskPageData = new byte[PageSize];
-  //   diskPageData[0] = (byte)'A'; // Initial data
-  //   diskPageData[1] = (byte)'B';
-  //   await CreateTestPageFileWithDataAsync(tableId, pageIndex, diskPageData);
+    // Create sample page data and write it to a mock disk file
+    byte[] diskPageData = new byte[PageSize];
+    diskPageData[0] = (byte)'A'; // Initial data
+    diskPageData[1] = (byte)'B';
+    await CreateTestPageFileWithDataAsync(tableId, pageIndex, diskPageData);
 
-  //   // Act: First fetch (cache miss, loads from disk)
-  //   Page? pageInstance1 = await _bpm.FetchPageAsync(pageId);
-  //   Assert.NotNull(pageInstance1);
-  //   Assert.Equal(pageId, pageInstance1.Id);
-  //   Assert.Equal((byte)'A', pageInstance1.Data.Span[0]);
+    // Act: First fetch (cache miss, loads from disk)
+    Page? pageInstance1 = await _bpm.FetchPageAsync(pageId);
+    Assert.NotNull(pageInstance1);
+    Assert.Equal(pageId, pageInstance1.Id);
+    Assert.Equal((byte)'A', pageInstance1.Data.Span[0]);
 
-  //   // Modify the data through the first Page object's memory.
-  //   // This change happens in the buffer pool's frame.
-  //   pageInstance1.Data.Span[0] = (byte)'X';
+    // Modify the data through the first Page object's memory.
+    // This change happens in the buffer pool's frame.
+    pageInstance1.Data.Span[0] = (byte)'X';
 
-  //   // Act: Second fetch for the same page (should be a cache hit)
-  //   Page? pageInstance2 = await _bpm.FetchPageAsync(pageId);
+    // Act: Second fetch for the same page (should be a cache hit)
+    Page? pageInstance2 = await _bpm.FetchPageAsync(pageId);
 
-  //   // Assert
-  //   Assert.NotNull(pageInstance2);
-  //   Assert.Equal(pageId, pageInstance2.Id);
+    // Assert
+    Assert.NotNull(pageInstance2);
+    Assert.Equal(pageId, pageInstance2.Id);
 
-  //   // 1. Verify that pageInstance2 sees the modification made through pageInstance1.
-  //   // This confirms they share the same underlying Memory<byte> from the frame,
-  //   // proving it was a cache hit and not re-read from the original disk content.
-  //   Assert.Equal((byte)'X', pageInstance2.Data.Span[0]);
-  //   Assert.Equal((byte)'B', pageInstance2.Data.Span[1]); // Unchanged original data
+    // 1. Verify that pageInstance2 sees the modification made through pageInstance1.
+    // This confirms they share the same underlying Memory<byte> from the frame,
+    // proving it was a cache hit and not re-read from the original disk content.
+    Assert.Equal((byte)'X', pageInstance2.Data.Span[0]);
+    Assert.Equal((byte)'B', pageInstance2.Data.Span[1]); // Unchanged original data
 
-  //   // 2. Verify the original disk data is unchanged (BPM hasn't flushed yet).
-  //   // This indirectly supports that the second fetch was a cache hit.
-  //   // We'll read the file directly to check.
-  //   var actualDiskData = new byte[PageSize];
-  //   await using (var handle = File.OpenHandle(GetExpectedTablePath(tableId), FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous))
-  //   {
-  //     await RandomAccess.ReadAsync(handle, actualDiskData.AsMemory(), 0);
-  //   }
-  //   Assert.Equal((byte)'A', actualDiskData[0]); // Original disk data
+    // 2. Verify the original disk data is unchanged (BPM hasn't flushed yet).
+    // This indirectly supports that the second fetch was a cache hit.
+    // We'll read the file directly to check.
+    var actualDiskData = new byte[PageSize];
+    using (var handle = File.OpenHandle(GetExpectedTablePath(tableId), FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous))
+    {
+      await RandomAccess.ReadAsync(handle, actualDiskData.AsMemory(), 0);
+    }
+    Assert.Equal((byte)'A', actualDiskData[0]); // Original disk data
 
-  //   // Note: Directly testing PinCount and LRU state changes requires either:
-  //   // - Exposing internal state/methods of BufferPoolManager for testing (e.g., via InternalsVisibleTo).
-  //   // - More complex scenario tests involving unpinning and eviction to observe behavior.
-  //   // This test focuses on the core cache hit behavior: data consistency and avoiding a disk read.
-  // }
+    // Note: Directly testing PinCount and LRU state changes requires either:
+    // - Exposing internal state/methods of BufferPoolManager for testing (e.g., via InternalsVisibleTo).
+    // - More complex scenario tests involving unpinning and eviction to observe behavior.
+    // This test focuses on the core cache hit behavior: data consistency and avoiding a disk read.
+  }
 
   // Helper to get the expected table file path
   private string GetExpectedTablePath(int tableId) => Path.Combine(_baseTestDir, $"{tableId}{DiskManager.TableFileExtension}");

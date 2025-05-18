@@ -144,7 +144,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     _logger.LogTrace("Page {PageId} not in buffer pool (cache miss). Attempting to find frame.", pageId);
 
     // 2a. Find an Available Frame (this whole block needs to be atomic regarding frame state changes)
-    int? availableFrameIndex = null;
+    int? availableFrameIndex;
 
     // Try to get from free list first
     if (_freeFrameIndices.TryDequeue(out int freeFrameIdx))
@@ -156,24 +156,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     {
       // No free frames, try to find a victim using replacement policy
       _logger.LogTrace("No free frames. Attempting to find victim frame for page {PageId}.", pageId);
-      lock (_replacerLock) // Protect LRU list and frame selection
-      {
-        // Iterate from the Least Recently Used end of the list
-        var lruNode = _lruList.First;
-        while (lruNode != null)
-        {
-          int victimFrameIndexCandidate = lruNode.Value;
-          if (_frames[victimFrameIndexCandidate].PinCount == 0) // Found an unpinned page
-          {
-            availableFrameIndex = victimFrameIndexCandidate;
-            _lruList.Remove(lruNode); // Remove from LRU list
-            _lruNodeLookup.Remove(victimFrameIndexCandidate);
-            _logger.LogTrace("Found victim frame {FrameIndex} for page {PageId} using LRU.", availableFrameIndex, pageId);
-            break;
-          }
-          lruNode = lruNode.Next;
-        }
-      }
+      availableFrameIndex = FindVictimPage(pageId);
     }
 
     if (availableFrameIndex == null)
@@ -186,7 +169,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     var targetFrame = _frames[frameIndex];
 
     // 2b. Evict Old Page from the chosen frame (if it was holding one)
-    if (targetFrame.CurrentPageId != default(PageId)) // default(PageId) means it was free or already reset
+    if (targetFrame.CurrentPageId != default) // default(PageId) means it was free or already reset
     {
       PageId oldPageId = targetFrame.CurrentPageId;
       _logger.LogDebug("Evicting page {OldPageId} from frame {FrameIndex} to make space for {NewPageId}.", oldPageId, frameIndex, pageId);
@@ -302,6 +285,35 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     return new Page(frame.CurrentPageId, frame.PageData);
   }
 
+  /// <summary>
+  /// Attempts to find a victim page to evict searching for the first least recently used
+  /// page that is unpinned. If no unpinned pages are found, it returns null.
+  /// </summary>
+  /// <param name="pageId"></param>
+  /// <returns></returns>
+  private int? FindVictimPage(PageId pageId)
+  {
+    lock (_replacerLock) // Protect LRU list and frame selection
+    {
+      int? availableFrameIndex = null;
+      // Iterate from the Least Recently Used end of the list
+      var lruNode = _lruList.First;
+      while (lruNode != null)
+      {
+        int victimFrameIndexCandidate = lruNode.Value;
+        if (_frames[victimFrameIndexCandidate].PinCount == 0) // Found an unpinned page
+        {
+          availableFrameIndex = victimFrameIndexCandidate;
+          _lruList.Remove(lruNode); // Remove from LRU list
+          _lruNodeLookup.Remove(victimFrameIndexCandidate);
+          _logger.LogTrace("Found victim frame {FrameIndex} for page {PageId} using LRU.", availableFrameIndex, pageId);
+          break;
+        }
+        lruNode = lruNode.Next;
+      }
+      return availableFrameIndex;
+    }
+  }
   /// <summary>
   /// Asynchronously disposes of resources managed by the BufferPoolManager.
   /// </summary>
