@@ -78,13 +78,6 @@ public partial class DiskManagerTests : IDisposable
 
   private string GetTestPath(string fileName) => Path.Combine(_baseTestDir, fileName);
 
-  private byte[] CreateTestBuffer(byte fillValue, int size = PageSize)
-  {
-    var buffer = new byte[size];
-    Array.Fill(buffer, fillValue);
-    return buffer;
-  }
-
   private async Task<byte[]> ReadPageDirectlyAsync(string path, int pageIndex)
   {
     var buffer = new byte[PageSize];

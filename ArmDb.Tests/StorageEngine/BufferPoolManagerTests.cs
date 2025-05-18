@@ -105,6 +105,51 @@ public class BufferPoolManagerTests : IDisposable
     // This test focuses on the core cache hit behavior: data consistency and avoiding a disk read.
   }
 
+  [Fact]
+  public async Task FetchPageAsync_PoolFullOfPinnedPages_ReturnsNull()
+  {
+    // Arrange
+    // Re-initialize BPM with a small pool size for this specific test
+    var options = new BufferPoolManagerOptions { PoolSizeInPages = 3 }; // Small pool
+    var localBpm = new BufferPoolManager(Options.Create(options), _diskManager, NullLogger<BufferPoolManager>.Instance);
+
+    int tableId = 20;
+    var pageId0 = new PageId(tableId, 0);
+    var pageId1 = new PageId(tableId, 1);
+    var pageId2 = new PageId(tableId, 2);
+    var pageId3 = new PageId(tableId, 3); // The page that shouldn't fit
+
+    // Create corresponding data on "disk"
+    await CreateTestPageFileWithDataAsync(tableId, 0, StorageEngineTestHelper.CreateTestBuffer((byte)'A'));
+    await CreateTestPageFileWithDataAsync(tableId, 1, StorageEngineTestHelper.CreateTestBuffer((byte)'B'));
+    await CreateTestPageFileWithDataAsync(tableId, 2, StorageEngineTestHelper.CreateTestBuffer((byte)'C'));
+    await CreateTestPageFileWithDataAsync(tableId, 3, StorageEngineTestHelper.CreateTestBuffer((byte)'D'));
+
+    // Act: Fill the buffer pool. Each fetched page will be pinned (PinCount = 1).
+    Page? p0 = await localBpm.FetchPageAsync(pageId0);
+    Page? p1 = await localBpm.FetchPageAsync(pageId1);
+    Page? p2 = await localBpm.FetchPageAsync(pageId2);
+
+    Assert.NotNull(p0); // Ensure setup is correct
+    Assert.NotNull(p1);
+    Assert.NotNull(p2);
+
+    // Act: Attempt to fetch a 4th page, which should fail as pool is full of pinned pages
+    Page? p3 = await localBpm.FetchPageAsync(pageId3);
+
+    // Assert
+    Assert.Null(p3); // Should fail to fetch and return null
+
+    // Optional: Verify the original pages are still accessible if we kept references
+    // (This just confirms our p0,p1,p2 are still valid, not a direct BPM state check)
+    Assert.Equal((byte)'A', p0.Data.Span[0]);
+    Assert.Equal((byte)'B', p1.Data.Span[0]);
+    Assert.Equal((byte)'C', p2.Data.Span[0]);
+
+    // Cleanup for this local BPM instance
+    await localBpm.DisposeAsync();
+  }
+
   // Helper to get the expected table file path
   private string GetExpectedTablePath(int tableId) => Path.Combine(_baseTestDir, $"{tableId}{DiskManager.TableFileExtension}");
 
