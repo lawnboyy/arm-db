@@ -34,7 +34,7 @@ internal class Frame
   /// Concurrency for PinCount updates must be handled by the BufferPoolManager
   /// (e.g., using Interlocked operations or locks).
   /// </summary>
-  public int PinCount { get; set; }
+  public int PinCount;
 
   // --- Fields/Properties for Page Replacement Algorithm State ---
   // Example for LRU (actual LinkedListNode might be managed by the replacer component itself):
