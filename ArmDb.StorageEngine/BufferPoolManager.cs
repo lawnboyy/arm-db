@@ -166,13 +166,31 @@ internal sealed class BufferPoolManager : IAsyncDisposable
           }
         }
       }
-      else
+      else // No free frames, try to find a victim to evict
       {
-        _logger.LogTrace("No free frames available for page {PageId}. Eviction logic would be next.", pageId);
-        // TODO: EVICTION LOGIC GOES HERE
-        // If eviction is implemented and successfully finds a victim,
-        // it should set 'frame' and 'frameIndex' for the victim frame.
-        // If eviction fails to find a frame, 'frame' remains null.
+        if (TryFindVictimFrame(out int availableFrameIndex))
+        {
+          if (!await EvictPageFromFrameAsync(availableFrameIndex))
+          {
+            _logger.LogCritical("Failed to prepare frame {FrameIndex} by evicting its content. Aborting fetch for {PageId}.", availableFrameIndex, pageId);
+            // If eviction failed (e.g., couldn't flush a dirty page), we should attempt to return the frame
+            // to the free list so it's not lost from management, though it might be in a problematic state.
+            // This recovery needs careful thought. For now, failing the fetch is key.
+            lock (_replacerLock)
+            {
+              // Ensure it's not in LRU (should have been handled by TryFindVictimFrame)
+              _lruNodeLookup.Remove(availableFrameIndex);
+              // Attempt to add back to free list
+              _freeFrameIndices.Enqueue(availableFrameIndex);
+            }
+            return null;
+          }
+        }
+        else
+        {
+          _logger.LogWarning("No unpinned victim found in LRU list. Unable to evict a page for {PageId}.", pageId);
+          return null; // No available frame to load the page
+        }
       }
 
       // If a frame was secured (either free, or will be from future eviction logic):
@@ -211,6 +229,74 @@ internal sealed class BufferPoolManager : IAsyncDisposable
 
     _logger.LogWarning("Failed to fetch page {PageId}. No suitable frame found or loading process incomplete.", pageId);
     return null; // Page not found or could not be loaded
+  }
+
+  /// <summary>
+  /// Handles the eviction of a page from a given frame.
+  /// This includes removing the page from the page table and writing it to disk if it's dirty.
+  /// After successful eviction (or if the frame was already free), the frame's metadata is reset
+  /// and its data buffer is cleared.
+  /// This method assumes the frame has already been selected as a victim and removed
+  /// from the page replacement policy's active tracking (e.g., LRU list).
+  /// </summary>
+  /// <param name="frameIndexToEvict">The index of the frame to process for eviction.</param>
+  /// <returns>
+  /// True if the frame was successfully prepared (dirty page flushed if necessary, frame reset and cleared).
+  /// False if a critical error occurred, such as failing to flush a dirty page.
+  /// </returns>
+  private async Task<bool> EvictPageFromFrameAsync(int frameIndexToEvict)
+  {
+    Frame frame = _frames[frameIndexToEvict];
+    _logger.LogTrace("Processing frame {FrameIndex} for eviction. Current PageId: {PageId}, IsDirty: {IsDirty}",
+                     frameIndexToEvict,
+                     frame.CurrentPageId == default ? "None" : frame.CurrentPageId.ToString(),
+                     frame.IsDirty);
+
+    // Step 1: If the frame currently holds a valid page, process it.
+    if (frame.CurrentPageId != default(PageId)) // Check against default PageId
+    {
+      PageId oldPageId = frame.CurrentPageId;
+
+      // 1a. Remove the old page from the page table.
+      // This should be done before potential disk I/O to reflect that the page is no longer
+      // considered "in this frame" by the page table.
+      if (!_pageTable.TryRemove(oldPageId, out _))
+      {
+        // This indicates an inconsistency: the frame thought it held oldPageId,
+        // but the page table didn't map oldPageId to this frame (or oldPageId wasn't in table).
+        _logger.LogWarning("During eviction of frame {FrameIndex}, its PageId {OldPageId} was not found in the page table or did not map to this frame. Possible inconsistency.",
+                           frameIndexToEvict, oldPageId);
+      }
+
+      // 1b. If the page in the frame is dirty, write it to disk.
+      if (frame.IsDirty)
+      {
+        _logger.LogInformation("Flushing dirty page {OldPageId} from frame {FrameIndex} before reuse.", oldPageId, frameIndexToEvict);
+        try
+        {
+          await _diskManager.WriteDiskPageAsync(oldPageId, frame.PageData);
+          // If WritePageDiskAsync succeeds, the data on disk for oldPageId is now up-to-date.
+          // The frame.IsDirty flag will be reset by frame.Reset() later.
+        }
+        catch (Exception ex)
+        {
+          _logger.LogCritical(ex, "CRITICAL: Failed to flush dirty page {OldPageId} from frame {FrameIndex}. Data for {OldPageId} may be lost. Frame cannot be safely reused for new page load at this time.", oldPageId, frameIndexToEvict, oldPageId);
+          // If we can't flush a dirty page, it's a significant error.
+          // We should not reuse this frame for a new page without resolving the dirty data.
+          // Returning false signals that this frame preparation failed.
+          return false;
+        }
+      }
+    }
+
+    // Step 2: Reset the frame's metadata and clear its data buffer.
+    // This happens whether the frame held a page or was already considered "empty" by CurrentPageId.
+    _logger.LogTrace("Resetting frame {FrameIndex} and clearing its buffer.", frameIndexToEvict);
+    frame.Reset(); // Sets CurrentPageId = default, IsDirty = false, PinCount = 0
+    frame.PageData.Span.Clear(); // Zero out the memory buffer to prevent stale data exposure
+
+    _logger.LogDebug("Frame {FrameIndex} successfully processed for eviction and is now clean and ready for reuse.", frameIndexToEvict);
+    return true; // Frame is successfully prepared
   }
 
   /// <summary>
