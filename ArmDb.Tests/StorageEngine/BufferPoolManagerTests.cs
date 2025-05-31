@@ -1,13 +1,14 @@
 using ArmDb.Common.Abstractions;
 using ArmDb.Common.Utils;
 using ArmDb.StorageEngine;
+using ArmDb.StorageEngine.Exceptions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using static ArmDb.UnitTests.StorageEngine.StorageEngineTestHelper;
 
 namespace ArmDb.UnitTests.StorageEngine;
 
-public class BufferPoolManagerTests : IDisposable
+public partial class BufferPoolManagerTests : IDisposable
 {
   private readonly IFileSystem _fileSystem;
   private readonly DiskManager _diskManager;
@@ -136,7 +137,8 @@ public class BufferPoolManagerTests : IDisposable
     Assert.NotNull(p2);
 
     // Act: Attempt to fetch a 4th page, which should fail as pool is full of pinned pages
-    Page? p3 = await localBpm.FetchPageAsync(pageId3);
+    Page? p3 = null;
+    await Assert.ThrowsAsync<BufferPoolFullException>(async () => { p3 = await localBpm.FetchPageAsync(pageId3); });
 
     // Assert
     Assert.Null(p3); // Should fail to fetch and return null
@@ -239,5 +241,32 @@ public class BufferPoolManagerTests : IDisposable
       Console.WriteLine($"Error cleaning up test directory '{_baseTestDir}': {ex.Message}");
     }
     GC.SuppressFinalize(this);
+  }
+
+  private async Task<byte[]> ReadPageDirectlyAsync(string path, int pageIndex)
+  {
+    var buffer = new byte[PageSize];
+    // Check existence using the abstraction
+    if (!_fileSystem.FileExists(path))
+    {
+      Array.Clear(buffer);
+      return buffer;
+    }
+
+    try
+    {
+      // Use the abstraction to read for verification
+      int bytesRead = await _fileSystem.ReadFileAsync(path, (long)pageIndex * PageSize, buffer.AsMemory());
+      if (bytesRead < PageSize && bytesRead >= 0)
+      {
+        Array.Clear(buffer, bytesRead, PageSize - bytesRead);
+      }
+    }
+    catch (Exception ex) when (ex is FileNotFoundException || ex is ArgumentOutOfRangeException || ex is IOException)
+    {
+      Console.WriteLine($"Note: Exception during direct read for verification in test: {ex.GetType().Name} - {ex.Message}");
+      Array.Clear(buffer);
+    }
+    return buffer;
   }
 }

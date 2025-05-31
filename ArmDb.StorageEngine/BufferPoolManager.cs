@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Collections.Concurrent;
+using ArmDb.StorageEngine.Exceptions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -132,7 +133,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
   /// <returns>The Page if it's found; null if the page was not found or could not be loaded.</returns>
   // Method within BufferPoolManager class
 
-  internal async Task<Page?> FetchPageAsync(PageId pageId)
+  internal async Task<Page> FetchPageAsync(PageId pageId)
   {
     // 1. Check Page Table (Cache Hit)
     if (_pageTable.TryGetValue(pageId, out int frameIndex))
@@ -162,7 +163,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     if (availableFrameIndex == null)
     {
       _logger.LogWarning("Buffer pool out of unpinned frames. Cannot fetch page {PageId}.", pageId);
-      return null; // Or throw a specific "buffer pool full" exception
+      throw new BufferPoolFullException($"Buffer pool is full. Cannot fetch page {pageId}.");
     }
 
     frameIndex = availableFrameIndex.Value;
@@ -199,7 +200,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
           // 3. Throw, indicating failure to fetch new page due to flush failure.
           targetFrame.Reset(); // Reset the frame metadata
           lock (_replacerLock) { _freeFrameIndices.Enqueue(frameIndex); } // Return frame to free list (if safe)
-          return null; // Indicate failure to fetch the new page
+          throw new CouldNotFlushToDiskException("Failed to flush dirty page during eviction. Data loss may occur.", ex);
         }
       }
       targetFrame.Reset(); // Reset metadata for reuse (PinCount should be 0, IsDirty false)
@@ -226,7 +227,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
       _logger.LogError(ex, "Failed to read page {PageId} from disk into frame {FrameIndex}.", pageId, frameIndex);
       targetFrame.Reset(); // Reset the frame as it's in an invalid state
       lock (_replacerLock) { _freeFrameIndices.Enqueue(frameIndex); } // Return frame to free list
-      return null; // Indicate failure to fetch page
+      throw;
     }
 
     // Set PinCount *after* successful load
@@ -241,7 +242,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
       targetFrame.Reset();
       targetFrame.PinCount = 0; // Unpin as it's not properly registered
       lock (_replacerLock) { _freeFrameIndices.Enqueue(frameIndex); } // Return frame to free list
-      return null;
+      throw new InvalidOperationException($"Failed to add page {pageId} to page table for frame {frameIndex}. Indicates a race condition or bug in eviction/frame finding logic.");
     }
 
     lock (_replacerLock)
@@ -348,7 +349,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     // Atomically increment pin count. Using Interlocked is best for simple increments.
     Interlocked.Increment(ref frame.PinCount);
 
-    // Update page replacement policy state (e.g., mark as recently used for LRU)
+    // Update page replacement policy state to mark this page as most recently used.
     // This needs to be thread-safe.
     lock (_replacerLock)
     {
@@ -359,7 +360,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
         _lruList.Remove(node);
         _lruNodeLookup.Remove(frameIndex); // Remove old mapping
       }
-      // If pin count was 0 and now >0, it's being actively used, so it's "newly" MRU from replacer's POV
+      // If pin count was 0 and now > 0, it's being actively used, so it's "newly" MRU from replacer's POV
       // For LRU, we always move accessed pages to the MRU end if they become pinned or are already pinned.
       // Or, some LRU variants only update on unpin. For fetch, always mark as MRU.
       var newNode = _lruList.AddLast(frameIndex); // Add to MRU end
