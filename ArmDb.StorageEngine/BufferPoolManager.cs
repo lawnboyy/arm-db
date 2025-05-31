@@ -314,13 +314,26 @@ internal sealed class BufferPoolManager : IAsyncDisposable
       throw new InvalidOperationException($"Pin count for page {pageId} became negative ({newPinCount}), indicating a critical error in pin/unpin logic.");
     }
 
-    // --- TODO: Next Steps ---
-    // 1. DONE: Get the actual Frame object: var frame = _frames[frameIndex];
-    // 2. DONE: Check frame.PinCount: if already 0, throw InvalidOperationException("Cannot unpin page {pageId} as its pin count is already zero.").
-    // 3. DONE: Atomically decrement frame.PinCount using Interlocked.Decrement().
-    // 4. TODO: Update frame.IsDirty: if (isDirty) frame.IsDirty = true; (or frame.IsDirty = frame.IsDirty || isDirty;)
-    // 5. TODO: Log new PinCount and IsDirty status.
-    // 6. TODO: If new PinCount is 0, log that it's now a candidate for eviction. (No LRU action needed here yet based on prior discussion).
+    // No interlock is necessary for isDirty because boolean writes are atomic, and we only set it to true if the caller
+    // is marking the page as dirty.
+    if (isDirty)
+    {
+      // If this unpin operation dirtied the page, mark the frame dirty.
+      // If it was already dirty, it remains dirty.
+      frame.IsDirty = true;
+    }
+
+    _logger.LogDebug("Page {PageId} in frame {FrameIndex} unpinned. New PinCount: {NewPinCount}, Frame IsDirty: {FrameIsDirtyStatus}",
+        pageId, frameIndex, newPinCount, frame.IsDirty);
+
+    if (newPinCount == 0)
+    {
+      _logger.LogInformation("Page {PageId} in frame {FrameIndex} now has PinCount 0 and is a candidate for eviction by replacer.",
+          pageId, frameIndex);
+      // No explicit action on LRU list here.
+      // MoveToMostRecentlyUsed was called when the page was fetched/pinned.
+      // Now that PinCount is 0, the LRU replacer's victim selection logic will be able to consider it.
+    }
 
     // Placeholder to make the method async if no other await is present in subsequent steps.
     // This will be removed as more logic (especially any async disk operations if needed for some reason) is added.
