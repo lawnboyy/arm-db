@@ -98,7 +98,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     // Initialize core data structures
     _frames = new Frame[_poolSizeInPages];
     _rentedBuffers = new byte[_poolSizeInPages][]; // To hold the actual rented arrays
-    _pageTable = new ConcurrentDictionary<PageId, int>(Environment.ProcessorCount * 2, _poolSizeInPages); // Concurrency level, initial capacity
+    _pageTable = new ConcurrentDictionary<PageId, int>(_pageTableConcurrencyLevel, _poolSizeInPages); // Concurrency level, initial capacity
     _freeFrameIndices = new ConcurrentQueue<int>();
 
     // Initialize LRU replacer structures
@@ -253,6 +253,78 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     // 2e. Return the New Page Object
     _logger.LogDebug("Page {PageId} fetched into frame {FrameIndex} and pinned. Pin count: 1", pageId, frameIndex);
     return new Page(targetFrame.CurrentPageId, targetFrame.PageData);
+  }
+
+  /// <summary>
+  /// Decrements the pin count of a page. If the page was marked as dirty by the caller,
+  /// its dirty flag in the frame is set. If the pin count reaches zero, the page becomes
+  /// a candidate for eviction.
+  /// </summary>
+  /// <param name="pageId">The ID of the page to unpin.</param>
+  /// <param name="isDirty">True if the page content was modified while pinned; false otherwise.</param>
+  /// <returns>A task representing the asynchronous unpin operation.</returns>
+  /// <exception cref="InvalidOperationException">
+  /// Thrown if the pageId is not found in the buffer pool,
+  /// or (later) if an attempt is made to unpin a page whose pin count is already zero.
+  /// </exception>
+  internal async Task UnpinPageAsync(PageId pageId, bool isDirty)
+  {
+    _logger.LogTrace("Attempting to unpin page {PageId}. IsDirty: {IsDirtyFlag}", pageId, isDirty);
+
+    // Step 1: Try to find the page in the page table.
+    // _pageTable is a ConcurrentDictionary<PageId, int>
+    if (!_pageTable.TryGetValue(pageId, out int frameIndex))
+    {
+      // Page not found in the page table. This is an invalid state for unpinning,
+      // as a page must be fetched (and thus in the page table) to be pinned.
+      _logger.LogError("Cannot unpin page {PageId} because it was not found in the buffer pool's page table. This likely indicates a bug in the caller or BPM.", pageId);
+      throw new InvalidOperationException($"Page {pageId} cannot be unpinned because it could not be found in the buffer pool's page table.");
+    }
+
+    // If we reach here, the pageId was found in the _pageTable, and frameIndex is valid.
+    _logger.LogTrace("Page {PageId} found in frame {FrameIndex} for unpinning process.", pageId, frameIndex);
+
+    // Step 2: Get the Frame object
+    Frame frame = _frames[frameIndex];
+
+    // Step 3: Check current PinCount
+    // It is an error to unpin a page that is not currently pinned (i.e., PinCount <= 0).
+    // We check frame.PinCount directly here. The atomicity of the decrement will be handled by Interlocked.
+    if (frame.PinCount <= 0)
+    {
+      _logger.LogError("Cannot unpin page {PageId} in frame {FrameIndex}: Pin count is already {PinCountValue} (expected > 0). This may indicate a double unpin or a bug.",
+          pageId, frameIndex, frame.PinCount);
+      throw new InvalidOperationException($"Page {pageId} in frame {frameIndex} cannot be unpinned. Its pin count is {frame.PinCount} (must be > 0).");
+    }
+
+    // Step 4: Atomically decrement the PinCount atomically.
+    // Using Interlocked.Decrement ensures that the operation is atomic and thread-safe.
+    int newPinCount = Interlocked.Decrement(ref frame.PinCount);
+
+    // Defensive check: Pin count should ideally not go below zero with correct usage.
+    // If it does, it's a bug (more unpins than pins).
+    if (newPinCount < 0)
+    {
+      // This state indicates a severe logic error.
+      _logger.LogCritical("Pin count for page {PageId} in frame {FrameIndex} dropped below zero to {NewPinCount} after decrement. Attempting to restore to 0. This indicates a critical bug in pin/unpin logic.",
+          pageId, frameIndex, newPinCount);
+      // Attempt to correct the PinCount to a sane state (0), though the system is likely inconsistent.
+      Interlocked.Exchange(ref frame.PinCount, 0);
+      // Still throw, because this is a symptom of a larger issue.
+      throw new InvalidOperationException($"Pin count for page {pageId} became negative ({newPinCount}), indicating a critical error in pin/unpin logic.");
+    }
+
+    // --- TODO: Next Steps ---
+    // 1. DONE: Get the actual Frame object: var frame = _frames[frameIndex];
+    // 2. DONE: Check frame.PinCount: if already 0, throw InvalidOperationException("Cannot unpin page {pageId} as its pin count is already zero.").
+    // 3. DONE: Atomically decrement frame.PinCount using Interlocked.Decrement().
+    // 4. TODO: Update frame.IsDirty: if (isDirty) frame.IsDirty = true; (or frame.IsDirty = frame.IsDirty || isDirty;)
+    // 5. TODO: Log new PinCount and IsDirty status.
+    // 6. TODO: If new PinCount is 0, log that it's now a candidate for eviction. (No LRU action needed here yet based on prior discussion).
+
+    // Placeholder to make the method async if no other await is present in subsequent steps.
+    // This will be removed as more logic (especially any async disk operations if needed for some reason) is added.
+    await Task.CompletedTask;
   }
 
   private Page GetCachedPage(PageId pageId, int frameIndex)

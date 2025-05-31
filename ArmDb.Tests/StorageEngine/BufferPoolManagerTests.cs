@@ -3,6 +3,7 @@ using ArmDb.Common.Utils;
 using ArmDb.StorageEngine;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using static ArmDb.UnitTests.StorageEngine.StorageEngineTestHelper;
 
 namespace ArmDb.UnitTests.StorageEngine;
 
@@ -148,6 +149,58 @@ public class BufferPoolManagerTests : IDisposable
 
     // Cleanup for this local BPM instance
     await localBpm.DisposeAsync();
+  }
+
+  [Fact]
+  public async Task UnpinPageAsync_PageNotInPageTable_ThrowsInvalidOperationException()
+  {
+    // Arrange
+    // _bpm is initialized in the constructor with an empty page table.
+    // We'll use a PageId that is guaranteed not to have been fetched.
+    var nonExistentPageId = new PageId(tableId: 999, pageIndex: 0);
+    bool isDirty = false;
+
+    // Act & Assert
+    var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        _bpm.UnpinPageAsync(nonExistentPageId, isDirty)
+    );
+
+    // Optional: Verify the exception message for more specificity
+    Assert.NotNull(exception.Message);
+  }
+
+  [Fact]
+  public async Task UnpinPageAsync_PinCountAlreadyZero_ThrowsInvalidOperationException()
+  {
+    // Arrange
+    int tableId = 501; // Use a unique tableId for test isolation
+    int pageIndex = 0;
+    var pageId = new PageId(tableId, pageIndex);
+    byte[] pageData = CreateTestBuffer(0xCF); // Use helper to create page data
+
+    // Create the file on disk so FetchPageAsync can load it
+    await CreateTestPageFileWithDataAsync(tableId, pageIndex, pageData);
+
+    // 1. Fetch the page: this pins it, and its PinCount should be 1 internally.
+    Page? fetchedPage = await _bpm.FetchPageAsync(pageId);
+    Assert.NotNull(fetchedPage); // Ensure the page was actually fetched for setup
+
+    // 2. Unpin it the first time: PinCount should go from 1 to 0.
+    //    We assume this call works as intended based on future tests or implementation.
+    //    No specific 'isDirty' concern for this test's purpose.
+    await _bpm.UnpinPageAsync(pageId, isDirty: false);
+
+    // At this point, the Frame for pageId in the BPM should have PinCount = 0.
+
+    // Act: Attempt to unpin the *same page* again.
+    var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        _bpm.UnpinPageAsync(pageId, isDirty: false)
+    );
+
+    // Assert
+    Assert.NotNull(exception.Message);
+    Assert.Contains($"Page {pageId}", exception.Message);
+    Assert.Contains("pin count is 0 (must be > 0)", exception.Message);
   }
 
   // Helper to get the expected table file path
