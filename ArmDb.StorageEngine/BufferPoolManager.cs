@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using ArmDb.StorageEngine.Exceptions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -135,125 +136,20 @@ internal sealed class BufferPoolManager : IAsyncDisposable
 
   internal async Task<Page> FetchPageAsync(PageId pageId)
   {
-    // 1. Check Page Table (Cache Hit)
-    if (_pageTable.TryGetValue(pageId, out int frameIndex))
+    _logger.LogTrace("Fetching page {PageId}.", pageId);
+
+    // Step 1: Attempt to get the page from cache.
+    if (TryGetCachedPageAndPin(pageId, out Page? cachedPage))
     {
-      return GetCachedPage(pageId, frameIndex);
+      // Cache Hit! All necessary actions for hit path are done.
+      // Null-forgiving operator used because bool return true guarantees page is not null.
+      return cachedPage!;
     }
 
-    // 2. Cache Miss - Page not in Buffer Pool
-    _logger.LogTrace("Page {PageId} not in buffer pool (cache miss). Attempting to find frame.", pageId);
+    // Cache miss: Page not found in the buffer pool.
+    _logger.LogTrace("Page {PageId} not in cache. Page must be read and loaded into a free frame...", pageId);
 
-    // 2a. Find an Available Frame (this whole block needs to be atomic regarding frame state changes)
-    int? availableFrameIndex;
-
-    // Try to get from free list first
-    if (_freeFrameIndices.TryDequeue(out int freeFrameIdx))
-    {
-      availableFrameIndex = freeFrameIdx;
-      _logger.LogTrace("Found free frame {FrameIndex} for page {PageId}.", availableFrameIndex, pageId);
-    }
-    else
-    {
-      // No free frames, try to find a victim using replacement policy
-      _logger.LogTrace("No free frames. Attempting to find victim frame for page {PageId}.", pageId);
-      availableFrameIndex = FindVictimPage(pageId);
-    }
-
-    if (availableFrameIndex == null)
-    {
-      _logger.LogWarning("Buffer pool out of unpinned frames. Cannot fetch page {PageId}.", pageId);
-      throw new BufferPoolFullException($"Buffer pool is full. Cannot fetch page {pageId}.");
-    }
-
-    frameIndex = availableFrameIndex.Value;
-    var targetFrame = _frames[frameIndex];
-
-    // 2b. Evict Old Page from the chosen frame (if it was holding one)
-    if (targetFrame.CurrentPageId != default) // default(PageId) means it was free or already reset
-    {
-      PageId oldPageId = targetFrame.CurrentPageId;
-      _logger.LogDebug("Evicting page {OldPageId} from frame {FrameIndex} to make space for {NewPageId}.", oldPageId, frameIndex, pageId);
-
-      if (!_pageTable.TryRemove(oldPageId, out _))
-      {
-        // This would indicate an inconsistency - page was in frame but not page table. Critical error.
-        _logger.LogCritical("CRITICAL: Page {OldPageId} was in frame {FrameIndex} but not found in page table during eviction!", oldPageId, frameIndex);
-        // Handle this severe inconsistency, maybe reset the frame and try to continue, or throw.
-        // For now, log and proceed to overwrite.
-      }
-
-      if (targetFrame.IsDirty)
-      {
-        _logger.LogInformation("Flushing dirty page {OldPageId} from frame {FrameIndex} before eviction.", oldPageId, frameIndex);
-        try
-        {
-          await _diskManager.WriteDiskPageAsync(oldPageId, targetFrame.PageData);
-          targetFrame.IsDirty = false; // Mark as no longer dirty after successful write
-        }
-        catch (Exception ex)
-        {
-          _logger.LogError(ex, "Failed to flush dirty page {OldPageId} from frame {FrameIndex} during eviction. Data loss may occur.", oldPageId, frameIndex);
-          // This is a serious issue. Options:
-          // 1. Re-queue the frame to free list and return null for current fetch (data for old page not saved).
-          // 2. Keep the frame "stuck" and try another victim (complex).
-          // 3. Throw, indicating failure to fetch new page due to flush failure.
-          targetFrame.Reset(); // Reset the frame metadata
-          lock (_replacerLock) { _freeFrameIndices.Enqueue(frameIndex); } // Return frame to free list (if safe)
-          throw new CouldNotFlushToDiskException("Failed to flush dirty page during eviction. Data loss may occur.", ex);
-        }
-      }
-      targetFrame.Reset(); // Reset metadata for reuse (PinCount should be 0, IsDirty false)
-    }
-
-    // 2c. Load New Page into Frame
-    targetFrame.CurrentPageId = pageId;
-    targetFrame.IsDirty = false;      // Freshly loaded, not dirty
-    targetFrame.PinCount = 0;         // Will be incremented after successful load
-    // Clear the memory buffer if ArrayPool doesn't guarantee it (it doesn't by default on Return)
-    // This ensures no stale data from a previous occupant of the frame.
-    Array.Clear(_rentedBuffers[frameIndex], 0, Page.Size);
-
-
-    _logger.LogDebug("Reading page {PageId} from disk into frame {FrameIndex}.", pageId, frameIndex);
-    try
-    {
-      int bytesRead = await _diskManager.ReadDiskPageAsync(pageId, targetFrame.PageData);
-      // ReadPageDiskAsync already throws IOException if bytesRead < Page.Size
-      // If it completes without error, we assume a full page was read.
-    }
-    catch (Exception ex)
-    {
-      _logger.LogError(ex, "Failed to read page {PageId} from disk into frame {FrameIndex}.", pageId, frameIndex);
-      targetFrame.Reset(); // Reset the frame as it's in an invalid state
-      lock (_replacerLock) { _freeFrameIndices.Enqueue(frameIndex); } // Return frame to free list
-      throw;
-    }
-
-    // Set PinCount *after* successful load
-    targetFrame.PinCount = 1;
-
-    // 2d. Update Page Table & Replacer for New Page
-    if (!_pageTable.TryAdd(pageId, frameIndex))
-    {
-      // Should not happen if eviction logic and frame finding is correct and serialized.
-      // This means another thread somehow loaded this pageId into another frame between our check and add.
-      _logger.LogCritical("CRITICAL: Failed to add page {PageId} to page table for frame {FrameIndex}. Race condition or bug in eviction/frame finding.", pageId, frameIndex);
-      targetFrame.Reset();
-      targetFrame.PinCount = 0; // Unpin as it's not properly registered
-      lock (_replacerLock) { _freeFrameIndices.Enqueue(frameIndex); } // Return frame to free list
-      throw new InvalidOperationException($"Failed to add page {pageId} to page table for frame {frameIndex}. Indicates a race condition or bug in eviction/frame finding logic.");
-    }
-
-    lock (_replacerLock)
-    {
-      var newNode = _lruList.AddLast(frameIndex);
-      _lruNodeLookup[frameIndex] = newNode;
-    }
-
-    // 2e. Return the New Page Object
-    _logger.LogDebug("Page {PageId} fetched into frame {FrameIndex} and pinned. Pin count: 1", pageId, frameIndex);
-    return new Page(targetFrame.CurrentPageId, targetFrame.PageData);
+    return await HandleCacheMissAsync(pageId);
   }
 
   /// <summary>
@@ -341,65 +237,275 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     await Task.CompletedTask;
   }
 
-  private Page GetCachedPage(PageId pageId, int frameIndex)
+  /// <summary>
+  /// Attempts to retrieve the page from the cache. If found, the page's frame is pinned, 
+  /// its position in the LRU replacer is set to most recently used, and the method returns 
+  /// true with the page in the out parameter.
+  /// </summary>
+  /// <param name="pageId">The ID of the page to retrieve.</param>
+  /// <param name="page">
+  /// When this method returns, contains the cached Page object if found and processed;
+  /// otherwise, null.
+  /// </param>
+  /// <returns>True if the page was found in the cache and processed; false otherwise.</returns>
+  private bool TryGetCachedPageAndPin(PageId pageId, [MaybeNullWhen(false)] out Page page)
   {
-    _logger.LogTrace("Page {PageId} found in frame {FrameIndex} (cache hit).", pageId, frameIndex);
-    var frame = _frames[frameIndex];
-
-    // Atomically increment pin count. Using Interlocked is best for simple increments.
-    Interlocked.Increment(ref frame.PinCount);
-
-    // Update page replacement policy state to mark this page as most recently used.
-    // This needs to be thread-safe.
-    lock (_replacerLock)
+    _logger.LogTrace("Checking cache for page {PageId}.", pageId);
+    // Check if the page is in the page table
+    if (_pageTable.TryGetValue(pageId, out int frameIndex))
     {
-      // If frame was in LRU list (meaning it was unpinned), remove it.
-      // Then add it as most recently used.
-      if (_lruNodeLookup.TryGetValue(frameIndex, out var node))
-      {
-        _lruList.Remove(node);
-        _lruNodeLookup.Remove(frameIndex); // Remove old mapping
-      }
-      // If pin count was 0 and now > 0, it's being actively used, so it's "newly" MRU from replacer's POV
-      // For LRU, we always move accessed pages to the MRU end if they become pinned or are already pinned.
-      // Or, some LRU variants only update on unpin. For fetch, always mark as MRU.
-      var newNode = _lruList.AddLast(frameIndex); // Add to MRU end
-      _lruNodeLookup[frameIndex] = newNode;      // Store new node
+      _logger.LogTrace("Page {PageId} found in frame {FrameIndex} (cache hit).", pageId, frameIndex);
+      Frame frame = _frames[frameIndex];
+
+      // Page is cached:
+      // 1. Increment pin count atomically.
+      Interlocked.Increment(ref frame.PinCount);
+
+      // 2. Update its position in the page replacement policy (e.g., LRU).
+      MoveToMostRecentlyUsed(frameIndex); // This method handles its own locking for LRU structures
+
+      _logger.LogDebug("Page {PageId} (cached) pinned in frame {FrameIndex}. Pin count now: {PinCount}",
+                       frame.CurrentPageId, // Should match input pageId
+                       frameIndex,
+                       frame.PinCount);
+
+      // 3. Create the Page object for the caller.
+      page = new Page(frame.CurrentPageId, frame.PageData);
+      return true; // Indicate success
     }
 
-    _logger.LogDebug("Page {PageId} pinned in frame {FrameIndex}. Pin count: {PinCount}", pageId, frameIndex, frame.PinCount);
-    return new Page(frame.CurrentPageId, frame.PageData);
+    _logger.LogTrace("Page {PageId} not found in cache by TryGetCachedPageAndPin.", pageId);
+    page = null; // Explicitly set out parameter to null on failure
+    return false; // Indicate failure (cache miss)
+  }
+
+  private async Task<Page> HandleCacheMissAsync(PageId pageIdToLoad)
+  {
+    _logger.LogTrace("HandleCacheMissAsync started for page {PageIdToLoad}.", pageIdToLoad);
+    int frameIndex = -1;
+    Frame? targetFrame = null;
+
+    // Check if there is a free frame available. If so, set the free frame as the target frame.
+    // The _freeFrameIndices queue itself is thread-safe for Enqueue/Dequeue.
+    // However, interaction with LRU (_lruNodeLookup, _lruList) requires synchronization.
+    lock (_replacerLock)
+    {
+      if (_freeFrameIndices.TryDequeue(out int dequeuedFrameIndex))
+      {
+        frameIndex = dequeuedFrameIndex;
+        targetFrame = _frames[frameIndex]; // targetFrame is now assigned
+        _logger.LogTrace("Found free frame {FrameIndex} for page {PageIdToLoad}.", frameIndex, pageIdToLoad);
+
+        // Safeguard: Ensure this frame is not lingering in LRU tracking.
+        // A frame from the free list should ideally already be out of LRU.
+        if (_lruNodeLookup.TryGetValue(frameIndex, out LinkedListNode<int>? node))
+        {
+          _lruList.Remove(node);
+          _lruNodeLookup.Remove(frameIndex);
+          _logger.LogTrace("Removed frame {FrameIndex} from LRU tracking as it was taken from free list.", frameIndex);
+        }
+      }
+    } // Release _replacerLock
+
+    if (targetFrame != null) // A free frame was successfully dequeued
+    {
+      // The frame from the free list is considered "empty".
+      // It should have been Reset() before being added to the free list.
+      // We'll Reset() again for safety and clear the buffer.
+      _logger.LogTrace("Preparing free frame {FrameIndex} for page {PageIdToLoad}.", frameIndex, pageIdToLoad);
+
+      targetFrame.Reset(); // Ensures PinCount=0, IsDirty=false, CurrentPageId=default
+      targetFrame.PageData.Span.Clear(); // CRUCIAL: Zero out buffer from ArrayPool to prevent stale data
+    }
+    else // No free frame was found so we must select a victim frame and evict it.
+    {
+      _logger.LogTrace("No free frame found for page {PageIdToLoad}. Victim selection logic is next.", pageIdToLoad);
+
+      int victimFrameIndex;
+      lock (_replacerLock) // Acquire lock to select a victim atomically from LRU
+      {
+        victimFrameIndex = FindVictimFrame(); // This will throw BufferPoolFullException if no unpinned victim is found
+      } // _replacerLock released. victimFrameIndex is now "reserved" for us.
+
+      _logger.LogTrace("HandleCacheMissAsync: Victim frame {VictimFrameIndex} selected for page {PageIdToLoad}.", victimFrameIndex, pageIdToLoad);
+      frameIndex = victimFrameIndex;    // Use this frame index
+      targetFrame = _frames[frameIndex]; // Get the frame
+
+      // Now, evict the content of this victim frame (flushes if dirty, resets frame, clears buffer)
+      // This is an async operation and happens *after* _replacerLock for victim selection is released.
+      try
+      {
+        await EvictPageFromFrameAsync(frameIndex); // Throws PageFlushException on failure
+      }
+      catch (CouldNotFlushToDiskException pex)
+      {
+        _logger.LogCritical(pex, "HandleCacheMissAsync: Failed to flush dirty page from victim frame {FrameIndex} for page {PageIdToLoad}. Aborting page fetch.", frameIndex, pageIdToLoad);
+        // If flush failed, this frame is problematic and has been reset by EvictPageFromFrameAsync.
+        // The original caller (FetchPageAsync) will catch this PageFlushException.
+        throw;
+      }
+      // --- End of New Eviction Logic ---
+    }
+
+    // --- Common logic for a successfully prepared frame (either free or victim) ---
+    // At this point, 'targetFrame' and 'frameIndex' point to a frame that is:
+    // 1. Reserved for our use (removed from free list OR removed from LRU by victim selection).
+    // 2. Its previous content (if any) has been handled (flushed if dirty, page table updated).
+    // 3. The frame itself has been Reset() and its PageData.Span.Clear()'d by EvictPageFromFrameAsync.
+
+    _logger.LogTrace("HandleCacheMissAsync: Frame {FrameIndex} is prepared. Loading page {PageIdToLoad} from disk.", frameIndex, pageIdToLoad);
+
+    targetFrame.CurrentPageId = pageIdToLoad;
+    // targetFrame.IsDirty = false; // Done by Reset() in EvictPageFromFrameAsync
+    // targetFrame.PinCount = 0;    // Done by Reset() in EvictPageFromFrameAsync
+
+    try
+    {
+      await _diskManager.ReadDiskPageAsync(pageIdToLoad, targetFrame.PageData);
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "HandleCacheMissAsync: Failed to read page {PageIdToLoad} from disk into frame {FrameIndex}.", pageIdToLoad, frameIndex);
+      CleanupFailedFrameLoadAndFree(frameIndex, targetFrame); // Helper to reset & free frame
+      throw new CouldNotLoadPageFromDiskException($"Failed to read page {pageIdToLoad} from disk.", ex);
+    }
+
+    if (!_pageTable.TryAdd(pageIdToLoad, frameIndex))
+    {
+      _logger.LogCritical("HandleCacheMissAsync: CRITICAL RACE: Page {PageIdToLoad} added to page table by another thread for frame {FrameIndex} while this thread was loading it.", pageIdToLoad, frameIndex);
+      CleanupFailedFrameLoadAndFree(frameIndex, targetFrame);
+      throw new InvalidOperationException($"Race condition: Failed to add page {pageIdToLoad} to page table for frame {frameIndex}.");
+    }
+    _logger.LogTrace("HandleCacheMissAsync: Page {PageIdToLoad} added to page table for frame {FrameIndex}.", pageIdToLoad, frameIndex);
+
+    Interlocked.Increment(ref targetFrame.PinCount); // PinCount becomes 1
+    MoveToMostRecentlyUsed(frameIndex); // This locks _replacerLock internally
+
+    _logger.LogDebug("HandleCacheMissAsync: Page {PageIdToLoad} loaded into frame {FrameIndex} and pinned. Pin count: {PinCount}",
+                     targetFrame.CurrentPageId, frameIndex, targetFrame.PinCount);
+    return new Page(targetFrame.CurrentPageId, targetFrame.PageData);
   }
 
   /// <summary>
-  /// Attempts to find a victim page to evict searching for the first least recently used
-  /// page that is unpinned. If no unpinned pages are found, it returns null.
+  /// Finds an unpinned frame to evict based on the LRU policy and removes it
+  /// from LRU tracking.
+  /// This method MUST be called while holding the _replacerLock.
   /// </summary>
-  /// <param name="pageId"></param>
-  /// <returns></returns>
-  private int? FindVictimPage(PageId pageId)
+  /// <returns>The index of the victim frame.</returns>
+  /// <exception cref="BufferPoolFullException">Thrown if no unpinned victim frame can be found (e.g., all pages are pinned or LRU list is empty).</exception>
+  private int FindVictimFrame()
   {
-    lock (_replacerLock) // Protect LRU list and frame selection
+    // This method assumes _replacerLock is already held by the caller.
+    _logger.LogTrace("FindVictimFrame: Searching for LRU victim (replacer lock held).");
+
+    LinkedListNode<int>? currentNode = _lruList.First; // LRU victim is at the head
+
+    while (currentNode != null)
     {
-      int? availableFrameIndex = null;
-      // Iterate from the Least Recently Used end of the list
-      var lruNode = _lruList.First;
-      while (lruNode != null)
+      int candidateFrameIndex = currentNode.Value;
+      Frame candidateFrame = _frames[candidateFrameIndex];
+
+      // Check PinCount. We must not evict a pinned page.
+      if (candidateFrame.PinCount == 0)
       {
-        int victimFrameIndexCandidate = lruNode.Value;
-        if (_frames[victimFrameIndexCandidate].PinCount == 0) // Found an unpinned page
-        {
-          availableFrameIndex = victimFrameIndexCandidate;
-          _lruList.Remove(lruNode); // Remove from LRU list
-          _lruNodeLookup.Remove(victimFrameIndexCandidate);
-          _logger.LogTrace("Found victim frame {FrameIndex} for page {PageId} using LRU.", availableFrameIndex, pageId);
-          break;
-        }
-        lruNode = lruNode.Next;
+        // Found an unpinned victim.
+        _lruList.Remove(currentNode);           // Remove from the LRU list
+        _lruNodeLookup.Remove(candidateFrameIndex); // Remove from the lookup map
+
+        _logger.LogDebug("FindVictimFrame: LRU victim selected: Frame {FrameIndex}, previously holding PageId {PageId}.",
+                         candidateFrameIndex,
+                         candidateFrame.CurrentPageId == default ? "None/Empty" : candidateFrame.CurrentPageId.ToString());
+        return candidateFrameIndex; // Return the frame index directly
       }
-      return availableFrameIndex;
+      else
+      {
+        _logger.LogTrace("FindVictimFrame: LRU candidate Frame {FrameIndex} (PageId {PageId}) is pinned (PinCount: {PinCount}). Skipping.",
+                         candidateFrameIndex,
+                         candidateFrame.CurrentPageId == default ? "None/Empty" : candidateFrame.CurrentPageId.ToString(),
+                         candidateFrame.PinCount);
+      }
+      currentNode = currentNode.Next; // Move to the next candidate
+    }
+
+    // If the loop completes, no unpinned page was found in the LRU list.
+    _logger.LogWarning("FindVictimFrame: No unpinned victim found (all pages in LRU list are pinned, or list is empty).");
+    throw new BufferPoolFullException("No unpinned victim frame could be found in the buffer pool. All pages may be pinned or the LRU list is empty.");
+  }
+
+  private async Task EvictPageFromFrameAsync(int frameIndexToEvict)
+  {
+    Frame frame = _frames[frameIndexToEvict];
+    _logger.LogTrace("Processing frame {FrameIndexToEvict} for eviction. Current PageId: {PageId}, IsDirty: {IsDirty}",
+                     frameIndexToEvict,
+                     frame.CurrentPageId == default ? "None" : frame.CurrentPageId.ToString(),
+                     frame.IsDirty);
+
+    if (frame.CurrentPageId != default) // Frame holds a valid page
+    {
+      PageId oldPageId = frame.CurrentPageId;
+
+      if (!_pageTable.TryRemove(oldPageId, out _))
+      {
+        _logger.LogWarning("During eviction of frame {FrameIndexToEvict}, its PageId {OldPageId} was not found in the page table. Possible inconsistency.", frameIndexToEvict, oldPageId);
+      }
+
+      if (frame.IsDirty)
+      {
+        _logger.LogInformation("Flushing dirty page {OldPageId} from frame {FrameIndexToEvict}.", oldPageId, frameIndexToEvict);
+        try
+        {
+          await _diskManager.WriteDiskPageAsync(oldPageId, frame.PageData);
+        }
+        catch (Exception ex)
+        {
+          _logger.LogCritical(ex, "CRITICAL: Failed to flush dirty page {OldPageId} from frame {FrameIndexToEvict}. Data for may be lost.", oldPageId, frameIndexToEvict);
+          // Propagate a specific exception so HandleCacheMissAsync knows the flush failed.
+          throw new CouldNotFlushToDiskException($"Failed to flush dirty page {oldPageId} from frame {frameIndexToEvict}. Data may be lost.", ex);
+        }
+      }
+    }
+
+    // Reset frame metadata and clear buffer regardless of whether it held a page
+    frame.Reset(); // Sets CurrentPageId = default, IsDirty = false, PinCount = 0
+    frame.PageData.Span.Clear(); // Zero out the memory buffer
+
+    _logger.LogDebug("Frame {FrameIndexToEvict} successfully processed for eviction and is now clean and ready for reuse.", frameIndexToEvict);
+  }
+
+  private void CleanupFailedFrameLoadAndFree(int frameIndex, Frame frame)
+  {
+    _logger.LogWarning("Cleaning up frame {FrameIndex} after failed page load for intended PageId {PageId}.", frameIndex, frame.CurrentPageId); // frame.CurrentPageId was set to the new pageId
+    if (frame.CurrentPageId != default(PageId))
+    {
+      _pageTable.TryRemove(frame.CurrentPageId, out _); // Remove if it was added by mistake or for the new page
+    }
+    frame.Reset(); // Reset all metadata including CurrentPageId, PinCount, IsDirty
+    // Return frame to free list (needs lock for _freeFrameIndices AND LRU data)
+    lock (_replacerLock)
+    {
+      if (_lruNodeLookup.TryGetValue(frameIndex, out var node)) // Ensure not in LRU if it was added
+      {
+        _lruList.Remove(node);
+        _lruNodeLookup.Remove(frameIndex);
+      }
+      _freeFrameIndices.Enqueue(frameIndex);
     }
   }
+
+  private void MoveToMostRecentlyUsed(int frameIndex)
+  {
+    lock (_replacerLock)
+    {
+      if (_lruNodeLookup.TryGetValue(frameIndex, out LinkedListNode<int>? node))
+      {
+        _lruList.Remove(node);
+      }
+      // Add the frame index to the end of the LRU list (MRU)
+      var lastNode = _lruList.AddLast(frameIndex);
+      _lruNodeLookup[frameIndex] = lastNode;
+    }
+  }
+
   /// <summary>
   /// Asynchronously disposes of resources managed by the BufferPoolManager.
   /// </summary>

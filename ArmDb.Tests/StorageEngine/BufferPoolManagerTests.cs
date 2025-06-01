@@ -108,7 +108,7 @@ public partial class BufferPoolManagerTests : IDisposable
   }
 
   [Fact]
-  public async Task FetchPageAsync_PoolFullOfPinnedPages_ReturnsNull()
+  public async Task FetchPageAsync_PoolFullOfPinnedPages_Throws()
   {
     // Arrange
     // Re-initialize BPM with a small pool size for this specific test
@@ -122,10 +122,10 @@ public partial class BufferPoolManagerTests : IDisposable
     var pageId3 = new PageId(tableId, 3); // The page that shouldn't fit
 
     // Create corresponding data on "disk"
-    await CreateTestPageFileWithDataAsync(tableId, 0, StorageEngineTestHelper.CreateTestBuffer((byte)'A'));
-    await CreateTestPageFileWithDataAsync(tableId, 1, StorageEngineTestHelper.CreateTestBuffer((byte)'B'));
-    await CreateTestPageFileWithDataAsync(tableId, 2, StorageEngineTestHelper.CreateTestBuffer((byte)'C'));
-    await CreateTestPageFileWithDataAsync(tableId, 3, StorageEngineTestHelper.CreateTestBuffer((byte)'D'));
+    await CreateTestPageFileWithDataAsync(tableId, 0, CreateTestBuffer((byte)'A'));
+    await CreateTestPageFileWithDataAsync(tableId, 1, CreateTestBuffer((byte)'B'));
+    await CreateTestPageFileWithDataAsync(tableId, 2, CreateTestBuffer((byte)'C'));
+    await CreateTestPageFileWithDataAsync(tableId, 3, CreateTestBuffer((byte)'D'));
 
     // Act: Fill the buffer pool. Each fetched page will be pinned (PinCount = 1).
     Page? p0 = await localBpm.FetchPageAsync(pageId0);
