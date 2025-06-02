@@ -2,8 +2,12 @@ using ArmDb.Common.Abstractions;
 using ArmDb.Common.Utils;
 using ArmDb.StorageEngine;
 using ArmDb.StorageEngine.Exceptions;
+using ArmDb.UnitTests.Server;
+using ArmDb.UnitTests.TestUtils;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Xunit.Abstractions;
 using static ArmDb.UnitTests.StorageEngine.StorageEngineTestHelper;
 
 namespace ArmDb.UnitTests.StorageEngine;
@@ -17,7 +21,7 @@ public partial class BufferPoolManagerTests : IDisposable
   private readonly BufferPoolManagerOptions _bpmOptions;
   private const int PageSize = Page.Size;
 
-  public BufferPoolManagerTests()
+  public BufferPoolManagerTests(ITestOutputHelper output)
   {
     _fileSystem = new FileSystem();
     _baseTestDir = Path.Combine(Path.GetTempPath(), $"ArmDb_BPM_Tests_{Guid.NewGuid()}");
@@ -28,7 +32,22 @@ public partial class BufferPoolManagerTests : IDisposable
 
     // Configure BPM
     _bpmOptions = new BufferPoolManagerOptions { PoolSizeInPages = 10 }; // Small pool for testing
-    var bpmLogger = NullLogger<BufferPoolManager>.Instance;
+
+    var loggerFactory = LoggerFactory.Create(builder =>
+            {
+              builder
+              .AddFilter("ArmDb.StorageEngine.BufferPoolManager", LogLevel.Trace) // Show Trace and above for BPM
+              .AddFilter("Default", LogLevel.Information) // Other categories at Information
+                                                          // .AddConsole(); // Standard console logger
+                                                          // For xUnit, a provider that writes to ITestOutputHelper is best.
+                                                          // If you don't have a specific xUnit logging provider,
+                                                          // AddDebug() or AddConsole() might show up in "Test Detail Summary" or general output.
+              .AddXUnit(output); // Requires a NuGet package like Xunit.Microsoft.Extensions.Logging
+                                 // Or implement a simple one yourself if needed for just console-like output
+            });
+    var bpmLogger = loggerFactory.CreateLogger<BufferPoolManager>();
+
+    //var bpmLogger = NullLogger<BufferPoolManager>.Instance;
     _bpm = new BufferPoolManager(Options.Create(_bpmOptions), _diskManager, bpmLogger);
   }
 
@@ -203,6 +222,187 @@ public partial class BufferPoolManagerTests : IDisposable
     Assert.NotNull(exception.Message);
     Assert.Contains($"Page {pageId}", exception.Message);
     Assert.Contains("pin count is 0 (must be > 0)", exception.Message);
+  }
+
+  [Fact]
+  public async Task FetchPageAsync_DiskReadFailsForNewPage_ThrowsPageLoadFromDiskException()
+  {
+    // Arrange
+    var mockFileSystem = new BpmMockFileSystem();
+    // DiskManager uses the base test directory, ensure it exists for ControllableFileSystem's perspective
+    mockFileSystem.EnsureDirectoryExists(_baseTestDir);
+
+    var diskManagerWithError = new DiskManager(mockFileSystem, NullLogger<DiskManager>.Instance, _baseTestDir);
+    var options = new BufferPoolManagerOptions { PoolSizeInPages = 1 }; // Small pool
+    var bpmWithErrorHandling = new BufferPoolManager(Options.Create(options), diskManagerWithError, NullLogger<BufferPoolManager>.Instance);
+
+    int tableId = 701;
+    var pageIdToLoad = new PageId(tableId, 0);
+    var filePath = GetExpectedTablePath(tableId); // This path is relative to _baseTestDir
+
+    // No actual file on disk is created for ControllableFileSystem unless explicitly added to its dictionary.
+    // We want ReadFileAsync to throw.
+    mockFileSystem.ReadFailurePaths.Add(filePath); // Configure mock to fail on read for this path
+
+    // Act & Assert
+    var exception = await Assert.ThrowsAsync<CouldNotLoadPageFromDiskException>(() =>
+        bpmWithErrorHandling.FetchPageAsync(pageIdToLoad)
+    );
+
+    Assert.NotNull(exception.InnerException);
+    Assert.IsType<IOException>(exception.InnerException); // Check that the underlying IO error is preserved
+    Assert.Contains($"Failed to read page {pageIdToLoad} from disk", exception.Message);
+
+    // Verify the frame that was attempted is now free again (BPM internal state)
+    // This requires a test hook or verifying that fetching another page uses that frame.
+    // For now, primarily test the exception.
+    // Example of an advanced check if a test hook was available:
+    // Assert.Null(bpmWithErrorHandling.GetFrameByPageId_TestOnly(pageIdToLoad));
+
+    await bpmWithErrorHandling.DisposeAsync();
+  }
+
+  [Fact]
+  public async Task FetchPageAsync_DirtyVictimFlushFails_ThrowsPageFlushException()
+  {
+    // Arrange
+    var mockFileSystem = new BpmMockFileSystem();
+    mockFileSystem.EnsureDirectoryExists(_baseTestDir);
+
+    var diskManagerWithError = new DiskManager(mockFileSystem, NullLogger<DiskManager>.Instance, _baseTestDir);
+    var options = new BufferPoolManagerOptions { PoolSizeInPages = 1 }; // Pool size of 1 to force eviction
+    var bpmWithErrorHandling = new BufferPoolManager(Options.Create(options), diskManagerWithError, NullLogger<BufferPoolManager>.Instance);
+
+    int tableId = 702;
+    var pageIdToEvict = new PageId(tableId, 0); // This will be our dirty victim
+    var pageIdToLoad = new PageId(tableId, 1);  // This is the new page we want to load
+
+    // Setup initial data for pageIdToEvict in our controllable FS
+    byte[] initialPage0Data = CreateTestBuffer(0xAA);
+    var page0FilePath = GetExpectedTablePath(pageIdToEvict.TableId); // Use pageIdToEvict.TableId
+    mockFileSystem.AddFileContent(page0FilePath, initialPage0Data);
+
+    // Fetch, modify, and unpin pageIdToEvict as dirty
+    Page? p0 = await bpmWithErrorHandling.FetchPageAsync(pageIdToEvict);
+    Assert.NotNull(p0);
+    p0.Data.Span[0] = 0xFF; // Modify it
+    await bpmWithErrorHandling.UnpinPageAsync(pageIdToEvict, true); // Unpin as dirty
+
+    // Setup ControllableFileSystem to fail when WriteFileAsync is called for pageIdToEvict's file
+    mockFileSystem.WriteFailurePaths.Add(page0FilePath);
+
+    // Act & Assert: Attempting to fetch pageIdToLoad should trigger eviction of dirty pageIdToEvict,
+    // which will fail during flush.
+    var exception = await Assert.ThrowsAsync<CouldNotFlushToDiskException>(() =>
+        bpmWithErrorHandling.FetchPageAsync(pageIdToLoad)
+    );
+
+    Assert.NotNull(exception.InnerException);
+    Assert.IsType<IOException>(exception.InnerException);
+    Assert.Contains($"Failed to flush dirty page {pageIdToEvict}", exception.Message);
+
+    // Verify pageIdToLoad was not loaded
+    // This would require an internal check or fetching it and expecting a miss / specific error
+    // Assert.Null(bpmWithErrorHandling.GetFrameByPageId_TestOnly(pageIdToLoad));
+
+    await bpmWithErrorHandling.DisposeAsync();
+  }
+
+  [Fact]
+  public async Task FetchPageAsync_ConcurrentFetchesForSameNewPage_ReadsDiskOnceAndCorrectlyPins()
+  {
+    // Arrange
+    var controllableFs = new BpmMockFileSystem();
+    // DiskManager needs its base directory to exist even in the mock FS if it checks/creates it.
+    controllableFs.EnsureDirectoryExists(_baseTestDir);
+
+    var diskManagerWithControllableFs = new DiskManager(controllableFs, NullLogger<DiskManager>.Instance, _baseTestDir);
+    var bpmOptions = new BufferPoolManagerOptions { PoolSizeInPages = 5 }; // Sufficiently large pool
+    var bpm = new BufferPoolManager(Options.Create(bpmOptions), diskManagerWithControllableFs, NullLogger<BufferPoolManager>.Instance);
+
+    int tableId = 501;
+    var targetPageId = new PageId(tableId, 0);
+    string filePath = GetExpectedTablePath(tableId); // Helper to get consistent path based on _baseTestDir
+    byte[] pageDataOnDisk = CreateTestBuffer(0xAA); // Creates a PageSize buffer filled with 0xAA
+
+    // Add the file content to our controllable file system
+    controllableFs.AddFileContent(filePath, pageDataOnDisk);
+    // controllableFs.ResetReadFileCallCount(filePath); // Call this if your controllable FS accumulates counts globally
+
+    int concurrentFetches = 3;
+    var fetchTasks = new List<Task<Page>>();
+
+    // Act
+    // Launch all tasks. Using Task.Run ensures they are scheduled on thread pool
+    // and have a better chance of executing concurrently, stressing the BPM's sync mechanisms.
+    for (int i = 0; i < concurrentFetches; i++)
+    {
+      fetchTasks.Add(Task.Run(() => bpm.FetchPageAsync(targetPageId)));
+    }
+
+    // Wait for all fetch operations to complete
+    Page[] results = await Task.WhenAll(fetchTasks);
+
+    // Assert
+    // 1. All fetches succeeded and returned non-null Page objects
+    Assert.Equal(concurrentFetches, results.Length);
+    Assert.All(results, Assert.NotNull); // Ensure no null pages returned
+
+    // 2. All Page objects have the correct PageId and initial content
+    foreach (var page in results)
+    {
+      Assert.Equal(targetPageId, page!.Id); // page! because Assert.NotNull was called
+      Assert.True(page.Data.Span.SequenceEqual(pageDataOnDisk), $"Page {page.Id} content mismatch after initial concurrent fetch.");
+    }
+
+    // 3. DiskManager's ReadFileAsync (via IFileSystem.ReadFileAsync) was called only once
+    // This assertion relies on you implementing call counting in your ControllableFileSystem
+    // For example: Assert.Equal(1, controllableFs.GetReadFileCallCount(filePath));
+    // Let's assume your ControllableFileSystem has a way to get this count.
+    // If not, the shared buffer test (4) is an indirect proof.
+    var readStats = controllableFs as BpmMockFileSystem; // Cast if needed, or ensure your _fileSystem field in the test class is already the controllable one
+    if (readStats != null)
+    {
+      Assert.Equal(1, readStats.GetReadFileCallCount(filePath)); // Replace GetReadFileCallCount with your actual method
+    }
+
+
+    // 4. All returned Page objects share the same underlying memory buffer
+    if (results.Length > 1 && results[0] != null && results[1] != null)
+    {
+      // Modify data through the first fetched page instance
+      results[0].Data.Span[0] = 0xFF; // Change first byte
+      results[0].Data.Span[10] = 0xEE; // Change another byte
+
+      // Verify the change is reflected in another fetched page instance
+      Assert.Equal(0xFF, results[1].Data.Span[0]);
+      Assert.Equal(0xEE, results[1].Data.Span[10]);
+    }
+
+    // 5. Pin Count (requires test hook in BPM)
+    // This part assumes you have the GetFrameByPageId_TestOnly method and PinCount is accessible.
+#if TEST_ONLY
+    var frame = bpm.GetFrameByPageId_TestOnly(targetPageId);
+    Assert.NotNull(frame);
+    // Each successful FetchPageAsync call pins the page.
+    // If any task failed and returned null (though our test asserts non-null),
+    // the count would be lower. Here, all should have succeeded.
+    Assert.Equal(concurrentFetches, frame.PinCount);
+
+    // Unpin all fetched pages to clean up frame's pin count for subsequent tests if BPM instance were reused
+    foreach (var pageInstance in results)
+    {
+      if (pageInstance != null)
+      {
+        await bpm.UnpinPageAsync(pageInstance.Id, false);
+      }
+    }
+    Assert.Equal(0, frame.PinCount); // Verify it goes back to 0
+#endif
+
+    // Cleanup the specific BPM instance for this test if it holds unmanaged resources directly
+    // or to ensure its state doesn't affect other tests (if not creating a new one per test).
+    await bpm.DisposeAsync();
   }
 
   // Helper to get the expected table file path

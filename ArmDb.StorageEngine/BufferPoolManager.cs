@@ -40,6 +40,12 @@ internal sealed class BufferPoolManager : IAsyncDisposable
   private readonly ConcurrentDictionary<PageId, int> _pageTable;
 
   /// <summary>
+  /// A thread-safe dictionary to manage locks on a per page basis. These locks handle multiple
+  /// concurrent attempts to load the same page from disk.
+  /// </summary>
+  private readonly ConcurrentDictionary<PageId, SemaphoreSlim> _pageLoadingLocks = new();
+
+  /// <summary>
   /// A thread-safe queue holding the indices of frames that are currently free and
   /// available for use (e.g., to load a new page from disk).
   /// Initially, all frames are free.
@@ -136,12 +142,15 @@ internal sealed class BufferPoolManager : IAsyncDisposable
 
   internal async Task<Page> FetchPageAsync(PageId pageId)
   {
+    // For trace logging/debugging purposes, we capture the thread ID.
+    int threadId = Thread.CurrentThread.ManagedThreadId;
     _logger.LogTrace("Fetching page {PageId}.", pageId);
 
-    // Step 1: Attempt to get the page from cache.
+    // Initial optimistic cache check...
     if (TryGetCachedPageAndPin(pageId, out Page? cachedPage))
     {
       // Cache Hit! All necessary actions for hit path are done.
+      _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: END (Cache Hit - Initial Check) for PageId {PageId}. Returning page.", threadId, pageId);
       // Null-forgiving operator used because bool return true guarantees page is not null.
       return cachedPage!;
     }
@@ -149,7 +158,52 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     // Cache miss: Page not found in the buffer pool.
     _logger.LogTrace("Page {PageId} not in cache. Page must be read and loaded into a free frame...", pageId);
 
-    return await HandleCacheMissAsync(pageId);
+    // If our optimistic cache check failed, we need to handle a cache miss, but we must lock access on a per
+    // page basis to avoid multiple attempts to read the page from disk.
+    SemaphoreSlim? pageLoadLock = _pageLoadingLocks.GetOrAdd(pageId, _ => new SemaphoreSlim(1, 1));
+
+    // Asynchronously wait to enter the critical section for this pageId
+    _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: Cache miss for PageId {PageId}. Attempting to acquire loading lock.", threadId, pageId);
+    await pageLoadLock.WaitAsync();
+    _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: Loading lock ACQUIRED for PageId {PageId}.", threadId, pageId);
+
+    try
+    {
+      // Re-check the cache after acquiring the lock as it is likely another thread may have loaded the page while we were waiting for the lock.      
+      if (TryGetCachedPageAndPin(pageId, out Page? pageAfterLock))
+      {
+        _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: END (Cache Hit - After Lock) for PageId {PageId}. Returning page.", threadId, pageId);
+        return pageAfterLock!;
+      }
+
+      // Still a miss - This thread is now responsible for loading the page.
+      _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: Still a miss for PageId {PageId} after lock. Proceeding to load via HandleCacheMissAsync.", threadId, pageId);
+
+      // HandleCacheMissAsync will find/prepare a frame, load data from disk,
+      // add to page table, pin the page, and update its LRU status.
+      Page loadedPage = await HandleCacheMissAsync(pageId);
+
+      _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: END (Cache Miss - Loaded by this thread) for PageId {PageId}. Returning page.", threadId, pageId);
+      return loadedPage;
+    }
+    finally
+    {
+      pageLoadLock.Release();
+      _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: Loading lock RELEASED for PageId {PageId}.", threadId, pageId);
+
+      // Optional: Consider removing the semaphore from _pageLoadingLocks if the page
+      // is now successfully cached and the semaphore is unlikely to be needed again soon
+      // for this PageId. This prevents the dictionary from growing indefinitely.
+      // However, removal needs to be done carefully to avoid race conditions if another
+      // thread is just about to GetOrAdd it. A common strategy is to keep them,
+      // or use a more complex mechanism with weak references or timed eviction for the semaphores.
+      // For now, keeping them is simpler.
+      // Example (needs careful thought on concurrency if implemented):
+      // if (_pageTable.ContainsKey(pageId)) // If page is now successfully cached
+      // {
+      //     _pageLoadingLocks.TryRemove(pageId, out _);
+      // }
+    }
   }
 
   /// <summary>
@@ -534,4 +588,37 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     _logger.LogInformation("BufferPoolManager disposed. Rented memory returned to pool.");
     GC.SuppressFinalize(this);
   }
+
+#if TEST_ONLY
+  /// <summary>
+  /// [TESTING ONLY] Gets the Frame object associated with a PageId if it's currently
+  /// resident in the buffer pool.
+  /// This method is intended for use in unit/integration tests to inspect internal BPM state
+  /// like PinCount or IsDirty status of a specific frame.
+  /// It should NOT be used in production code.
+  /// </summary>
+  /// <param name="pageId">The PageId to look for.</param>
+  /// <returns>The Frame object if the page is found in the buffer pool; otherwise, null.</returns>
+  internal Frame? GetFrameByPageId_TestOnly(PageId pageId)
+  {
+    // _pageTable is ConcurrentDictionary<PageId, int>
+    // _frames is Frame[]
+    if (_pageTable.TryGetValue(pageId, out int frameIndex))
+    {
+      // Basic sanity check, though TryGetValue should give a valid index if true
+      if (frameIndex >= 0 && frameIndex < _frames.Length)
+      {
+        return _frames[frameIndex];
+      }
+      else
+      {
+        // This indicates a severe inconsistency between _pageTable and _frames
+        _logger?.LogCritical("GetFrameByPageId_TestOnly: PageTable returned an invalid frameIndex {FrameIndex} for PageId {PageId}. Frames array size: {FramesLength}.",
+                            frameIndex, pageId, _frames.Length);
+        return null;
+      }
+    }
+    return null; // PageId not found in the page table
+  }
+#endif
 }
