@@ -564,18 +564,74 @@ internal sealed class BufferPoolManager : IAsyncDisposable
   }
 
   /// <summary>
-  /// Asynchronously disposes of resources managed by the BufferPoolManager.
+  /// Flushes a single dirty page to disk if it exists in the buffer pool.
+  /// </summary>
+  /// <param name="pageId">The ID of the page to flush.</param>
+  /// <returns>True if the page was found, was dirty, and successfully flushed; false otherwise.</returns>
+  internal async Task<bool> FlushPageAsync(PageId pageId)
+  {
+    // Check if the page is resident in the page table
+    if (_pageTable.TryGetValue(pageId, out int frameIndex))
+    {
+      var frame = _frames[frameIndex];
+      // No lock is taken here for IsDirty check, assuming that concurrent writes to IsDirty are acceptable
+      // and that a flush call is a coordination point. A more complex system might latch the page here.
+      if (frame.IsDirty)
+      {
+        _logger.LogTrace("Flushing dirty page {PageId} from frame {FrameIndex} on demand.", pageId, frameIndex);
+        try
+        {
+          await _diskManager.WriteDiskPageAsync(pageId, frame.PageData);
+          frame.IsDirty = false; // Mark clean after successful write
+          return true;
+        }
+        catch (Exception ex)
+        {
+          _logger.LogError(ex, "Failed to flush dirty page {PageId} from frame {FrameIndex}.", pageId, frameIndex);
+          // Do not mark clean if write failed
+          return false;
+        }
+      }
+    }
+    return false; // Page not found or not dirty
+  }
+
+  /// <summary>
+  /// Flushes all dirty pages currently in the buffer pool to disk.
+  /// </summary>
+  /// <returns>A task representing the asynchronous flush operation.</returns>
+  internal async Task FlushAllDirtyPagesAsync()
+  {
+    _logger.LogInformation("Flushing all dirty pages to disk...");
+    int flushedCount = 0;
+    // Take a snapshot of the keys to avoid issues with collection modification during iteration.
+    // This is safer in a highly concurrent environment.
+    // TODO: This is not a perfect solution if pages are added/removed while flushing; for a more
+    // robust solution, we need to implement page latching.
+    var pageIdsInPool = _pageTable.Keys.ToList();
+
+    foreach (var pageId in pageIdsInPool)
+    {
+      if (await FlushPageAsync(pageId))
+      {
+        flushedCount++;
+      }
+    }
+    _logger.LogInformation("Flush all pages complete. {Count} pages flushed to disk.", flushedCount);
+  }
+
+  /// <summary>
+  /// Asynchronously disposes of resources managed by the BufferPoolManager,
+  /// ensuring all dirty pages are flushed to disk and rented memory is returned.
   /// </summary>
   public async ValueTask DisposeAsync()
   {
-    _logger.LogInformation("BufferPoolManager disposing...");
+    _logger.LogInformation("Disposing BufferPoolManager...");
 
-    // TODO: STEP 1 - Flush all dirty pages to disk
-    // This requires a FlushAllDirtyPagesAsync() method or similar logic.
-    // For now, we'll assume this will be implemented.
-    // await FlushAllDirtyPagesAsync();
+    // Step 1: Ensure all modified data in the buffer pool is persisted.
+    await FlushAllDirtyPagesAsync();
 
-    // STEP 2 - Return rented buffers to the ArrayPool
+    // Step 2: Return all rented buffers back to the shared ArrayPool.
     if (_rentedBuffers != null)
     {
       for (int i = 0; i < _rentedBuffers.Length; i++)
@@ -583,13 +639,13 @@ internal sealed class BufferPoolManager : IAsyncDisposable
         if (_rentedBuffers[i] != null)
         {
           ArrayPool<byte>.Shared.Return(_rentedBuffers[i]);
-          // Optionally clear the reference: _rentedBuffers[i] = null;
         }
       }
     }
 
-    _logger.LogInformation("BufferPoolManager disposed. Rented memory returned to pool.");
-    GC.SuppressFinalize(this);
+    _logger.LogInformation("BufferPoolManager disposed successfully.");
+    // No need to call GC.SuppressFinalize here because ValueTask-returning DisposeAsync
+    // handles this implicitly when there is no finalizer.
   }
 
 #if DEBUG
