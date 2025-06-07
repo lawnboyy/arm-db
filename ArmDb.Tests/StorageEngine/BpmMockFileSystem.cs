@@ -63,6 +63,11 @@ public class BpmMockFileSystem : IFileSystem
     return count;
   }
 
+  public void ResetReadFileCallCount(string path)
+  {
+    ReadFileAsyncCallCounts.TryRemove(path, out _);
+  }
+
   public Task<int> ReadFileAsync(string path, long fileOffset, Memory<byte> destination)
   {
     if (ReadFailurePaths.Contains(path))

@@ -12,11 +12,11 @@ public partial class BufferPoolManagerTests
   public async Task FetchPageAsync_ConcurrentFetchesForSameNewPage_ReadsDiskOnceAndCorrectlyPins()
   {
     // Arrange
-    var controllableFs = new BpmMockFileSystem();
+    var mockFileSystem = new BpmMockFileSystem();
     // DiskManager needs its base directory to exist even in the mock FS if it checks/creates it.
-    controllableFs.EnsureDirectoryExists(_baseTestDir);
+    mockFileSystem.EnsureDirectoryExists(_baseTestDir);
 
-    var diskManagerWithControllableFs = new DiskManager(controllableFs, NullLogger<DiskManager>.Instance, _baseTestDir);
+    var diskManagerWithControllableFs = new DiskManager(mockFileSystem, NullLogger<DiskManager>.Instance, _baseTestDir);
     var bpmOptions = new BufferPoolManagerOptions { PoolSizeInPages = 5 }; // Sufficiently large pool
     var bpm = new BufferPoolManager(Options.Create(bpmOptions), diskManagerWithControllableFs, NullLogger<BufferPoolManager>.Instance);
 
@@ -26,7 +26,7 @@ public partial class BufferPoolManagerTests
     byte[] pageDataOnDisk = CreateTestBuffer(0xAA); // Creates a PageSize buffer filled with 0xAA
 
     // Add the file content to our controllable file system
-    controllableFs.AddFile(filePath, pageDataOnDisk);
+    mockFileSystem.AddFile(filePath, pageDataOnDisk);
     // controllableFs.ResetReadFileCallCount(filePath); // Call this if your controllable FS accumulates counts globally
 
     int concurrentFetches = 3;
@@ -60,7 +60,7 @@ public partial class BufferPoolManagerTests
     // For example: Assert.Equal(1, controllableFs.GetReadFileCallCount(filePath));
     // Let's assume your ControllableFileSystem has a way to get this count.
     // If not, the shared buffer test (4) is an indirect proof.
-    var readStats = controllableFs as BpmMockFileSystem; // Cast if needed, or ensure your _fileSystem field in the test class is already the controllable one
+    var readStats = mockFileSystem as BpmMockFileSystem; // Cast if needed, or ensure your _fileSystem field in the test class is already the controllable one
     if (readStats != null)
     {
       Assert.Equal(1, readStats.GetReadFileCallCount(filePath)); // Replace GetReadFileCallCount with your actual method
@@ -109,10 +109,10 @@ public partial class BufferPoolManagerTests
   public async Task FetchPageAsync_ConcurrentFetchesForDifferentNewPages_LoadInParallel()
   {
     // Arrange
-    var controllableFs = new BpmMockFileSystem();
-    controllableFs.EnsureDirectoryExists(_baseTestDir);
+    var mockFileSystem = new BpmMockFileSystem();
+    mockFileSystem.EnsureDirectoryExists(_baseTestDir);
 
-    var diskManager = new DiskManager(controllableFs, NullLogger<DiskManager>.Instance, _baseTestDir);
+    var diskManager = new DiskManager(mockFileSystem, NullLogger<DiskManager>.Instance, _baseTestDir);
     var bpmOptions = new BufferPoolManagerOptions { PoolSizeInPages = 5 }; // Pool large enough for all pages
     var bpm = new BufferPoolManager(Options.Create(bpmOptions), diskManager, NullLogger<BufferPoolManager>.Instance);
 
@@ -130,7 +130,7 @@ public partial class BufferPoolManagerTests
       pagesToFetch.Add(pageId);
       pageDataOnDisk.Add(pageId, pageData);
     }
-    CreateMultiPageTestFileInMock(controllableFs, tableId, pageDataOnDisk);
+    CreateMultiPageTestFileInMock(mockFileSystem, tableId, pageDataOnDisk);
 
     var fetchTasks = new List<Task<Page>>();
 
@@ -160,7 +160,7 @@ public partial class BufferPoolManagerTests
     //    (This requires the ControllableFileSystem to track call counts)
     string filePath = GetExpectedTablePath(tableId);
     // Assumes your ControllableFileSystem has GetReadFileCallCount implemented
-    Assert.Equal(numConcurrentPages, controllableFs.GetReadFileCallCount(filePath));
+    Assert.Equal(numConcurrentPages, mockFileSystem.GetReadFileCallCount(filePath));
 
     // 6. Verify each page is pinned exactly once
 #if TEST_ONLY
@@ -173,6 +173,113 @@ public partial class BufferPoolManagerTests
 #endif
 
     // Cleanup
+    await bpm.DisposeAsync();
+  }
+
+  [Fact]
+  public async Task FetchPageAsync_ConcurrentMixOfCachedAndNewPages_LoadCorrectly()
+  {
+    // Arrange
+    var mockFileSystem = new BpmMockFileSystem();
+    mockFileSystem.EnsureDirectoryExists(_baseTestDir);
+
+    var diskManager = new DiskManager(mockFileSystem, NullLogger<DiskManager>.Instance, _baseTestDir);
+    var bpmOptions = new BufferPoolManagerOptions { PoolSizeInPages = 5 }; // Pool large enough to prevent evictions
+    var bpm = new BufferPoolManager(Options.Create(bpmOptions), diskManager, NullLogger<BufferPoolManager>.Instance);
+
+    int tableId = 901;
+    var cachedPageId = new PageId(tableId, 0);
+    var newPageId1 = new PageId(tableId, 1);
+    var newPageId2 = new PageId(tableId, 2);
+
+    // Create data for all pages and add them to our "disk"
+    var pageDataOnDisk = new Dictionary<PageId, byte[]>
+        {
+            { cachedPageId, CreateTestBuffer(0xAA) },
+            { newPageId1, CreateTestBuffer(0xBB) },
+            { newPageId2, CreateTestBuffer(0xCC) }
+        };
+    CreateMultiPageTestFileInMock(mockFileSystem, tableId, pageDataOnDisk);
+    string filePath = GetExpectedTablePath(tableId);
+
+
+    // --- Pre-populate the cache with cachedPageId ---
+    Page? prewarmedPage = await bpm.FetchPageAsync(cachedPageId);
+    Assert.NotNull(prewarmedPage);
+    await bpm.UnpinPageAsync(cachedPageId, isDirty: false); // Unpin it so its PinCount starts at 0 for our test
+
+    // Reset the read count *after* the setup fetch
+    // Assuming your ControllableFileSystem has a method like this
+    mockFileSystem.ResetReadFileCallCount(filePath);
+
+
+    // --- Prepare concurrent tasks (Corrected Method) ---
+    int hitTasksCount = 3;
+
+    // 1. Create a list of delegates (Func<Task<Page>>) representing the work to be done.
+    var taskFactories = new List<Func<Task<Page>>>();
+
+    // Add delegates for cache hits
+    for (int i = 0; i < hitTasksCount; i++)
+    {
+      // The lambda isn't executed yet, just stored in the list.
+      taskFactories.Add(() => bpm.FetchPageAsync(cachedPageId));
+    }
+    // Add delegates for cache misses
+    taskFactories.Add(() => bpm.FetchPageAsync(newPageId1));
+    taskFactories.Add(() => bpm.FetchPageAsync(newPageId2));
+
+    // 2. Shuffle the list of delegates. This randomizes the launch order.
+    var random = new Random();
+    var shuffledFactories = taskFactories.OrderBy(t => random.Next()).ToList();
+
+    // 3. Now, execute the shuffled delegates to create and start the hot tasks.
+    //    Using Task.Run for each ensures they are queued on the ThreadPool.
+    var runningTasks = shuffledFactories.Select(factory => Task.Run(factory)).ToList();
+
+
+
+    // Act
+    // Execute all tasks concurrently and wait for them to complete
+    Page[] results = await Task.WhenAll(runningTasks);
+
+
+    // Assert
+    Assert.Equal(hitTasksCount + 2, results.Length); // Ensure all tasks completed
+
+    // 1. Check disk reads - expecting 2 (one for each new page)
+    Assert.Equal(2, mockFileSystem.GetReadFileCallCount(filePath));
+
+    // 2. Group results by PageId for easier assertions
+    var hitResults = results.Where(p => p?.Id == cachedPageId).ToArray();
+    var miss1Result = results.FirstOrDefault(p => p?.Id == newPageId1);
+    var miss2Result = results.FirstOrDefault(p => p?.Id == newPageId2);
+
+    Assert.Equal(hitTasksCount, hitResults.Length);
+    Assert.NotNull(miss1Result);
+    Assert.NotNull(miss2Result);
+
+    // 3. Verify data integrity of all returned pages
+    Assert.All(hitResults, p => Assert.True(p!.Data.Span.SequenceEqual(pageDataOnDisk[cachedPageId])));
+    Assert.True(miss1Result!.Data.Span.SequenceEqual(pageDataOnDisk[newPageId1]));
+    Assert.True(miss2Result!.Data.Span.SequenceEqual(pageDataOnDisk[newPageId2]));
+
+    // 4. Check Pin Counts using the test-only helper method
+#if TEST_ONLY
+    var cachedFrame = bpm.GetFrameByPageId_TestOnly(cachedPageId);
+    Assert.NotNull(cachedFrame);
+    Assert.Equal(hitTasksCount, cachedFrame.PinCount); // 3 cache hits -> PinCount = 3
+
+    var newFrame1 = bpm.GetFrameByPageId_TestOnly(newPageId1);
+    Assert.NotNull(newFrame1);
+    Assert.Equal(1, newFrame1.PinCount);
+
+    var newFrame2 = bpm.GetFrameByPageId_TestOnly(newPageId2);
+    Assert.NotNull(newFrame2);
+    Assert.Equal(1, newFrame2.PinCount);
+#endif
+
+    // Cleanup local BPM instance
     await bpm.DisposeAsync();
   }
 
