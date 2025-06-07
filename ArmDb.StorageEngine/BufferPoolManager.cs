@@ -606,8 +606,9 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     int flushedCount = 0;
     // Take a snapshot of the keys to avoid issues with collection modification during iteration.
     // This is safer in a highly concurrent environment.
-    // TODO: This is not a perfect solution if pages are added/removed while flushing; for a more
+    // This is not a perfect solution if pages are added/removed while flushing; for a more
     // robust solution, we need to implement page latching.
+    // TODO: Implement page latching to handle concurrent writes.
     var pageIdsInPool = _pageTable.Keys.ToList();
 
     foreach (var pageId in pageIdsInPool)
