@@ -514,7 +514,10 @@ public partial class BufferPoolManagerTests
     var targetPageId = new PageId(tableId, 0);
 
     // Create the page on our mock "disk"
-    await CreateTestPageFileWithDataAsync(tableId, 0, CreateTestBuffer(0xAB));
+    CreateMultiPageTestFileInMock(mockFileSystem, tableId, new Dictionary<PageId, byte[]>
+    {
+        { targetPageId, CreateTestBuffer(0xAB) } // Page 0 filled with 0xAB
+    });
 
 
     // Act & Assert - Stage 1: Two concurrent initial fetches
@@ -553,13 +556,17 @@ public partial class BufferPoolManagerTests
     var pageToForceEviction1 = new PageId(tableId, 1);
     var pageToForceEviction2 = new PageId(tableId, 2);
     var pageToForceEviction3 = new PageId(tableId, 3);
-    await CreateTestPageFileWithDataAsync(tableId, 1, CreateTestBuffer(0x01));
-    await CreateTestPageFileWithDataAsync(tableId, 2, CreateTestBuffer(0x02));
-    await CreateTestPageFileWithDataAsync(tableId, 3, CreateTestBuffer(0x03));
+    CreateMultiPageTestFileInMock(mockFileSystem, tableId, new Dictionary<PageId, byte[]>
+    {
+        { pageToForceEviction1, CreateTestBuffer(0x01) },
+        { pageToForceEviction2, CreateTestBuffer(0x02) },
+        { pageToForceEviction3, CreateTestBuffer(0x03) }
+    });
 
     // Fill the rest of the pool and force eviction of our target page
     await bpm.FetchPageAsync(pageToForceEviction1);
-    await bpm.FetchPageAsync(pageToForceEviction2); // This should evict the targetPageId frame
+    await bpm.FetchPageAsync(pageToForceEviction2);
+    await bpm.FetchPageAsync(pageToForceEviction3); // This should evict the targetPageId frame
 
     var evictedFrame = bpm.GetFrameByPageId_TestOnly(targetPageId);
     Assert.Null(evictedFrame); // Verify it's no longer in the cache
