@@ -308,6 +308,108 @@ public partial class BufferPoolManagerTests : IDisposable
     await bpmWithErrorHandling.DisposeAsync();
   }
 
+  // In BufferPoolManagerTests.cs
+
+  [Fact]
+  public async Task FlushAllDirtyPagesAsync_OnlyWritesDirtyPages_AndResetsFlags()
+  {
+    // Arrange
+    var mockFileSystem = new BpmMockFileSystem();
+    mockFileSystem.EnsureDirectoryExists(_baseTestDir);
+
+    var diskManager = new DiskManager(mockFileSystem, NullLogger<DiskManager>.Instance, _baseTestDir);
+    // Pool size must be large enough to hold all pages without eviction
+    var bpmOptions = new BufferPoolManagerOptions { PoolSizeInPages = 5 };
+    var bpm = new BufferPoolManager(Options.Create(bpmOptions), diskManager, NullLogger<BufferPoolManager>.Instance);
+
+    int tableId = 201;
+    var cleanPageId0 = new PageId(tableId, 0);
+    var dirtyPageId1 = new PageId(tableId, 1);
+    var cleanPageId2 = new PageId(tableId, 2);
+    var dirtyPageId3 = new PageId(tableId, 3);
+
+    // Prepare initial data for all pages
+    var pageDataMap = new Dictionary<PageId, byte[]>
+    {
+        { cleanPageId0, CreateTestBuffer(0xAA) },
+        { dirtyPageId1, CreateTestBuffer(0xBB) },
+        { cleanPageId2, CreateTestBuffer(0xCC) },
+        { dirtyPageId3, CreateTestBuffer(0xDD) }
+    };
+    CreateMultiPageTestFileInMock(mockFileSystem, tableId, pageDataMap);
+    string filePath = GetExpectedTablePath(tableId);
+
+    // Prepare modified data for the dirty pages
+    var p1ModifiedData = CreateTestBuffer(0xB1);
+    var p3ModifiedData = CreateTestBuffer(0xD1);
+
+    // 1. Fetch all pages to load them into the buffer pool
+    var p0 = await bpm.FetchPageAsync(cleanPageId0);
+    var p1 = await bpm.FetchPageAsync(dirtyPageId1);
+    var p2 = await bpm.FetchPageAsync(cleanPageId2);
+    var p3 = await bpm.FetchPageAsync(dirtyPageId3);
+    Assert.NotNull(p0); Assert.NotNull(p1); Assert.NotNull(p2); Assert.NotNull(p3);
+
+    // 2. Modify the pages that should be dirty
+    p1ModifiedData.CopyTo(p1.Data);
+    p3ModifiedData.CopyTo(p3.Data);
+
+    // 3. Unpin pages, setting the dirty flag appropriately
+    await bpm.UnpinPageAsync(cleanPageId0, isDirty: false);
+    await bpm.UnpinPageAsync(dirtyPageId1, isDirty: true);
+    await bpm.UnpinPageAsync(cleanPageId2, isDirty: false);
+    await bpm.UnpinPageAsync(dirtyPageId3, isDirty: true);
+
+    // Reset I/O counters after the setup phase
+    mockFileSystem.ResetReadFileCallCount(filePath);
+
+    // Act
+    await bpm.FlushAllDirtyPagesAsync();
+
+    // Assert
+    // 1. Verify disk write counts
+    Assert.Equal(2, mockFileSystem.GetWriteFileCallCount(filePath)); // Only dirty pages should be written
+    Assert.Equal(0, mockFileSystem.GetReadFileCallCount(filePath));  // No reads should have occurred
+
+    // 2. Verify the flushed data on "disk" is the MODIFIED data
+    Assert.True(mockFileSystem.Files.TryGetValue(filePath, out byte[]? finalFileContent));
+    Assert.NotNull(finalFileContent);
+
+    // Check the dirty pages' content
+    var p1_diskContentAfter = finalFileContent.AsSpan((int)Page.Size * 1, Page.Size);
+    var p3_diskContentAfter = finalFileContent.AsSpan((int)Page.Size * 3, Page.Size);
+    Assert.True(p1ModifiedData.AsSpan().SequenceEqual(p1_diskContentAfter), "Dirty page P1 was not flushed correctly.");
+    Assert.True(p3ModifiedData.AsSpan().SequenceEqual(p3_diskContentAfter), "Dirty page P3 was not flushed correctly.");
+
+    // Check that the clean pages' content was NOT modified
+    var p0_diskContentAfter = finalFileContent.AsSpan((int)Page.Size * 0, Page.Size);
+    var p2_diskContentAfter = finalFileContent.AsSpan((int)Page.Size * 2, Page.Size);
+    Assert.True(pageDataMap[cleanPageId0].AsSpan().SequenceEqual(p0_diskContentAfter), "Clean page P0 content was unexpectedly changed.");
+    Assert.True(pageDataMap[cleanPageId2].AsSpan().SequenceEqual(p2_diskContentAfter), "Clean page P2 content was unexpectedly changed.");
+
+
+    // 3. Verify IsDirty flags were reset to false for the flushed pages
+#if DEBUG
+    var frame1 = bpm.GetFrameByPageId_TestOnly(dirtyPageId1);
+    var frame3 = bpm.GetFrameByPageId_TestOnly(dirtyPageId3);
+    Assert.NotNull(frame1);
+    Assert.NotNull(frame3);
+    Assert.False(frame1.IsDirty, "IsDirty flag for flushed page P1 should be false.");
+    Assert.False(frame3.IsDirty, "IsDirty flag for flushed page P3 should be false.");
+
+    // Also verify clean pages remain clean
+    var frame0 = bpm.GetFrameByPageId_TestOnly(cleanPageId0);
+    var frame2 = bpm.GetFrameByPageId_TestOnly(cleanPageId2);
+    Assert.NotNull(frame0);
+    Assert.NotNull(frame2);
+    Assert.False(frame0.IsDirty);
+    Assert.False(frame2.IsDirty);
+#endif
+
+    // Cleanup
+    await bpm.DisposeAsync();
+  }
+
   // Helper to get the expected table file path
   private string GetExpectedTablePath(int tableId) => Path.Combine(_baseTestDir, $"{tableId}{DiskManager.TableFileExtension}");
 
