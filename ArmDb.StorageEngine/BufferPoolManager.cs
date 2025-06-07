@@ -592,7 +592,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     GC.SuppressFinalize(this);
   }
 
-#if TEST_ONLY
+#if DEBUG
   /// <summary>
   /// [TESTING ONLY] Gets the Frame object associated with a PageId if it's currently
   /// resident in the buffer pool.
