@@ -1,5 +1,6 @@
 // In your Test Project (e.g., ArmDb.UnitTests.Common.Utils or a new TestHelpers file)
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -17,7 +18,7 @@ public class BpmMockFileSystem : IFileSystem
   // Paths for which WriteFileAsync should throw an IOException
   public HashSet<string> WriteFailurePaths { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-  public Dictionary<string, int> ReadFileAsyncCallCounts { get; } = new(StringComparer.OrdinalIgnoreCase);
+  public ConcurrentDictionary<string, int> ReadFileAsyncCallCounts { get; } = new(StringComparer.OrdinalIgnoreCase);
 
   public string CombinePath(string path1, string path2) => Path.Combine(path1, path2); // Use actual Path.Combine
   public bool DirectoryExists(string path) => Directories.Contains(path);
@@ -67,8 +68,7 @@ public class BpmMockFileSystem : IFileSystem
     if (ReadFailurePaths.Contains(path))
       throw new IOException($"Simulated read failure for {path}");
 
-    ReadFileAsyncCallCounts.TryGetValue(path, out int currentCount);
-    ReadFileAsyncCallCounts[path] = currentCount + 1;
+    ReadFileAsyncCallCounts.AddOrUpdate(path, 1, (key, currentCount) => currentCount + 1);
 
     if (Files.TryGetValue(path, out var content))
     {
