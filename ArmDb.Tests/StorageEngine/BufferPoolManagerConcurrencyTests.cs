@@ -26,7 +26,7 @@ public partial class BufferPoolManagerTests
     byte[] pageDataOnDisk = CreateTestBuffer(0xAA); // Creates a PageSize buffer filled with 0xAA
 
     // Add the file content to our controllable file system
-    controllableFs.AddFileContent(filePath, pageDataOnDisk);
+    controllableFs.AddFile(filePath, pageDataOnDisk);
     // controllableFs.ResetReadFileCallCount(filePath); // Call this if your controllable FS accumulates counts globally
 
     int concurrentFetches = 3;
@@ -181,13 +181,16 @@ public partial class BufferPoolManagerTests
     if (!pageDataMap.Any()) return;
 
     string filePath = GetExpectedTablePath(tableId);
+    // Find the highest page index to determine required file size
     int maxPageIndex = pageDataMap.Keys.Max(p => p.PageIndex);
     var fileContent = new byte[(maxPageIndex + 1) * Page.Size];
 
+    // Copy each page's data into its correct offset in the file content array
     foreach (var (pageId, data) in pageDataMap)
     {
       data.CopyTo(fileContent.AsSpan((int)((long)pageId.PageIndex * Page.Size)));
     }
-    fs.AddFileContent(filePath, fileContent);
+    // Add the complete file content to the mock file system
+    fs.AddFile(filePath, fileContent);
   }
 }

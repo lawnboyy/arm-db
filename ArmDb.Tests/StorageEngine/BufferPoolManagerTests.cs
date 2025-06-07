@@ -280,7 +280,7 @@ public partial class BufferPoolManagerTests : IDisposable
     // Setup initial data for pageIdToEvict in our controllable FS
     byte[] initialPage0Data = CreateTestBuffer(0xAA);
     var page0FilePath = GetExpectedTablePath(pageIdToEvict.TableId); // Use pageIdToEvict.TableId
-    mockFileSystem.AddFileContent(page0FilePath, initialPage0Data);
+    mockFileSystem.AddFile(page0FilePath, initialPage0Data);
 
     // Fetch, modify, and unpin pageIdToEvict as dirty
     Page? p0 = await bpmWithErrorHandling.FetchPageAsync(pageIdToEvict);

@@ -25,7 +25,7 @@ public class BpmMockFileSystem : IFileSystem
   public void EnsureDirectoryExists(string path) => Directories.Add(path); // Simplified: just tracks it
   public bool FileExists(string path) => Files.ContainsKey(path);
 
-  public void AddFileContent(string path, byte[] content)
+  public void AddFile(string path, byte[] content)
   {
     var dirName = Path.GetDirectoryName(path);
     if (!string.IsNullOrEmpty(dirName))
