@@ -89,6 +89,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     else
     {
       // Default heuristic: 2x processor count, minimum of 1
+      // The processor count is the logical processor count on the machine.
       _pageTableConcurrencyLevel = Environment.ProcessorCount * 2;
       if (_pageTableConcurrencyLevel <= 0) _pageTableConcurrencyLevel = 1;
     }
@@ -341,7 +342,9 @@ internal sealed class BufferPoolManager : IAsyncDisposable
 
     // Check if there is a free frame available. If so, set the free frame as the target frame.
     // The _freeFrameIndices queue itself is thread-safe for Enqueue/Dequeue.
-    // However, interaction with LRU (_lruNodeLookup, _lruList) requires synchronization.
+    // However, interaction with LRU (_lruNodeLookup, _lruList) requires synchronization. Multiple
+    // threads may attempt to update the LRU state concurrently if they are working with different
+    // pages.
     lock (_replacerLock)
     {
       if (_freeFrameIndices.TryDequeue(out int dequeuedFrameIndex))
