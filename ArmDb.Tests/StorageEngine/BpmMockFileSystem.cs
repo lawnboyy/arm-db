@@ -20,6 +20,8 @@ public class BpmMockFileSystem : IFileSystem
 
   public ConcurrentDictionary<string, int> ReadFileAsyncCallCounts { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+  public ConcurrentDictionary<string, int> WriteFileAsyncCallCounts { get; } = new(StringComparer.OrdinalIgnoreCase);
+
   public string CombinePath(string path1, string path2) => Path.Combine(path1, path2); // Use actual Path.Combine
   public bool DirectoryExists(string path) => Directories.Contains(path);
   public void EnsureDirectoryExists(string path) => Directories.Add(path); // Simplified: just tracks it
@@ -63,6 +65,13 @@ public class BpmMockFileSystem : IFileSystem
     return count;
   }
 
+  public int GetWriteFileCallCount(string path)
+  {
+    WriteFileAsyncCallCounts.TryGetValue(path, out int count);
+    return count;
+  }
+
+
   public void ResetReadFileCallCount(string path)
   {
     ReadFileAsyncCallCounts.TryRemove(path, out _);
@@ -92,6 +101,8 @@ public class BpmMockFileSystem : IFileSystem
     if (WriteFailurePaths.Contains(path))
       throw new IOException($"Simulated write failure for {path}");
     ArgumentOutOfRangeException.ThrowIfNegative(fileOffset);
+
+    WriteFileAsyncCallCounts.AddOrUpdate(path, 1, (key, currentCount) => currentCount + 1);
 
     if (!Files.TryGetValue(path, out var content) || content.Length < fileOffset + source.Length)
     {

@@ -283,6 +283,99 @@ public partial class BufferPoolManagerTests
     await bpm.DisposeAsync();
   }
 
+  [Fact]
+  public async Task FetchPageAsync_ConcurrentNewPageFetches_TriggerMultipleCleanEvictionsCorrectly()
+  {
+    // Arrange
+    var mockFileSystem = new BpmMockFileSystem();
+    mockFileSystem.EnsureDirectoryExists(_baseTestDir);
+
+    var diskManager = new DiskManager(mockFileSystem, NullLogger<DiskManager>.Instance, _baseTestDir);
+    // Use a small pool size of 2 to force evictions immediately
+    var bpmOptions = new BufferPoolManagerOptions { PoolSizeInPages = 2 };
+    var bpm = new BufferPoolManager(Options.Create(bpmOptions), diskManager, NullLogger<BufferPoolManager>.Instance);
+
+    int tableId = 301;
+    var pageId0 = new PageId(tableId, 0); // Will become LRU victim
+    var pageId1 = new PageId(tableId, 1); // Will become next victim
+    var pageId2 = new PageId(tableId, 2); // New page to fetch
+    var pageId3 = new PageId(tableId, 3); // Another new page to fetch
+
+    // Create data for all pages on our "disk"
+    var pageDataOnDisk = new Dictionary<PageId, byte[]>
+    {
+        { pageId0, CreateTestBuffer(0xAA) },
+        { pageId1, CreateTestBuffer(0xBB) },
+        { pageId2, CreateTestBuffer(0xCC) },
+        { pageId3, CreateTestBuffer(0xDD) }
+    };
+    CreateMultiPageTestFileInMock(mockFileSystem, tableId, pageDataOnDisk);
+    string filePath = GetExpectedTablePath(tableId);
+
+    // --- Pre-populate the buffer pool and set LRU order ---
+    // 1. Fetch P0 and P1 to fill the pool
+    var p0 = await bpm.FetchPageAsync(pageId0);
+    // Page 1 becomes MRU, so Page 0 will be LRU and the first to be evicted if unpinned.
+    var p1 = await bpm.FetchPageAsync(pageId1);
+    Assert.NotNull(p0);
+    Assert.NotNull(p1);
+
+    // 2. Unpin both pages 0 and 1 so they are eligible for eviction.
+    await bpm.UnpinPageAsync(pageId0, isDirty: false);
+    await bpm.UnpinPageAsync(pageId1, isDirty: false);
+
+    // 3. Reset disk I/O counters after setup
+    mockFileSystem.ResetReadFileCallCount(filePath);
+
+    // --- Prepare concurrent tasks to fetch new pages ---
+    var fetchTasks = new List<Task<Page>>
+    {
+        Task.Run(() => bpm.FetchPageAsync(pageId2)),
+        Task.Run(() => bpm.FetchPageAsync(pageId3))
+    };
+
+    // Act
+    Page[] results = await Task.WhenAll(fetchTasks);
+
+    // Assert
+    // 1. Verify both new pages were loaded successfully
+    Assert.Equal(2, results.Length);
+    Assert.All(results, Assert.NotNull);
+
+    var p2_result = results.FirstOrDefault(p => p?.Id == pageId2);
+    var p3_result = results.FirstOrDefault(p => p?.Id == pageId3);
+    Assert.NotNull(p2_result);
+    Assert.NotNull(p3_result);
+    Assert.True(p2_result.Data.Span.SequenceEqual(pageDataOnDisk[pageId2]));
+    Assert.True(p3_result.Data.Span.SequenceEqual(pageDataOnDisk[pageId3]));
+
+    // 2. Verify disk I/O counts
+    // Should have read P2 and P3 once each.
+    Assert.Equal(2, mockFileSystem.GetReadFileCallCount(filePath));
+    // Should NOT have written P0 or P1 as they were clean.
+    Assert.Equal(0, mockFileSystem.GetWriteFileCallCount(filePath));
+
+    // 3. Verify final pin counts and eviction state using test hooks
+#if DEBUG
+    // P2 and P3 should be in the pool, pinned once each
+    var frame2 = bpm.GetFrameByPageId_TestOnly(pageId2);
+    var frame3 = bpm.GetFrameByPageId_TestOnly(pageId3);
+    Assert.NotNull(frame2);
+    Assert.NotNull(frame3);
+    Assert.Equal(1, frame2.PinCount);
+    Assert.Equal(1, frame3.PinCount);
+
+    // P0 and P1 should have been evicted and no longer be in the cache
+    var frame0 = bpm.GetFrameByPageId_TestOnly(pageId0);
+    var frame1 = bpm.GetFrameByPageId_TestOnly(pageId1);
+    Assert.Null(frame0);
+    Assert.Null(frame1);
+#endif
+
+    // Cleanup local BPM instance
+    await bpm.DisposeAsync();
+  }
+
   private void CreateMultiPageTestFileInMock(BpmMockFileSystem fs, int tableId, Dictionary<PageId, byte[]> pageDataMap)
   {
     if (!pageDataMap.Any()) return;
