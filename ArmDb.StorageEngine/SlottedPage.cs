@@ -79,4 +79,74 @@ internal static class SlottedPage
     // TODO: Consider throwing an exception if the page is corrupted.
     return Math.Max(0, freeSpace);
   }
+
+  /// <summary>
+  /// Attempts to add a new data item to the page at a specific logical index, shifting existing
+  /// slots to the right to maintain order.
+  /// </summary>
+  /// <param name="page">The page to modify.</param>
+  /// <param name="itemData">The raw byte data of the item to insert.</param>
+  /// <param name="indexToInsertAt">The logical, 0-based index in the slot array where the new item's pointer should be inserted.</param>
+  /// <returns>True if the item was successfully added; false if there was not enough free space.</returns>
+  /// <exception cref="ArgumentNullException">Thrown if page is null.</exception>
+  /// <exception cref="ArgumentException">Thrown if itemData is empty.</exception>
+  /// <exception cref="ArgumentOutOfRangeException">Thrown if indexToInsertAt is out of the valid range [0 to current ItemCount].</exception>
+  internal static bool TryAddItem(Page page, ReadOnlySpan<byte> itemData, int indexToInsertAt)
+  {
+    ArgumentNullException.ThrowIfNull(page);
+    if (itemData.IsEmpty)
+    {
+      throw new ArgumentException("Item data to be added cannot be empty.", nameof(itemData));
+    }
+
+    var header = new PageHeader(page);
+    int currentItemCount = header.ItemCount;
+
+    // The insertion index must be from 0 (start) to currentItemCount (end).
+    if ((uint)indexToInsertAt > (uint)currentItemCount)
+    {
+      throw new ArgumentOutOfRangeException(nameof(indexToInsertAt), $"Insertion index ({indexToInsertAt}) must be within the range [0..{currentItemCount}].");
+    }
+
+    // 1. Calculate space needed and check for availability.
+    int spaceNeeded = itemData.Length + Slot.Size;
+    if (spaceNeeded > GetFreeSpace(page))
+    {
+      // Not enough contiguous free space for the new data and its slot pointer.
+      return false;
+    }
+
+    // 2. Write the new item's data into the data heap (growing backward).
+    int recordOffset = header.DataStartOffset - itemData.Length;
+    page.WriteBytes(recordOffset, itemData);
+
+    // 3. Shift existing slots to the right to make room for the new slot.
+    int slotInsertionOffset = PageHeader.HEADER_SIZE + (indexToInsertAt * Slot.Size);
+    int slotsToShiftCount = currentItemCount - indexToInsertAt;
+
+    if (slotsToShiftCount > 0)
+    {
+      int sourceSlotBlockOffset = slotInsertionOffset;
+      int destSlotBlockOffset = sourceSlotBlockOffset + Slot.Size;
+      int slotBlockLength = slotsToShiftCount * Slot.Size;
+
+      // Get a view of the block of slots that needs to be moved.
+      // Using GetReadOnlySpan is safe as it provides a zero-copy view for the source.
+      ReadOnlySpan<byte> slotsToMove = page.GetReadOnlySpan(sourceSlotBlockOffset, slotBlockLength);
+      // Copy it one slot to the right.
+      page.WriteBytes(destSlotBlockOffset, slotsToMove);
+    }
+
+    // 4. Write the new slot data into the now-vacant position.
+    // Write the pointer to the new data cell...
+    page.WriteInt32(slotInsertionOffset, recordOffset);
+    // ...and the length of the data.
+    page.WriteInt32(slotInsertionOffset + sizeof(int), itemData.Length);
+
+    // 5. Update the page header with the new state.
+    header.ItemCount++; // Increment the item count
+    header.DataStartOffset = recordOffset;   // Update the data heap pointer
+
+    return true;
+  }
 }

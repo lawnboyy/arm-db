@@ -2,7 +2,7 @@ using ArmDb.StorageEngine;
 
 namespace ArmDb.UnitTests.StorageEngine;
 
-public class SlottedPageTests
+public partial class SlottedPageTests
 {
   [Fact]
   public void Initialize_AsLeafNode_SetsDefaultHeaderCorrectly()
