@@ -52,5 +52,31 @@ internal static class SlottedPage
     }
   }
 
-  // --- Other methods (GetFreeSpace, TryAddRecord, GetRecord, etc.) will be added here next ---
+  /// <summary>
+  /// Calculates the size of the contiguous block of free space between the slot array
+  /// and the data cells in the slotted page.
+  /// </summary>
+  /// <param name="page">The page to check for free space.</param>
+  /// <returns>The number of bytes of free space available.</returns>
+  /// <exception cref="ArgumentNullException">Thrown if the page is null.</exception>
+  public static int GetFreeSpace(Page page)
+  {
+    ArgumentNullException.ThrowIfNull(page);
+
+    // 1. Create a header view to read the page's metadata
+    var header = new PageHeader(page);
+
+    // 2. Calculate the offset immediately after the last slot entry
+    int endOfSlotsOffset = PageHeader.HEADER_SIZE + (header.ItemCount * Slot.Size);
+
+    // 3. Get the offset where the data heap begins
+    int startOfDataOffset = header.DataStartOffset;
+
+    // 4. The free space is the difference between these two pointers
+    int freeSpace = startOfDataOffset - endOfSlotsOffset;
+
+    // 5. In a corrupted page, this calculation could be negative. Return 0 in that case.
+    // TODO: Consider throwing an exception if the page is corrupted.
+    return Math.Max(0, freeSpace);
+  }
 }

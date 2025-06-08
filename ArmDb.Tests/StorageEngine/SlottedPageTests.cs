@@ -90,6 +90,105 @@ public class SlottedPageTests
     );
   }
 
+  [Fact]
+  public void GetFreeSpace_OnFreshlyInitializedPage_ReturnsCorrectSize()
+  {
+    // Arrange
+    var page = CreateTestPage();
+    // Initialize the page to a known empty state
+    SlottedPage.Initialize(page, PageType.LeafNode);
+    int expectedFreeSpace = Page.Size - PageHeader.HEADER_SIZE;
+
+    // Act
+    int actualFreeSpace = SlottedPage.GetFreeSpace(page);
+
+    // Assert
+    Assert.Equal(expectedFreeSpace, actualFreeSpace);
+  }
+
+  [Fact]
+  public void GetFreeSpace_WithSomeSlotsAndData_ReturnsCorrectSize()
+  {
+    // Arrange
+    var page = CreateTestPage();
+    var header = new PageHeader(page); // Get a view to manipulate header state for the test
+
+    // Simulate a page with 3 records taking up a total of 150 bytes of data
+    int itemCount = 3;
+    int dataOnPageBytes = 150;
+    int dataStartOffset = Page.Size - dataOnPageBytes; // e.g., 8192 - 150 = 8042
+
+    header.ItemCount = itemCount;
+    header.DataStartOffset = dataStartOffset;
+
+    int slotsSize = itemCount * Slot.Size; // 3 * 8 = 24 bytes
+    int endOfSlots = PageHeader.HEADER_SIZE + slotsSize; // 32 + 24 = 56
+    int expectedFreeSpace = dataStartOffset - endOfSlots; // 8042 - 56 = 7986
+
+    // Act
+    int actualFreeSpace = SlottedPage.GetFreeSpace(page);
+
+    // Assert
+    Assert.Equal(expectedFreeSpace, actualFreeSpace);
+  }
+
+  [Fact]
+  public void GetFreeSpace_WhenPageIsFull_ReturnsZero()
+  {
+    // Arrange
+    var page = CreateTestPage();
+    var header = new PageHeader(page);
+
+    // Simulate a state where the free space has been completely used up
+    int itemCount = 10;
+    int slotsSize = itemCount * Slot.Size; // 10 * 8 = 80 bytes
+    int endOfSlots = PageHeader.HEADER_SIZE + slotsSize; // 32 + 80 = 112
+
+    // Set the data pointer to be exactly at the end of the slot array
+    header.ItemCount = itemCount;
+    header.DataStartOffset = endOfSlots;
+
+    // Act
+    int actualFreeSpace = SlottedPage.GetFreeSpace(page);
+
+    // Assert
+    Assert.Equal(0, actualFreeSpace);
+  }
+
+  [Fact]
+  public void GetFreeSpace_OnCorruptedPage_WherePointersCrossed_ReturnsZero()
+  {
+    // Arrange
+    var page = CreateTestPage();
+    var header = new PageHeader(page);
+
+    // Simulate corruption where the data heap pointer has moved past the slot array
+    header.ItemCount = 20; // Slots take up 32 + 20*8 = 192 bytes
+    header.DataStartOffset = 100; // Data pointer is *before* end of slots
+
+    // The raw calculation inside GetFreeSpace would be 100 - 192 = -92
+
+    // Act
+    int actualFreeSpace = SlottedPage.GetFreeSpace(page);
+
+    // Assert
+    // The Math.Max(0, ...) check in the implementation should cap the result at 0
+    Assert.Equal(0, actualFreeSpace);
+  }
+
+  [Fact]
+  public void GetFreeSpace_WithNullPage_ThrowsArgumentNullException()
+  {
+    // Arrange
+    Page? nullPage = null;
+
+    // Act & Assert
+    Assert.Throws<ArgumentNullException>("page", () =>
+        // Use null-forgiving operator (!) as we are intentionally testing the null case
+        SlottedPage.GetFreeSpace(nullPage!)
+    );
+  }
+
   // Helper to create a blank test page.
   // We fill it with a non-zero value to ensure our Initialize method is actually writing zeros.
   private static Page CreateTestPage()
