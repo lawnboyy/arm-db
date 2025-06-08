@@ -17,13 +17,13 @@ public readonly ref struct PageHeader
 
   public const int INVALID_PAGE_INDEX = -1;
 
-  private const int PAGE_LSN_OFFSET = 0;
-  private const int ITEM_COUNT_OFFSET = 8;
-  private const int DATA_START_OFFSET = 12; // Renamed const, resolving conflict
-  private const int PARENT_PAGE_INDEX_OFFSET = 16;
-  private const int TYPE_SPECIFIC_POINTER_1_OFFSET = 20;
-  private const int TYPE_SPECIFIC_POINTER_2_OFFSET = 24;
-  private const int PAGE_TYPE_OFFSET = 28;
+  internal const int PAGE_LSN_OFFSET = 0;
+  internal const int ITEM_COUNT_OFFSET = 8;
+  internal const int DATA_START_OFFSET = 12; // Renamed const, resolving conflict
+  internal const int PARENT_PAGE_INDEX_OFFSET = 16;
+  internal const int TYPE_SPECIFIC_POINTER_1_OFFSET = 20;
+  internal const int TYPE_SPECIFIC_POINTER_2_OFFSET = 24;
+  internal const int PAGE_TYPE_OFFSET = 28;
 
   private readonly Span<byte> _headerSpan;
 
