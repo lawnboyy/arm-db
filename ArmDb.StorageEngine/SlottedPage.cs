@@ -149,4 +149,50 @@ internal static class SlottedPage
 
     return true;
   }
+
+  /// <summary>
+  /// Retrieves the raw byte data of a record at a specific slot index in the slotted page.
+  /// </summary>
+  /// <param name="page">The page to read from.</param>
+  /// <param name="slotIndex">The slot index to jump to.</param>
+  /// <returns></returns>
+  internal static ReadOnlySpan<byte> GetRecord(Page page, int slotIndex)
+  {
+    ArgumentNullException.ThrowIfNull(page, nameof(page));
+
+    var pageHeader = new PageHeader(page);
+    int currentItemCount = pageHeader.ItemCount;
+
+    // Use unsigned trick for a single, efficient bounds check
+    if ((uint)slotIndex >= (uint)currentItemCount)
+    {
+      // Provide a clearer message, especially for the empty case
+      string validRange = currentItemCount == 0
+          ? "The page is empty."
+          : $"Valid range is [0..{currentItemCount - 1}].";
+      throw new ArgumentOutOfRangeException(nameof(slotIndex), $"Slot index {slotIndex} is out of range. {validRange}");
+    }
+
+    // Read the slot to get the record offset and length.
+    var slot = ReadSlot(page, slotIndex);
+
+    // If the data length is zero, the record has been deleted.
+    if (slot.RecordLength == 0)
+    {
+      return ReadOnlySpan<byte>.Empty;
+    }
+
+    // This returns a zero-copy view of the record data. The GetReadOnlySpan method
+    // on the Page itself provides another layer of safety against corrupted slot pointers.
+    return page.GetReadOnlySpan(slot.RecordOffset, slot.RecordLength);
+  }
+
+  private static Slot ReadSlot(Page page, int slotIndex)
+  {
+    int slotOffset = PageHeader.HEADER_SIZE + (slotIndex * Slot.Size);
+    var slotSpan = page.GetReadOnlySpan(slotOffset, Slot.Size);
+    int recordOffset = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(slotSpan);
+    int recordLength = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(slotSpan.Slice(sizeof(int)));
+    return new Slot { RecordOffset = recordOffset, RecordLength = recordLength };
+  }
 }
