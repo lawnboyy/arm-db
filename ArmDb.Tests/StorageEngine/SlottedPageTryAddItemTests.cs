@@ -153,14 +153,4 @@ public partial class SlottedPageTests // Use partial to extend the existing Slot
     Assert.Throws<ArgumentException>("itemData", () =>
         SlottedPage.TryAddItem(page, ReadOnlySpan<byte>.Empty, 0));
   }
-
-  // A private helper to read a slot's data directly from the page for verification
-  private static Slot ReadSlot(Page page, int slotIndex)
-  {
-    int slotOffset = PageHeader.HEADER_SIZE + (slotIndex * Slot.Size);
-    var slotSpan = page.GetReadOnlySpan(slotOffset, Slot.Size);
-    int recordOffset = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(slotSpan);
-    int recordLength = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(slotSpan.Slice(sizeof(int)));
-    return new Slot { RecordOffset = recordOffset, RecordLength = recordLength };
-  }
 }

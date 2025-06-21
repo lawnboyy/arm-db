@@ -169,10 +169,10 @@ internal static class SlottedPage
     if ((uint)slotIndex >= (uint)currentItemCount)
     {
       // Provide a clear message for an empty page or out-of-bounds index.
-      string validRange = currentItemCount == 0
+      string errorMessage = currentItemCount == 0
           ? "The page is empty."
-          : $"Valid range is [0..{currentItemCount - 1}].";
-      throw new ArgumentOutOfRangeException(nameof(slotIndex), $"Slot index {slotIndex} is out of range. {validRange}");
+          : $"Slot index {slotIndex} is out of range. Valid range is [0..{currentItemCount - 1}].";
+      throw new ArgumentOutOfRangeException(nameof(slotIndex), errorMessage);
     }
 
     // Read the slot to get the record offset and length.
@@ -189,18 +189,54 @@ internal static class SlottedPage
     return page.GetReadOnlySpan(slot.RecordOffset, slot.RecordLength);
   }
 
+  /// <summary>
+  /// Deletes a record by marking the slot offset invalid by marking the slot and the length to 0.
+  /// This makes deleting the record very performant but does not reclaim space. The compaction/vacuum
+  /// process will handle that.
+  /// </summary>
+  /// <param name="page"></param>
+  /// <param name="slotIndex"></param>
+  internal static void DeleteRecord(Page page, int slotIndex)
+  {
+    ArgumentNullException.ThrowIfNull(page, nameof(page));
+
+    var pageHeader = new PageHeader(page);
+    int currentItemCount = pageHeader.ItemCount;
+
+    // Perform validation on the given slot index to determine if it's in bounds.
+    // Casting to uint allows a single comparison to check for both negative and out-of-bounds indices.
+    // If slotIndex is negative then the uint cast will yield a large value greater than currentItemCount.
+    // Not sure if this performance optimization is really worth it.
+    if ((uint)slotIndex >= (uint)currentItemCount)
+    {
+      // Provide a clear message for an out-of-bounds index.
+      throw new ArgumentOutOfRangeException(nameof(slotIndex), $"Slot index {slotIndex} is out of range. Valid range is [0..{currentItemCount - 1}].");
+    }
+
+    // If we have a valid slot, zero out the slot offset and length.
+    DeleteSlot(page, slotIndex);
+  }
+
+  private static void DeleteSlot(Page page, int slotIndex)
+  {
+    int slotOffset = PageHeader.HEADER_SIZE + (slotIndex * Slot.Size);
+
+    // Zero out the slot's record offset
+    page.WriteInt32(slotOffset, 0);
+
+    // Zero out the slot's record length
+    page.WriteInt32(slotOffset + sizeof(int), 0);
+  }
+
   private static Slot ReadSlot(Page page, int slotIndex)
   {
     int slotOffset = PageHeader.HEADER_SIZE + (slotIndex * Slot.Size);
-    // Read the slot data at the given offset.
-    var slotSpan = page.GetReadOnlySpan(slotOffset, Slot.Size);
 
     // Get the record offset by reading reading the first 32 bit integer. 
-    // ReadInt32LittleEndian will only read the first 4 bytes of the span.
-    int recordOffset = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(slotSpan);
+    int recordOffset = page.ReadInt32(slotOffset);
 
     // Read the next 32 bit integer for the record length.
-    int recordLength = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(slotSpan.Slice(sizeof(int)));
+    int recordLength = page.ReadInt32(slotOffset + sizeof(int));
     return new Slot { RecordOffset = recordOffset, RecordLength = recordLength };
   }
 }

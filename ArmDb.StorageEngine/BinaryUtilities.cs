@@ -4,6 +4,12 @@ namespace ArmDb.StorageEngine;
 
 public static class BinaryUtilities
 {
+  /// <summary>
+  /// Reads a 32 bit integer from the source span. It will only read the first 4 bytes.
+  /// </summary>
+  /// <param name="source"></param>
+  /// <returns></returns>
+  /// <exception cref="ArgumentOutOfRangeException"></exception>
   public static int ReadInt32LittleEndian(ReadOnlySpan<byte> source)
   {
     const int intSize = sizeof(int);
@@ -21,6 +27,12 @@ public static class BinaryUtilities
     return value;
   }
 
+  /// <summary>
+  /// Reads a 64 bit integer from the source span. It will only read the first 8 bytes.
+  /// </summary>
+  /// <param name="source"></param>
+  /// <returns></returns>
+  /// <exception cref="ArgumentOutOfRangeException"></exception>
   public static long ReadInt64LittleEndian(ReadOnlySpan<byte> source)
   {
     const int longSize = sizeof(long);
