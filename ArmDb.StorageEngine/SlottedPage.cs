@@ -176,7 +176,7 @@ internal static class SlottedPage
     }
 
     // Read the slot to get the record offset and length.
-    var slot = ReadSlot(page, slotIndex);
+    var slot = ReadSlot(page, slotIndex, out var _, out var _);
 
     // If the data length is zero, the record has been deleted.
     if (slot.RecordLength == 0)
@@ -217,6 +217,59 @@ internal static class SlottedPage
     DeleteSlot(page, slotIndex);
   }
 
+  internal static bool TryUpdateRecord(Page page, int slotIndex, ReadOnlySpan<byte> newRecordData)
+  {
+    // Check that the index is valid...
+    var pageHeader = new PageHeader(page);
+    if (slotIndex >= pageHeader.ItemCount || slotIndex < 0)
+    {
+      throw new ArgumentOutOfRangeException(nameof(slotIndex), $"Slot index: {slotIndex} is out of range. Index must be in the range [0...${pageHeader.ItemCount - 1}]");
+    }
+
+    // Read the slot to get the offset...
+    var slot = ReadSlot(page, slotIndex, out var slotOffset, out var slotRecordSizeOffset);
+
+    // You cannot update a deleted record...
+    if (slot.RecordOffset == 0 || slot.RecordLength == 0)
+    {
+      throw new InvalidOperationException($"Cannot update the record at slot index: {slotIndex} because the record has been deleted!");
+    }
+
+    if (newRecordData.Length <= slot.RecordLength)
+    {
+      // Write the new updated record on the data heap at the offset.
+      page.WriteBytes(slot.RecordOffset, newRecordData);
+
+      // Update the slot's record size...
+      page.WriteInt32(slotRecordSizeOffset, newRecordData.Length);
+    }
+    else // New record size exceeds the original record size...
+    {
+      // If the new record is larger than the existing record, we cannot write to the old cell. We'll need to see
+      // if there is sufficient space in the free block to write to.      
+      if (GetFreeSpace(page) < newRecordData.Length)
+      {
+        // There is not enough free space available so we cannot update this record.
+        // TODO: Should we go ahead and attempt a compaction here?
+        return false;
+      }
+
+      // There is enough free space, so we can write the record and then update the record offset.
+      // Calculate the new offset on the heap by shifting the data start offset to the left by the size of the new record...
+      // Update the page header's data start offset
+      pageHeader.DataStartOffset = pageHeader.DataStartOffset - newRecordData.Length;
+
+      // Write the new data...
+      page.WriteBytes(pageHeader.DataStartOffset, newRecordData);
+      // and update the record size...
+      page.WriteInt32(slotRecordSizeOffset, newRecordData.Length);
+      // Now update the slot offset... 
+      page.WriteInt32(slotOffset, pageHeader.DataStartOffset);
+    }
+
+    return true;
+  }
+
   private static void DeleteSlot(Page page, int slotIndex)
   {
     int slotOffset = PageHeader.HEADER_SIZE + (slotIndex * Slot.Size);
@@ -228,15 +281,16 @@ internal static class SlottedPage
     page.WriteInt32(slotOffset + sizeof(int), 0);
   }
 
-  private static Slot ReadSlot(Page page, int slotIndex)
+  private static Slot ReadSlot(Page page, int slotIndex, out int slotOffset, out int slotRecordSizeOffset)
   {
-    int slotOffset = PageHeader.HEADER_SIZE + (slotIndex * Slot.Size);
+    slotOffset = PageHeader.HEADER_SIZE + (slotIndex * Slot.Size);
+    slotRecordSizeOffset = slotOffset + sizeof(int);
 
     // Get the record offset by reading reading the first 32 bit integer. 
     int recordOffset = page.ReadInt32(slotOffset);
 
     // Read the next 32 bit integer for the record length.
-    int recordLength = page.ReadInt32(slotOffset + sizeof(int));
+    int recordLength = page.ReadInt32(slotRecordSizeOffset);
     return new Slot { RecordOffset = recordOffset, RecordLength = recordLength };
   }
 }
