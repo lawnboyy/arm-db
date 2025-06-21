@@ -163,10 +163,12 @@ internal static class SlottedPage
     var pageHeader = new PageHeader(page);
     int currentItemCount = pageHeader.ItemCount;
 
-    // Use unsigned trick for a single, efficient bounds check
+    // Casting to uint allows a single comparison to check for both negative and out-of-bounds indices.
+    // If slotIndex is negative then the uint cast will yield a large value greater than currentItemCount.
+    // Not sure if this performance optimization is really worth it.
     if ((uint)slotIndex >= (uint)currentItemCount)
     {
-      // Provide a clearer message, especially for the empty case
+      // Provide a clear message for an empty page or out-of-bounds index.
       string validRange = currentItemCount == 0
           ? "The page is empty."
           : $"Valid range is [0..{currentItemCount - 1}].";
@@ -190,8 +192,14 @@ internal static class SlottedPage
   private static Slot ReadSlot(Page page, int slotIndex)
   {
     int slotOffset = PageHeader.HEADER_SIZE + (slotIndex * Slot.Size);
+    // Read the slot data at the given offset.
     var slotSpan = page.GetReadOnlySpan(slotOffset, Slot.Size);
+
+    // Get the record offset by reading reading the first 32 bit integer. 
+    // ReadInt32LittleEndian will only read the first 4 bytes of the span.
     int recordOffset = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(slotSpan);
+
+    // Read the next 32 bit integer for the record length.
     int recordLength = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(slotSpan.Slice(sizeof(int)));
     return new Slot { RecordOffset = recordOffset, RecordLength = recordLength };
   }
