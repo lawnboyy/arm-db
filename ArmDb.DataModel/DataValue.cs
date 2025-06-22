@@ -40,7 +40,9 @@ public sealed class DataValue : IEquatable<DataValue>
   }
 
   /// <summary>Creates a DataValue for a 64-bit integer.</summary>
-  public static DataValue CreateInteger(long value) => new DataValue(PrimitiveDataType.Int, value);
+  public static DataValue CreateInteger(int value) => new DataValue(PrimitiveDataType.Int, value);
+
+  public static DataValue CreateBigInteger(long value) => new DataValue(PrimitiveDataType.BigInt, value);
 
   /// <summary>Creates a DataValue for a string.</summary>
   /// <exception cref="ArgumentNullException">Thrown if value is null.</exception>

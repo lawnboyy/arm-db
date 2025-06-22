@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace ArmDb.SchemaDefinition;
 
 /// <summary>
@@ -98,6 +100,7 @@ public sealed class DataTypeInfo : IEquatable<DataTypeInfo> // Sealed + IEquatab
         break;
 
       case PrimitiveDataType.Int:
+      case PrimitiveDataType.BigInt:
       case PrimitiveDataType.Boolean:
       case PrimitiveDataType.DateTime:
       case PrimitiveDataType.Float:
@@ -115,6 +118,36 @@ public sealed class DataTypeInfo : IEquatable<DataTypeInfo> // Sealed + IEquatab
         // Includes PrimitiveDataType.Unknown or any future values not handled above
         throw new ArgumentException($"Unsupported or unknown primitive data type specified: {primitiveType}", nameof(primitiveType));
     }
+  }
+
+  /// <summary>
+  /// Gets a value indicating whether this data type has a fixed, predictable size.
+  /// </summary>
+  [JsonIgnore] // Exclude this from any potential JSON serialization of this object
+  public bool IsFixedSize => PrimitiveType switch
+  {
+    PrimitiveDataType.Varchar or PrimitiveDataType.Blob => false,
+    _ => true
+  };
+
+  /// <summary>
+  /// Gets the size in bytes for a fixed-size data type.
+  /// </summary>
+  /// <returns>The size of the data type in bytes.</returns>
+  /// <exception cref="InvalidOperationException">Thrown if called on a variable-size data type.</exception>
+  public int GetFixedSize()
+  {
+    // This switch provides a single, authoritative source for type sizes.
+    return PrimitiveType switch
+    {
+      PrimitiveDataType.Int => sizeof(int),         // 4 bytes
+      PrimitiveDataType.BigInt => sizeof(long),     // 8 bytes
+      PrimitiveDataType.Boolean => sizeof(byte),    // 1 byte
+      PrimitiveDataType.DateTime => sizeof(long),   // Stored as long (via ToBinary())
+      PrimitiveDataType.Float => sizeof(double),    // 8 bytes
+      PrimitiveDataType.Decimal => sizeof(decimal), // 16 bytes
+      _ => throw new InvalidOperationException($"Cannot get fixed size for variable-size type {PrimitiveType}.")
+    };
   }
 
   /// <summary>

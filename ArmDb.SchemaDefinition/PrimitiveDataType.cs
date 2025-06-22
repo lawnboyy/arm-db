@@ -16,6 +16,11 @@ public enum PrimitiveDataType
   Int,
 
   /// <summary>
+  /// Represents a 64-bit signed integer (maps to C# long)
+  /// </summary>
+  BigInt,
+
+  /// <summary>
   /// Represents a variable-length string of characters. Will require parameters like MaxLength later.
   /// </summary>
   Varchar,

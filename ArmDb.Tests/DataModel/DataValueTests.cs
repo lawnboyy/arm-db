@@ -13,9 +13,9 @@ public class DataValueTests
     // Arrange
     long value = 12345L;
     // Act
-    var dataValue = DataValue.CreateInteger(value);
+    var dataValue = DataValue.CreateBigInteger(value);
     // Assert
-    Assert.Equal(PrimitiveDataType.Int, dataValue.DataType);
+    Assert.Equal(PrimitiveDataType.BigInt, dataValue.DataType);
     Assert.False(dataValue.IsNull);
     Assert.Equal(value, dataValue.Value);
     Assert.IsType<long>(dataValue.Value);
@@ -151,7 +151,7 @@ public class DataValueTests
   public void GetAs_CorrectType_ReturnsValue()
   {
     // Arrange
-    var intVal = DataValue.CreateInteger(42L);
+    var intVal = DataValue.CreateBigInteger(42L);
     var strVal = DataValue.CreateString("test");
     var boolVal = DataValue.CreateBoolean(true);
     var decVal = DataValue.CreateDecimal(1.23M);
@@ -183,7 +183,7 @@ public class DataValueTests
   public void GetAs_WrongType_ThrowsInvalidCastException()
   {
     // Arrange
-    var intVal = DataValue.CreateInteger(42L);
+    var intVal = DataValue.CreateBigInteger(42L);
     var strVal = DataValue.CreateString("test");
 
     // Act & Assert
@@ -213,7 +213,7 @@ public class DataValueTests
   {
     // Arrange
     DataValue dv;
-    if (value is long l) dv = DataValue.CreateInteger(l);
+    if (value is long l) dv = DataValue.CreateBigInteger(l);
     else if (value is string s) dv = DataValue.CreateString(s);
     else if (value is bool b) dv = DataValue.CreateBoolean(b);
     else if (value is double d) dv = DataValue.CreateFloat(d);
