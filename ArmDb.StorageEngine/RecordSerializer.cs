@@ -57,7 +57,7 @@ internal static class RecordSerializer
           // Now determine which bit to set within the byte...
           var bitInByte = i % 8;
           // Set the bit in the null bitmap that corresponds to this column.
-          bytes[nullBitmapByteIndex] |= (byte)(1 >> bitInByte);
+          bytes[nullBitmapByteIndex] |= (byte)(1 << bitInByte);
           continue;
         }
 
@@ -113,7 +113,7 @@ internal static class RecordSerializer
 
     // Determine the size of the null bitmap in bytes based on how many columns we have. We need
     // 1 byte for every 8 columns, which gives us 1 bit per column.
-    nullBitmapSize = (int)Math.Ceiling((double)columnCount / 8);
+    nullBitmapSize = (columnCount + 7) / 8;
 
     var totalRecordSize = nullBitmapSize;
     // Go through each column and determine the size...
@@ -132,9 +132,26 @@ internal static class RecordSerializer
       else // Handle variable length data types
       {
         string? variableLengthValue = rowValue.Value as string;
-        byte[] bytes = Encoding.UTF8.GetBytes(variableLengthValue!);
         totalRecordSize += sizeof(int); // to store the length of the variable length data
-        totalRecordSize += bytes.Length; // space to store actual variable length data
+
+        switch (columnDef.DataType.PrimitiveType)
+        {
+          case PrimitiveDataType.Varchar:
+            // Convert the object to string and get its UTF-8 byte count
+            string? stringValue = Convert.ToString(rowValue.Value);
+            totalRecordSize += Encoding.UTF8.GetByteCount(stringValue!);
+            break;
+
+          case PrimitiveDataType.Blob:
+            // Cast the object to byte[] and get its length
+            byte[] blobValue = (byte[])rowValue.Value!;
+            totalRecordSize += blobValue.Length;
+            break;
+
+          default:
+            // This case shouldn't be hit if IsFixedSize is false, but good for safety
+            throw new NotSupportedException($"Size calculation for variable-size type {columnDef.DataType.PrimitiveType} is not supported.");
+        }
       }
     }
 
