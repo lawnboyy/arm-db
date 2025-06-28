@@ -50,6 +50,58 @@ public class RecordSerializerTests
     Assert.Equal(expectedBytes, actualBytes); // Compare the byte arrays for equality
   }
 
+  [Fact]
+  public void Serialize_WithNullFixedSizeColumns_SetsBitmapAndOmitsData()
+  {
+    // Arrange
+    // 1. Define schema with nullable columns:
+    // (ID INT NOT NULL, LastLogin DATETIME NULL, StatusCode INT NULL, IsActive BOOL NOT NULL)
+    var tableDef = CreateTestTable(
+        new ColumnDefinition("ID", new DataTypeInfo(PrimitiveDataType.Int), isNullable: false),
+        new ColumnDefinition("LastLogin", new DataTypeInfo(PrimitiveDataType.DateTime), isNullable: true),
+        new ColumnDefinition("StatusCode", new DataTypeInfo(PrimitiveDataType.Int), isNullable: true),
+        new ColumnDefinition("IsActive", new DataTypeInfo(PrimitiveDataType.Boolean), isNullable: false)
+    );
+
+    // 2. Create data row where LastLogin (column 1) is NULL
+    var row = new DataRow(
+        DataValue.CreateInteger(10),                             // ID
+        DataValue.CreateNull(PrimitiveDataType.DateTime),      // LastLogin = NULL
+        DataValue.CreateInteger(200),                            // StatusCode
+        DataValue.CreateBoolean(true)                            // IsActive
+    );
+
+    // 3. Manually calculate the expected byte array output
+    // Null Bitmap (1 byte): 4 columns.
+    // Col 0 (ID) is not null -> bit 0 is 0
+    // Col 1 (LastLogin) IS NULL -> bit 1 is 1
+    // Col 2 (StatusCode) is not null -> bit 2 is 0
+    // Col 3 (IsActive) is not null -> bit 3 is 0
+    // Bitmap = 0b00000010 = 0x02
+    // Fixed-Length Data: Only non-null columns are written
+    // ID (int, 4 bytes for 10):         0A 00 00 00
+    // LastLogin (DateTime, 8 bytes):  SKIPPED
+    // StatusCode (int, 4 bytes for 200):C8 00 00 00
+    // IsActive (bool, 1 byte for true): 01
+    var expectedBytes = new byte[]
+    {
+      // --- Header ---
+      0x02, // Null Bitmap
+      // --- Fixed-Length Data ---
+      0x0A, 0x00, 0x00, 0x00, // ID = 10
+      0xC8, 0x00, 0x00, 0x00, // StatusCode = 200
+      0x01                        // IsActive = true
+    };
+
+    // Act
+    byte[] actualBytes = RecordSerializer.Serialize(tableDef, row);
+
+    // Assert
+    Assert.NotNull(actualBytes);
+    Assert.Equal(expectedBytes.Length, actualBytes.Length); // Verify final size is correct
+    Assert.Equal(expectedBytes, actualBytes); // Compare byte arrays
+  }
+
   // Helper to create a simple table definition for tests
   private static TableDefinition CreateTestTable(params ColumnDefinition[] columns)
   {

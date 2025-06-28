@@ -131,7 +131,6 @@ internal static class RecordSerializer
       }
       else // Handle variable length data types
       {
-        string? variableLengthValue = rowValue.Value as string;
         totalRecordSize += sizeof(int); // to store the length of the variable length data
 
         switch (columnDef.DataType.PrimitiveType)
