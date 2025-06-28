@@ -32,6 +32,14 @@ namespace ArmDb.StorageEngine;
 /// </summary>
 internal static class RecordSerializer
 {
+  /// <summary>
+  /// Serializes a DataRow into a byte array.
+  /// </summary>
+  /// <param name="tableDef"></param>
+  /// <param name="row"></param>
+  /// <returns></returns>
+  /// <exception cref="Exception"></exception>
+  /// <exception cref="ArgumentNullException"></exception>
   public static byte[] Serialize(TableDefinition tableDef, DataRow row)
   {
     // Initialize byte array to hold the serialized row...
@@ -163,6 +171,14 @@ internal static class RecordSerializer
     return bytes;
   }
 
+  /// <summary>
+  /// Deserializes a read-only span of bytes into a DataRow.
+  /// // TODO: Complete implementation to handle deserializing variable length values.
+  /// </summary>
+  /// <param name="tableDef"></param>
+  /// <param name="recordData"></param>
+  /// <returns></returns>
+  /// <exception cref="Exception"></exception>
   public static DataRow Deserialize(TableDefinition tableDef, ReadOnlySpan<byte> recordData)
   {
     var columnCount = tableDef.Columns.Count();
