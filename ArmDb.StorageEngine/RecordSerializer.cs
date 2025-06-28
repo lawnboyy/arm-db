@@ -1,8 +1,10 @@
 using System.Buffers.Binary;
+using System.Data;
 using System.Runtime.InteropServices;
 using System.Text;
 using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
+using DataRow = ArmDb.DataModel.DataRow;
 
 namespace ArmDb.StorageEngine;
 
@@ -146,7 +148,6 @@ internal static class RecordSerializer
             string? stringValue = Convert.ToString(currentValue);
             byte[] varcharBytes = Encoding.UTF8.GetBytes(stringValue!) ?? throw new ArgumentNullException("Could not convert string value for serialization!");
             varcharBytes.CopyTo(dataDestination);
-            currentOffset += valueSize;
             break;
           case PrimitiveDataType.Blob:
             byte[] blobValue = (byte[])currentValue!;
@@ -155,6 +156,7 @@ internal static class RecordSerializer
           default:
             throw new Exception($"Unexpected variable size data type: {columnDef.DataType.PrimitiveType}");
         }
+        currentOffset += valueSize;
       }
     }
 
@@ -163,7 +165,85 @@ internal static class RecordSerializer
 
   public static DataRow Deserialize(TableDefinition tableDef, ReadOnlySpan<byte> recordData)
   {
-    throw new NotImplementedException();
+    var columnCount = tableDef.Columns.Count();
+    var rowValues = new DataValue[columnCount];
+
+    // Determine the size of the null bitmap in bytes based on how many columns we have. We need
+    // 1 byte for every 8 columns, which gives us 1 bit per column.
+    var nullBitmapSize = (columnCount + 7) / 8;
+    // Grab the null bitmap...
+    var nullBitmap = recordData.Slice(0, nullBitmapSize);
+
+    // We'll use 2 pointers, one for fixed size data and one for variable size data...
+    var currentFixedSizedDataOffset = nullBitmapSize;
+    // var variableSizedDataOffset = nullBitmapSize;
+
+    for (int i = 0; i < columnCount; i++)
+    {
+      var columnDef = tableDef.Columns[i];
+      if (columnDef.IsNullable)
+      {
+        // Check the null bitmap to see if the value is null
+        // Determine which byte to index...
+        var nullBitmapByteIndex = i / 8;
+        var nullBitmapByte = nullBitmap[nullBitmapByteIndex];
+        // What bit are we interested in?
+        var bitInByte = i % 8;
+        // Is it set?
+        var isNull = (nullBitmapByte & (1 << bitInByte)) != 0;
+        if (isNull)
+        {
+          // Create the null value for the column and continue...
+          rowValues[i] = DataValue.CreateNull(columnDef.DataType.PrimitiveType);
+          // There is no data written if the value is null, so we don't need to update either offset here...
+          continue;
+        }
+      }
+
+      if (columnDef.DataType.IsFixedSize)
+      {
+        // Get the size of the column from the schema definition...
+        var dataSize = columnDef.DataType.GetFixedSize();
+        var dataValue = recordData.Slice(currentFixedSizedDataOffset, dataSize);
+        // Read the data in...
+        switch (columnDef.DataType.PrimitiveType)
+        {
+          case PrimitiveDataType.BigInt:
+            long longValue = BinaryUtilities.ReadInt64LittleEndian(dataValue);
+            rowValues[i] = DataValue.CreateBigInteger(longValue);
+            break;
+          case PrimitiveDataType.Boolean:
+            bool boolValue = BitConverter.ToBoolean(dataValue);
+            rowValues[i] = DataValue.CreateBoolean(boolValue);
+            break;
+          case PrimitiveDataType.DateTime:
+            long dateTicks = BinaryUtilities.ReadInt64LittleEndian(dataValue);
+            DateTime dateTimeValue = new DateTime(dateTicks);
+            rowValues[i] = DataValue.CreateDateTime(dateTimeValue);
+            break;
+          case PrimitiveDataType.Decimal:
+            decimal decimalValue = BinaryUtilities.ConvertSpanToDecimal(dataValue);
+            rowValues[i] = DataValue.CreateDecimal(decimalValue);
+            break;
+          case PrimitiveDataType.Float:
+            double doubleValue = BinaryPrimitives.ReadDoubleLittleEndian(dataValue); ;
+            rowValues[i] = DataValue.CreateFloat(doubleValue);
+            break;
+          case PrimitiveDataType.Int:
+            int intValue = BinaryUtilities.ReadInt32LittleEndian(dataValue);
+            rowValues[i] = DataValue.CreateInteger(intValue);
+            break;
+          default:
+            throw new Exception($"Unexpected fixed size data type: {columnDef.DataType.PrimitiveType}");
+        }
+
+        // TODO: This will need to calculate the next fixed size offset by skipping any variable length
+        // columnns.
+        currentFixedSizedDataOffset += dataSize;
+      }
+    }
+
+    return new DataRow(rowValues);
   }
 
   private static int CalculateSerializedRecordSize(TableDefinition tableDef, DataRow row, out int nullBitmapSize, out Dictionary<string, int> variableDataSizeLookup)

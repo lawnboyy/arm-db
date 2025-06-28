@@ -5,10 +5,8 @@ using System.Text;
 
 namespace ArmDb.UnitTests.StorageEngine;
 
-public class RecordSerializerTests
+public partial class RecordSerializerTests
 {
-
-
   [Fact]
   public void Serialize_WithOnlyFixedNonNullableColumns_CreatesCorrectByteArray()
   {
@@ -257,6 +255,59 @@ public class RecordSerializerTests
     // Assert
     Assert.NotNull(actualBytes);
     Assert.Equal(expectedBytes, actualBytes); // Compare byte arrays
+  }
+
+  [Fact]
+  public void Serialize_WithBlobFollowedByVarchar_CorrectlyAdvancesOffset()
+  {
+    // Arrange
+    // This schema, with a BLOB followed by another variable-length field,
+    // will expose the bug if the offset isn't advanced after writing the blob data.
+    var tableDef = CreateTestTable(
+        new ColumnDefinition("ID", new DataTypeInfo(PrimitiveDataType.Int), isNullable: false),
+        new ColumnDefinition("ImageData", new DataTypeInfo(PrimitiveDataType.Blob, 1024), isNullable: false),
+        new ColumnDefinition("Caption", new DataTypeInfo(PrimitiveDataType.Varchar, 50), isNullable: false)
+    );
+
+    // Data for the row
+    var blobData = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF }; // 4 bytes
+    string captionValue = "A Photo"; // 7 bytes in UTF-8
+
+    var row = new DataRow(
+        DataValue.CreateInteger(200),
+        DataValue.CreateBlob(blobData),
+        DataValue.CreateString(captionValue)
+    );
+
+    // Expected byte representation if the logic is CORRECT
+    var expectedBytes = new byte[]
+    {
+        // --- Header ---
+        0, // Null Bitmap
+
+        // --- Fixed-Length Data ---
+        200, 0, 0, 0, // ID = 200
+
+        // --- Variable-Length Data ---
+        // First var-len field: Blob
+        4, 0, 0, 0,   // Length of blobData (4)
+        0xDE, 0xAD, 0xBE, 0xEF, // The blob data
+
+        // Second var-len field: Varchar
+        7, 0, 0, 0,   // Length of "A Photo" (7)
+        // "A Photo" in UTF-8 bytes: 65, 32, 80, 104, 111, 116, 111
+        65, 32, 80, 104, 111, 116, 111
+    };
+
+    // Act
+    byte[] actualBytes = RecordSerializer.Serialize(tableDef, row);
+
+    // Assert
+    // With the bug, the 'Caption' length and data would overwrite the 'ImageData' data
+    // because the offset was not advanced after writing the blob bytes.
+    // The resulting actualBytes array would be shorter and have incorrect content.
+    // This assertion will fail until the bug is fixed.
+    Assert.Equal(expectedBytes, actualBytes);
   }
 
   [Fact]

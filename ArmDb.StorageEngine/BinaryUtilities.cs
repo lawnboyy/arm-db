@@ -131,4 +131,30 @@ public static class BinaryUtilities
     // Cast back to signed long for the final result
     return (long)result;
   }
+
+  /// <summary>
+  /// Converts a 16-byte read-only span, representing a decimal in little-endian format,
+  /// into a decimal value.
+  /// </summary>
+  /// <param name="source">A read-only span of bytes. Must be at least 16 bytes long.</param>
+  /// <returns>The reconstructed decimal value.</returns>
+  /// <exception cref="ArgumentException">Thrown if source span is shorter than 16 bytes.</exception>
+  internal static decimal ConvertSpanToDecimal(ReadOnlySpan<byte> source)
+  {
+    const int decimalSize = sizeof(decimal); // 16 bytes
+    if (source.Length < decimalSize)
+    {
+      throw new ArgumentException($"Source span must be at least {decimalSize} bytes long to convert to a decimal.", nameof(source));
+    }
+
+    // A decimal is composed of four 32-bit integers. We read each one,
+    // assuming they were written in little-endian order.
+    int lo = ReadInt32LittleEndian(source.Slice(0, 4));
+    int mid = ReadInt32LittleEndian(source.Slice(4, 4));
+    int hi = ReadInt32LittleEndian(source.Slice(8, 4));
+    int flags = ReadInt32LittleEndian(source.Slice(12, 4));
+
+    // Use the constructor that takes the four parts in an array.
+    return new decimal([lo, mid, hi, flags]);
+  }
 }
