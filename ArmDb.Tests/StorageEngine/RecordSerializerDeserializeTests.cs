@@ -52,4 +52,57 @@ public partial class RecordSerializerTests
     // Assert.Equal(expectedRow.Values[1], actualRow.Values[1]); // Balance
     // Assert.Equal(expectedRow.Values[2], actualRow.Values[2]); // IsActive
   }
+
+  [Fact]
+  public void Deserialize_WithNullFixedSizeColumns_ReconstructsNullsCorrectly()
+  {
+    // Arrange
+    // 1. Define schema with nullable columns, matching the corresponding Serialize test
+    var tableDef = CreateTestTable(
+        new ColumnDefinition("ID", new DataTypeInfo(PrimitiveDataType.Int), isNullable: false),
+        new ColumnDefinition("LastLogin", new DataTypeInfo(PrimitiveDataType.DateTime), isNullable: true),
+        new ColumnDefinition("StatusCode", new DataTypeInfo(PrimitiveDataType.Int), isNullable: true),
+        new ColumnDefinition("IsActive", new DataTypeInfo(PrimitiveDataType.Boolean), isNullable: false)
+    );
+
+    // 2. This is the original DataRow we expect to get back after deserialization
+    var expectedRow = new DataRow(
+        DataValue.CreateInteger(10),
+        DataValue.CreateNull(PrimitiveDataType.DateTime), // LastLogin is NULL
+        DataValue.CreateInteger(200),
+        DataValue.CreateBoolean(true)
+    );
+
+    // 3. This is the known-good serialized byte array for the row above.
+    //    It has bit 1 set in the null bitmap.
+    var serializedData = new byte[]
+    {
+      // --- Header ---
+      2,           // Null Bitmap (0b00000010)
+      // --- Fixed-Length Data Section (LastLogin is omitted) ---
+      10, 0, 0, 0,  // ID = 10
+      200, 0, 0, 0, // StatusCode = 200
+      1            // IsActive = true
+    };
+
+    // Act
+    // Call the Deserialize method with the serialized data
+    DataRow actualRow = RecordSerializer.Deserialize(tableDef, serializedData.AsSpan());
+
+    // Assert
+    Assert.NotNull(actualRow);
+    Assert.Equal(expectedRow.Arity, actualRow.Arity);
+
+    // Assert that the entire reconstructed row is equal to the original
+    Assert.Equal(expectedRow, actualRow);
+
+    // For more specific debugging, you can also check individual values:
+    Assert.False(actualRow.Values[0].IsNull, "The ID column should not be null.");
+    Assert.Equal(10, actualRow.Values[0].GetAs<int>());
+    Assert.True(actualRow.Values[1].IsNull, "The LastLogin column should be NULL.");
+    Assert.False(actualRow.Values[2].IsNull, "The StatusCode column should not be null.");
+    Assert.Equal(200, actualRow.Values[2].GetAs<int>());
+    Assert.False(actualRow.Values[3].IsNull, "The IsActive column should not be null.");
+    Assert.True(actualRow.Values[3].GetAs<bool>());
+  }
 }
