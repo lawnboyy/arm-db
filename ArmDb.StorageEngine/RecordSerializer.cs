@@ -52,6 +52,8 @@ internal static class RecordSerializer
     // them in a contiguous block, then a second pass for variable length columns which will reside in
     // a second contiguous block.
 
+    // TODO: We could refactor this to a single loop with separate offsets for fixed and variable length data...
+
     // Row values are stored in the same order as the schema column definition order...
     var columns = tableDef.Columns;
     var columnCount = columns.Count();
@@ -173,7 +175,6 @@ internal static class RecordSerializer
 
   /// <summary>
   /// Deserializes a read-only span of bytes into a DataRow.
-  /// // TODO: Complete implementation to handle deserializing variable length values.
   /// </summary>
   /// <param name="tableDef"></param>
   /// <param name="recordData"></param>
@@ -192,28 +193,17 @@ internal static class RecordSerializer
 
     // We'll use 2 pointers, one for fixed size data and one for variable size data...
     var currentFixedSizedDataOffset = nullBitmapSize;
-    // var variableSizedDataOffset = nullBitmapSize;
+    var currentVariableSizedDataOffset = CalculateVariableLengthDataOffset(tableDef, nullBitmap);
 
     for (int i = 0; i < columnCount; i++)
     {
       var columnDef = tableDef.Columns[i];
-      if (columnDef.IsNullable)
+      if (IsColumnValueNull(columnDef, nullBitmap, i))
       {
-        // Check the null bitmap to see if the value is null
-        // Determine which byte to index...
-        var nullBitmapByteIndex = i / 8;
-        var nullBitmapByte = nullBitmap[nullBitmapByteIndex];
-        // What bit are we interested in?
-        var bitInByte = i % 8;
-        // Is it set?
-        var isNull = (nullBitmapByte & (1 << bitInByte)) != 0;
-        if (isNull)
-        {
-          // Create the null value for the column and continue...
-          rowValues[i] = DataValue.CreateNull(columnDef.DataType.PrimitiveType);
-          // There is no data written if the value is null, so we don't need to update either offset here...
-          continue;
-        }
+        // Create the null value for the column and continue...
+        rowValues[i] = DataValue.CreateNull(columnDef.DataType.PrimitiveType);
+        // There is no data written if the value is null, so we don't need to update either offset here...
+        continue;
       }
 
       if (columnDef.DataType.IsFixedSize)
@@ -229,7 +219,7 @@ internal static class RecordSerializer
             rowValues[i] = DataValue.CreateBigInteger(longValue);
             break;
           case PrimitiveDataType.Boolean:
-            bool boolValue = BitConverter.ToBoolean(dataValue);
+            bool boolValue = BinaryUtilities.ToBoolean(dataValue);
             rowValues[i] = DataValue.CreateBoolean(boolValue);
             break;
           case PrimitiveDataType.DateTime:
@@ -253,9 +243,32 @@ internal static class RecordSerializer
             throw new Exception($"Unexpected fixed size data type: {columnDef.DataType.PrimitiveType}");
         }
 
-        // TODO: This will need to calculate the next fixed size offset by skipping any variable length
-        // columnns.
         currentFixedSizedDataOffset += dataSize;
+      }
+      else // This is a variable length column
+      {
+        // Read the length of the variable sized column from the beginning of the variable length data offset...
+        var dataSizeData = recordData.Slice(currentVariableSizedDataOffset, sizeof(int));
+        int dataSize = BinaryUtilities.ReadInt32LittleEndian(dataSizeData);
+        // Advance our variable length data offset past the length of this value...
+        currentVariableSizedDataOffset += sizeof(int);
+        var dataValue = recordData.Slice(currentVariableSizedDataOffset, dataSize);
+
+        switch (columnDef.DataType.PrimitiveType)
+        {
+          case PrimitiveDataType.Varchar:
+            var stringValue = Encoding.UTF8.GetString(dataValue);
+            if (stringValue == null)
+              throw new NullReferenceException("Expected a non-null string, but value is null!");
+            rowValues[i] = DataValue.CreateString(stringValue);
+            break;
+          case PrimitiveDataType.Blob:
+            rowValues[i] = DataValue.CreateBlob(dataValue.ToArray());
+            break;
+        }
+
+        // Advance the variable length data offset past the actual data...
+        currentVariableSizedDataOffset += dataSize;
       }
     }
 
@@ -318,5 +331,50 @@ internal static class RecordSerializer
     }
 
     return totalRecordSize;
+  }
+
+  private static int CalculateVariableLengthDataOffset(TableDefinition tableDef, ReadOnlySpan<byte> nullBitmap)
+  {
+    var columnCount = tableDef.Columns.Count();
+
+    // Determine the size of the null bitmap in bytes based on how many columns we have. We need
+    // 1 byte for every 8 columns, which gives us 1 bit per column.
+    var nullBitmapSize = (columnCount + 7) / 8;
+
+    var offset = nullBitmapSize;
+    // Go through each fixed column and determine the size...
+    for (int i = 0; i < columnCount; i++)
+    {
+      // Null values will not be written, so only calculate space necessary for non-null values
+      if (IsColumnValueNull(tableDef.Columns[i], nullBitmap, i))
+        continue;
+
+      var columnDef = tableDef.Columns[i];
+      if (columnDef.DataType.IsFixedSize)
+      {
+        offset += columnDef.DataType.GetFixedSize();
+      }
+    }
+
+    return offset;
+  }
+
+  private static bool IsColumnValueNull(ColumnDefinition columnDef, ReadOnlySpan<byte> nullBitmap, int index)
+  {
+    if (columnDef.IsNullable)
+    {
+      // Check the null bitmap to see if the value is null
+      // Determine which byte to index...
+      var nullBitmapByteIndex = index / 8;
+      var nullBitmapByte = nullBitmap[nullBitmapByteIndex];
+      // What bit are we interested in?
+      var bitInByte = index % 8;
+      // Is it set?
+      var isNull = (nullBitmapByte & (1 << bitInByte)) != 0;
+
+      return isNull;
+    }
+
+    return false;
   }
 }

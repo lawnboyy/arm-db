@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace ArmDb.StorageEngine;
@@ -156,5 +157,13 @@ public static class BinaryUtilities
 
     // Use the constructor that takes the four parts in an array.
     return new decimal([lo, mid, hi, flags]);
+  }
+
+  [MethodImpl(MethodImplOptions.AggressiveInlining)]
+  internal static bool ToBoolean(ReadOnlySpan<byte> value)
+  {
+    if (value.Length < sizeof(byte))
+      ArgumentOutOfRangeException.ThrowIfLessThan(value.Length, sizeof(byte));
+    return Unsafe.ReadUnaligned<byte>(ref MemoryMarshal.GetReference(value)) != 0;
   }
 }
