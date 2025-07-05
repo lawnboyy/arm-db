@@ -404,4 +404,58 @@ public partial class RecordSerializerTests
     Assert.NotNull(actualRow);
     Assert.Equal(expectedRow, actualRow);
   }
+
+  [Fact]
+  public void Deserialize_WithDateTime_ReconstructsKindCorrectly()
+  {
+    // Arrange
+    // 1. Define schema with two DateTime columns
+    var tableDef = CreateTestTable(
+        new ColumnDefinition("EventId", new DataTypeInfo(PrimitiveDataType.Int), isNullable: false),
+        new ColumnDefinition("TimestampUtc", new DataTypeInfo(PrimitiveDataType.DateTime), isNullable: false),
+        new ColumnDefinition("TimestampLocal", new DataTypeInfo(PrimitiveDataType.DateTime), isNullable: false)
+    );
+
+    // 2. Create two DateTime objects with different Kind properties
+    var utcTimestamp = new DateTime(2025, 7, 5, 15, 30, 0, DateTimeKind.Utc);
+    var localTimestamp = new DateTime(2025, 7, 5, 10, 30, 0, DateTimeKind.Local);
+
+    // This is the original DataRow we expect to get back
+    var expectedRow = new DataRow(
+        DataValue.CreateInteger(42),
+        DataValue.CreateDateTime(utcTimestamp),
+        DataValue.CreateDateTime(localTimestamp)
+    );
+
+    // 3. Manually construct the serialized byte array using ToBinary() for both dates
+    long binaryUtc = utcTimestamp.ToBinary();
+    long binaryLocal = localTimestamp.ToBinary();
+
+    using (var ms = new MemoryStream())
+    using (var writer = new BinaryWriter(ms))
+    {
+      writer.Write((byte)0);              // Null Bitmap
+      writer.Write((int)42);              // EventId
+      writer.Write(binaryUtc);            // TimestampUtc
+      writer.Write(binaryLocal);          // TimestampLocal
+      var serializedData = ms.ToArray();
+
+      // Act
+      DataRow actualRow = RecordSerializer.Deserialize(tableDef, serializedData.AsSpan());
+
+      // Assert
+      Assert.NotNull(actualRow);
+      Assert.Equal(expectedRow, actualRow);
+
+      // Granular assertions to be explicit
+      var deserializedUtc = actualRow.Values[1].GetAs<DateTime>();
+      var deserializedLocal = actualRow.Values[2].GetAs<DateTime>();
+
+      Assert.Equal(DateTimeKind.Utc, deserializedUtc.Kind);
+      Assert.Equal(utcTimestamp.Ticks, deserializedUtc.Ticks);
+
+      Assert.Equal(DateTimeKind.Local, deserializedLocal.Kind);
+      Assert.Equal(localTimestamp.Ticks, deserializedLocal.Ticks);
+    }
+  }
 }

@@ -224,7 +224,7 @@ internal static class RecordSerializer
             break;
           case PrimitiveDataType.DateTime:
             long dateTicks = BinaryUtilities.ReadInt64LittleEndian(dataValue);
-            DateTime dateTimeValue = new DateTime(dateTicks);
+            DateTime dateTimeValue = DateTime.FromBinary(dateTicks);
             rowValues[i] = DataValue.CreateDateTime(dateTimeValue);
             break;
           case PrimitiveDataType.Decimal:
