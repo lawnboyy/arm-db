@@ -39,6 +39,45 @@ public partial class RecordSerializerTests // Use partial to extend the existing
     Assert.Equal(expectedKey, actualKey);
   }
 
+  [Fact]
+  public void DeserializePrimaryKey_WithCompositeFixedKey_ExtractsCorrectKey()
+  {
+    // Arrange
+    // 1. Define schema with a composite PK on two INT columns
+    var tableDef = new TableDefinition("TestCompositePK");
+    tableDef.AddColumn(new ColumnDefinition("PartId", new DataTypeInfo(PrimitiveDataType.Int), isNullable: false));
+    tableDef.AddColumn(new ColumnDefinition("SubId", new DataTypeInfo(PrimitiveDataType.Int), isNullable: false));
+    tableDef.AddColumn(new ColumnDefinition("Description", new DataTypeInfo(PrimitiveDataType.Varchar, 100), isNullable: false));
+    tableDef.AddConstraint(new PrimaryKeyConstraint("TestCompositePK", new[] { "PartId", "SubId" }));
+
+    // 2. This is the original Key we expect to get back
+    var expectedKey = new Key(new[]
+    {
+        DataValue.CreateInteger(500), // PartId
+        DataValue.CreateInteger(10)   // SubId
+    });
+
+    // 3. This is the serialized byte array for the full row (500, 10, "Engine Block")
+    var serializedData = new byte[]
+    {
+        // --- Header ---
+        0,              // Null Bitmap
+        // --- Fixed-Length Data ---
+        244, 1, 0, 0,   // PartId = 500 (decimal)
+        10, 0, 0, 0,    // SubId = 10 (decimal)
+        // --- Variable-Length Data ---
+        12, 0, 0, 0,    // Length of "Engine Block" (12)
+        69, 110, 103, 105, 110, 101, 32, 66, 108, 111, 99, 107 // "Engine Block"
+    };
+
+    // Act
+    Key actualKey = RecordSerializer.DeserializePrimaryKey(tableDef, serializedData.AsSpan());
+
+    // Assert
+    Assert.NotNull(actualKey);
+    Assert.Equal(expectedKey, actualKey);
+  }
+
   // Helper to create a table definition with a primary key
   private static TableDefinition CreateTestTableWithPK(string pkColumnName, params ColumnDefinition[] columns)
   {
