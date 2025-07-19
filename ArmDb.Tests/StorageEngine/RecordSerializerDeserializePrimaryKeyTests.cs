@@ -78,6 +78,47 @@ public partial class RecordSerializerTests // Use partial to extend the existing
     Assert.Equal(expectedKey, actualKey);
   }
 
+  [Fact]
+  public void DeserializePrimaryKey_WithMixedTypeKey_ExtractsCorrectKey()
+  {
+    // Arrange
+    // 1. Define schema with a composite PK on a VARCHAR and an INT column.
+    //    A non-key column is placed first to make the test more robust.
+    var tableDef = new TableDefinition("TestMixedPK");
+    tableDef.AddColumn(new ColumnDefinition("IsActive", new DataTypeInfo(PrimitiveDataType.Boolean), isNullable: false));
+    tableDef.AddColumn(new ColumnDefinition("OrgName", new DataTypeInfo(PrimitiveDataType.Varchar, 50), isNullable: false));
+    tableDef.AddColumn(new ColumnDefinition("EmployeeId", new DataTypeInfo(PrimitiveDataType.Int), isNullable: false));
+    tableDef.AddConstraint(new PrimaryKeyConstraint("TestMixedPK", ["OrgName", "EmployeeId"]));
+
+    // 2. This is the original Key we expect to get back
+    var expectedKey = new Key(new[]
+    {
+        DataValue.CreateString("Sales"),  // OrgName
+        DataValue.CreateInteger(901)    // EmployeeId
+    });
+
+    // 3. This is the serialized byte array for the full row (true, "Sales", 901)
+    // Format: [NullBitmap][Fixed: IsActive, EmployeeId][Variable: OrgName Length + Data]
+    var serializedData = new byte[]
+    {
+        // --- Header ---
+        0,              // Null Bitmap
+        // --- Fixed-Length Data ---
+        1,              // IsActive = true
+        133, 3, 0, 0,   // EmployeeId = 901 (decimal)
+        // --- Variable-Length Data ---
+        5, 0, 0, 0,     // Length of "Sales" (5)
+        83, 97, 108, 101, 115 // "Sales"
+    };
+
+    // Act
+    Key actualKey = RecordSerializer.DeserializePrimaryKey(tableDef, serializedData.AsSpan());
+
+    // Assert
+    Assert.NotNull(actualKey);
+    Assert.Equal(expectedKey, actualKey);
+  }
+
   // Helper to create a table definition with a primary key
   private static TableDefinition CreateTestTableWithPK(string pkColumnName, params ColumnDefinition[] columns)
   {
