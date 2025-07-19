@@ -52,6 +52,11 @@ internal static class SlottedPage
     }
   }
 
+  public static PageHeader GetHeader(Page page)
+  {
+    return new PageHeader(page);
+  }
+
   /// <summary>
   /// Calculates the size of the contiguous block of free space between the slot array
   /// and the data cells in the slotted page.

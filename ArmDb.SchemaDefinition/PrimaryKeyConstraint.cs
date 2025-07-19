@@ -1,8 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-
-namespace ArmDb.SchemaDefinition; // File-scoped namespace
+namespace ArmDb.SchemaDefinition;
 
 /// <summary>
 /// Represents a Primary Key constraint defined on one or more columns of a table.
