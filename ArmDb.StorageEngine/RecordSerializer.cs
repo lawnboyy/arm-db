@@ -206,43 +206,64 @@ internal static class RecordSerializer
         continue;
       }
 
+      rowValues[i] = DeserializeColumnValue(columnDef, recordData, ref currentFixedSizedDataOffset, ref currentVariableSizedDataOffset);
+    }
+
+    return new DataRow(rowValues);
+  }
+
+  public static Key DeserializePrimaryKey(TableDefinition tableDef, ReadOnlySpan<byte> recordData)
+  {
+    // Determine the primary key columns...
+    var primaryKeyConstraint = tableDef.GetPrimaryKeyConstraint();
+
+    if (primaryKeyConstraint == null)
+      throw new InvalidOperationException($"No primary key contstraint was found on table {tableDef.Name}!");
+
+    var keyColumnNames = primaryKeyConstraint.ColumnNames;
+    var keyColumns = tableDef.Columns.Where(c => keyColumnNames.Contains(c.Name));
+
+    return DeserializeKey(tableDef, keyColumns, recordData);
+  }
+
+  private static Key DeserializeKey(TableDefinition tableDef, IEnumerable<ColumnDefinition> keyColumns, ReadOnlySpan<byte> recordData)
+  {
+    var keyColumnCount = keyColumns.Count();
+    var columnCount = tableDef.Columns.Count();
+    var rowValues = new DataValue[keyColumnCount];
+
+    // Determine the size of the null bitmap in bytes based on how many columns we have. We need
+    // 1 byte for every 8 columns, which gives us 1 bit per column.
+    var nullBitmapSize = (columnCount + 7) / 8;
+    // Grab the null bitmap...
+    var nullBitmap = recordData.Slice(0, nullBitmapSize);
+
+    // We'll use 2 pointers, one for fixed size data and one for variable size data...
+    var currentFixedSizedDataOffset = nullBitmapSize;
+    var currentVariableSizedDataOffset = CalculateVariableLengthDataOffset(tableDef, nullBitmap);
+
+    var keyValueIndex = 0;
+    for (int i = 0; i < columnCount; i++)
+    {
+      var columnDef = tableDef.Columns[i];
+
+      var isPrimaryKeyColumn = keyColumns.Select(k => k.Name).Contains(columnDef.Name);
+
+      if (IsColumnValueNull(columnDef, nullBitmap, i))
+      {
+        // Create the null value for the column and continue...
+        if (isPrimaryKeyColumn)
+          rowValues[keyValueIndex++] = DataValue.CreateNull(columnDef.DataType.PrimitiveType);
+        // There is no data written if the value is null, so we don't need to update either offset here...
+        continue;
+      }
+
       if (columnDef.DataType.IsFixedSize)
       {
         // Get the size of the column from the schema definition...
-        var dataSize = columnDef.DataType.GetFixedSize();
-        var dataValue = recordData.Slice(currentFixedSizedDataOffset, dataSize);
-        // Read the data in...
-        switch (columnDef.DataType.PrimitiveType)
-        {
-          case PrimitiveDataType.BigInt:
-            long longValue = BinaryUtilities.ReadInt64LittleEndian(dataValue);
-            rowValues[i] = DataValue.CreateBigInteger(longValue);
-            break;
-          case PrimitiveDataType.Boolean:
-            bool boolValue = BinaryUtilities.ToBoolean(dataValue);
-            rowValues[i] = DataValue.CreateBoolean(boolValue);
-            break;
-          case PrimitiveDataType.DateTime:
-            long dateTicks = BinaryUtilities.ReadInt64LittleEndian(dataValue);
-            DateTime dateTimeValue = DateTime.FromBinary(dateTicks);
-            rowValues[i] = DataValue.CreateDateTime(dateTimeValue);
-            break;
-          case PrimitiveDataType.Decimal:
-            decimal decimalValue = BinaryUtilities.ConvertSpanToDecimal(dataValue);
-            rowValues[i] = DataValue.CreateDecimal(decimalValue);
-            break;
-          case PrimitiveDataType.Float:
-            double doubleValue = BinaryPrimitives.ReadDoubleLittleEndian(dataValue); ;
-            rowValues[i] = DataValue.CreateFloat(doubleValue);
-            break;
-          case PrimitiveDataType.Int:
-            int intValue = BinaryUtilities.ReadInt32LittleEndian(dataValue);
-            rowValues[i] = DataValue.CreateInteger(intValue);
-            break;
-          default:
-            throw new Exception($"Unexpected fixed size data type: {columnDef.DataType.PrimitiveType}");
-        }
-
+        int dataSize = columnDef.DataType.GetFixedSize();
+        if (isPrimaryKeyColumn)
+          rowValues[keyValueIndex++] = DeserializeFixedSizeColumnValue(columnDef, recordData, currentFixedSizedDataOffset, dataSize);
         currentFixedSizedDataOffset += dataSize;
       }
       else // This is a variable length column
@@ -252,27 +273,101 @@ internal static class RecordSerializer
         int dataSize = BinaryUtilities.ReadInt32LittleEndian(dataSizeData);
         // Advance our variable length data offset past the length of this value...
         currentVariableSizedDataOffset += sizeof(int);
-        var dataValue = recordData.Slice(currentVariableSizedDataOffset, dataSize);
-
-        switch (columnDef.DataType.PrimitiveType)
-        {
-          case PrimitiveDataType.Varchar:
-            var stringValue = Encoding.UTF8.GetString(dataValue);
-            if (stringValue == null)
-              throw new NullReferenceException("Expected a non-null string, but value is null!");
-            rowValues[i] = DataValue.CreateString(stringValue);
-            break;
-          case PrimitiveDataType.Blob:
-            rowValues[i] = DataValue.CreateBlob(dataValue.ToArray());
-            break;
-        }
-
+        if (isPrimaryKeyColumn)
+          rowValues[keyValueIndex++] = DeserializeVariableSizeColumnValue(columnDef, recordData, currentVariableSizedDataOffset, dataSize);
         // Advance the variable length data offset past the actual data...
         currentVariableSizedDataOffset += dataSize;
       }
     }
 
-    return new DataRow(rowValues);
+    return new Key(rowValues);
+  }
+
+  private static DataValue DeserializeColumnValue(ColumnDefinition columnDef, ReadOnlySpan<byte> recordData, ref int currentFixedSizedDataOffset, ref int currentVariableSizedDataOffset)
+  {
+    DataValue rowValue;
+
+    if (columnDef.DataType.IsFixedSize)
+    {
+      int dataSize = columnDef.DataType.GetFixedSize();
+      rowValue = DeserializeFixedSizeColumnValue(columnDef, recordData, currentFixedSizedDataOffset, dataSize);
+      currentFixedSizedDataOffset += dataSize;
+    }
+    else // This is a variable length column
+    {
+      // Read the length of the variable sized column from the beginning of the variable length data offset...
+      var dataSizeData = recordData.Slice(currentVariableSizedDataOffset, sizeof(int));
+      int dataSize = BinaryUtilities.ReadInt32LittleEndian(dataSizeData);
+      // Advance our variable length data offset past the length of this value...
+      currentVariableSizedDataOffset += sizeof(int);
+      rowValue = DeserializeVariableSizeColumnValue(columnDef, recordData, currentVariableSizedDataOffset, dataSize);
+      // Advance the variable length data offset past the actual data...
+      currentVariableSizedDataOffset += dataSize;
+    }
+
+    return rowValue;
+  }
+
+  private static DataValue DeserializeFixedSizeColumnValue(ColumnDefinition columnDef, ReadOnlySpan<byte> recordData, int currentFixedSizedDataOffset, int dataSize)
+  {
+    DataValue rowValue;
+    var dataValue = recordData.Slice(currentFixedSizedDataOffset, dataSize);
+    // Read the data in...
+    switch (columnDef.DataType.PrimitiveType)
+    {
+      case PrimitiveDataType.BigInt:
+        long longValue = BinaryUtilities.ReadInt64LittleEndian(dataValue);
+        rowValue = DataValue.CreateBigInteger(longValue);
+        break;
+      case PrimitiveDataType.Boolean:
+        bool boolValue = BinaryUtilities.ToBoolean(dataValue);
+        rowValue = DataValue.CreateBoolean(boolValue);
+        break;
+      case PrimitiveDataType.DateTime:
+        long dateTicks = BinaryUtilities.ReadInt64LittleEndian(dataValue);
+        DateTime dateTimeValue = DateTime.FromBinary(dateTicks);
+        rowValue = DataValue.CreateDateTime(dateTimeValue);
+        break;
+      case PrimitiveDataType.Decimal:
+        decimal decimalValue = BinaryUtilities.ConvertSpanToDecimal(dataValue);
+        rowValue = DataValue.CreateDecimal(decimalValue);
+        break;
+      case PrimitiveDataType.Float:
+        double doubleValue = BinaryPrimitives.ReadDoubleLittleEndian(dataValue); ;
+        rowValue = DataValue.CreateFloat(doubleValue);
+        break;
+      case PrimitiveDataType.Int:
+        int intValue = BinaryUtilities.ReadInt32LittleEndian(dataValue);
+        rowValue = DataValue.CreateInteger(intValue);
+        break;
+      default:
+        throw new Exception($"Unexpected fixed size data type: {columnDef.DataType.PrimitiveType}");
+    }
+
+    return rowValue;
+  }
+
+  private static DataValue DeserializeVariableSizeColumnValue(ColumnDefinition columnDef, ReadOnlySpan<byte> recordData, int currentVariableSizedDataOffset, int dataSize)
+  {
+    DataValue rowValue;
+    var dataValue = recordData.Slice(currentVariableSizedDataOffset, dataSize);
+
+    switch (columnDef.DataType.PrimitiveType)
+    {
+      case PrimitiveDataType.Varchar:
+        var stringValue = Encoding.UTF8.GetString(dataValue);
+        if (stringValue == null)
+          throw new NullReferenceException("Expected a non-null string, but value is null!");
+        rowValue = DataValue.CreateString(stringValue);
+        break;
+      case PrimitiveDataType.Blob:
+        rowValue = DataValue.CreateBlob(dataValue.ToArray());
+        break;
+      default:
+        throw new Exception($"Unexpected variable size data type: {columnDef.DataType.PrimitiveType}");
+    }
+
+    return rowValue;
   }
 
   private static int CalculateSerializedRecordSize(TableDefinition tableDef, DataRow row, out int nullBitmapSize, out Dictionary<string, int> variableDataSizeLookup)
