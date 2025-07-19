@@ -245,6 +245,10 @@ internal static class RecordSerializer
     var keyValueIndex = 0;
     for (int i = 0; i < columnCount; i++)
     {
+      // Early out if we have already pulled all the primary key column values...
+      if (keyValueIndex >= keyColumnCount)
+        break;
+
       var columnDef = tableDef.Columns[i];
 
       var isPrimaryKeyColumn = keyColumns.Select(k => k.Name).Contains(columnDef.Name);
