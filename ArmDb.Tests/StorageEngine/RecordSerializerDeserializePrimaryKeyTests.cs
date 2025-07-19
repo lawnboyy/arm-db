@@ -36,7 +36,7 @@ public partial class RecordSerializerTests // Use partial to extend the existing
 
     // Assert
     Assert.NotNull(actualKey);
-    Assert.True(expectedKey.Values.SequenceEqual(actualKey.Values));
+    Assert.Equal(expectedKey, actualKey);
   }
 
   // Helper to create a table definition with a primary key
