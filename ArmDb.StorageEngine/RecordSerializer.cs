@@ -217,6 +217,16 @@ internal static class RecordSerializer
     return new DataRow(rowValues);
   }
 
+  /// <summary>
+  /// Special method to deserialize only the primary key of a data record (database row). This method
+  /// is necessary to efficiently extract the primary key for comparison purposes when searching a 
+  /// page's list of records for a key, either to find the correct location to insert a new row, or
+  /// to locate a specific record.
+  /// </summary>
+  /// <param name="tableDef"></param>
+  /// <param name="recordData"></param>
+  /// <returns></returns>
+  /// <exception cref="InvalidOperationException"></exception>
   public static Key DeserializePrimaryKey(TableDefinition tableDef, ReadOnlySpan<byte> recordData)
   {
     // Determine the primary key columns...
