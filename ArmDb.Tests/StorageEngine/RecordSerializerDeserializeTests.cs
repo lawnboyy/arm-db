@@ -106,6 +106,39 @@ public partial class RecordSerializerTests
   }
 
   [Fact]
+  public void Deserialize_NonNullableColumn_ThrowsIfValueIsNull()
+  {
+    // Arrange
+    // 1. Define schema with nullable columns, matching the corresponding Serialize test
+    var tableDef = CreateTestTable(
+        new ColumnDefinition("ID", new DataTypeInfo(PrimitiveDataType.Int), isNullable: false),
+        new ColumnDefinition("LastLogin", new DataTypeInfo(PrimitiveDataType.DateTime), isNullable: false)
+    );
+
+    // 2. This is the original DataRow we expect to get back after deserialization
+    var expectedRow = new DataRow(
+        DataValue.CreateInteger(10),
+        DataValue.CreateNull(PrimitiveDataType.DateTime) // LastLogin is NULL
+    );
+
+    // 3. This is the known-good serialized byte array for the row above.
+    //    It has bit 1 set in the null bitmap.
+    var serializedData = new byte[]
+    {
+      // --- Header ---
+      2,           // Null Bitmap (0b00000010)
+      // --- Fixed-Length Data Section (LastLogin is omitted because it is null) ---
+      10, 0, 0, 0  // ID = 10      
+    };
+
+    // Act
+    // Call the Deserialize method with the serialized data
+    var ex = Assert.Throws<InvalidDataException>(() =>
+        RecordSerializer.Deserialize(tableDef, serializedData.AsSpan())
+    );
+  }
+
+  [Fact]
   public void Deserialize_WithInterleavedColumns_ReconstructsCorrectRow()
   {
     // Arrange

@@ -119,6 +119,41 @@ public partial class RecordSerializerTests // Use partial to extend the existing
     Assert.Equal(expectedKey, actualKey);
   }
 
+  [Fact]
+  public void DeserializePrimaryKey_WithNullInKey_ThrowsInvalidDataException()
+  {
+    // Arrange
+    // 1. Define schema where ID is a non-nullable PK
+    var tableDef = CreateTestTableWithPK("ID",
+        new ColumnDefinition("ID", new DataTypeInfo(PrimitiveDataType.Int), isNullable: false),
+        new ColumnDefinition("Name", new DataTypeInfo(PrimitiveDataType.Varchar, 50), isNullable: false)
+    );
+
+    // 2. This is a corrupted serialized byte array.
+    // The null bitmap (first byte) has bit 0 set to 1, marking the 'ID' column as NULL,
+    // which violates the primary key constraint.
+    var corruptedData = new byte[]
+    {
+        // --- Header ---
+        1,              // Null Bitmap (0b00000001) -> Col 0 is NULL
+        // --- Fixed-Length Data ---
+        // (No data for ID because it's marked as null)
+        // --- Variable-Length Data ---
+        5, 0, 0, 0,     // Length of "Alice" (5)
+        65, 108, 105, 99, 101 // "Alice"
+    };
+
+    // Act & Assert
+    // The method should detect the invalid state and throw an exception.
+    // InvalidDataException is a good choice for when data stream is not in the expected format.
+    var ex = Assert.Throws<InvalidDataException>(() =>
+        RecordSerializer.DeserializePrimaryKey(tableDef, corruptedData.AsSpan())
+    );
+
+    // Optional: Verify the exception message is helpful
+    Assert.Contains("Primary key column 'ID' cannot be null.", ex.Message);
+  }
+
   // Helper to create a table definition with a primary key
   private static TableDefinition CreateTestTableWithPK(string pkColumnName, params ColumnDefinition[] columns)
   {

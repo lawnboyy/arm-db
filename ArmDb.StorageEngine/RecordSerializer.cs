@@ -198,8 +198,13 @@ internal static class RecordSerializer
     for (int i = 0; i < columnCount; i++)
     {
       var columnDef = tableDef.Columns[i];
-      if (IsColumnValueNull(columnDef, nullBitmap, i))
+      if (IsColumnValueNull(nullBitmap, i))
       {
+        if (!columnDef.IsNullable)
+        {
+          throw new InvalidDataException($"Found null value for non-nullable column {columnDef.Name}!");
+        }
+
         // Create the null value for the column and continue...
         rowValues[i] = DataValue.CreateNull(columnDef.DataType.PrimitiveType);
         // There is no data written if the value is null, so we don't need to update either offset here...
@@ -253,11 +258,12 @@ internal static class RecordSerializer
 
       var isPrimaryKeyColumn = keyColumns.Select(k => k.Name).Contains(columnDef.Name);
 
-      if (IsColumnValueNull(columnDef, nullBitmap, i))
+      if (IsColumnValueNull(nullBitmap, i))
       {
         // Create the null value for the column and continue...
         if (isPrimaryKeyColumn)
-          rowValues[keyValueIndex++] = DataValue.CreateNull(columnDef.DataType.PrimitiveType);
+          throw new InvalidDataException($"Primary key column '{columnDef.Name}' cannot be null.");
+
         // There is no data written if the value is null, so we don't need to update either offset here...
         continue;
       }
@@ -445,7 +451,7 @@ internal static class RecordSerializer
     for (int i = 0; i < columnCount; i++)
     {
       // Null values will not be written, so only calculate space necessary for non-null values
-      if (IsColumnValueNull(tableDef.Columns[i], nullBitmap, i))
+      if (IsColumnValueNull(nullBitmap, i))
         continue;
 
       var columnDef = tableDef.Columns[i];
@@ -458,22 +464,15 @@ internal static class RecordSerializer
     return offset;
   }
 
-  private static bool IsColumnValueNull(ColumnDefinition columnDef, ReadOnlySpan<byte> nullBitmap, int index)
+  private static bool IsColumnValueNull(ReadOnlySpan<byte> nullBitmap, int index)
   {
-    if (columnDef.IsNullable)
-    {
-      // Check the null bitmap to see if the value is null
-      // Determine which byte to index...
-      var nullBitmapByteIndex = index / 8;
-      var nullBitmapByte = nullBitmap[nullBitmapByteIndex];
-      // What bit are we interested in?
-      var bitInByte = index % 8;
-      // Is it set?
-      var isNull = (nullBitmapByte & (1 << bitInByte)) != 0;
-
-      return isNull;
-    }
-
-    return false;
+    // Check the null bitmap to see if the value is null
+    // Determine which byte to index...
+    var nullBitmapByteIndex = index / 8;
+    var nullBitmapByte = nullBitmap[nullBitmapByteIndex];
+    // What bit are we interested in?
+    var bitInByte = index % 8;
+    // Is it set?
+    return (nullBitmapByte & (1 << bitInByte)) != 0;
   }
 }
