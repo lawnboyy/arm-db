@@ -154,6 +154,43 @@ public partial class RecordSerializerTests // Use partial to extend the existing
     Assert.Contains("Primary key column 'ID' cannot be null.", ex.Message);
   }
 
+  [Fact]
+  public void DeserializePrimaryKey_WithKeyColumnNotFirstInFixedSection_ExtractsCorrectly()
+  {
+    // Arrange
+    // 1. Define schema where the PK ('UserID') is not the first column,
+    //    and also not the first fixed-size column.
+    var tableDef = new TableDefinition("TestKeyNotFirst");
+    tableDef.AddColumn(new ColumnDefinition("FirstName", new DataTypeInfo(PrimitiveDataType.Varchar, 50), isNullable: false));
+    tableDef.AddColumn(new ColumnDefinition("IsActive", new DataTypeInfo(PrimitiveDataType.Boolean), isNullable: false));
+    tableDef.AddColumn(new ColumnDefinition("UserID", new DataTypeInfo(PrimitiveDataType.Int), isNullable: false));
+    tableDef.AddConstraint(new PrimaryKeyConstraint("TestKeyNotFirst", new[] { "UserID" }));
+
+    // 2. This is the original Key we expect to get back
+    var expectedKey = new Key(new[] { DataValue.CreateInteger(123) });
+
+    // 3. This is the serialized byte array for the full row ("Alice", true, 123)
+    // Format: [NullBitmap][Fixed: IsActive, UserID][Variable: FirstName Length + Data]
+    var serializedData = new byte[]
+    {
+        // --- Header ---
+        0,              // Null Bitmap
+        // --- Fixed-Length Data Section (in schema order) ---
+        1,              // IsActive = true
+        123, 0, 0, 0,   // UserID = 123
+        // --- Variable-Length Data Section ---
+        5, 0, 0, 0,     // Length of "Alice" (5)
+        65, 108, 105, 99, 101 // "Alice"
+    };
+
+    // Act
+    Key actualKey = RecordSerializer.DeserializePrimaryKey(tableDef, serializedData.AsSpan());
+
+    // Assert
+    Assert.NotNull(actualKey);
+    Assert.Equal(expectedKey, actualKey);
+  }
+
   // Helper to create a table definition with a primary key
   private static TableDefinition CreateTestTableWithPK(string pkColumnName, params ColumnDefinition[] columns)
   {
