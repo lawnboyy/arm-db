@@ -16,7 +16,7 @@ public abstract class KeyComparer : IComparer<Key>
     // TODO: The values should be the same length, otherwise we have an error condition...
 
     // There probably aren't valid use cases for passing in null Key objects, though the values in
-    // the Key objects could be null. But the Key object and it's collection of values should never
+    // the Key objects could be null. But the Key object and its collection of values should never
     // be null, or there is some other problem. While the semantics of the IComparer interface
     // suggests we should do a comparison for null Key values, the better option is to throw here
     // to let a caller know that we wer not expecting this and either a use case does exist
@@ -47,11 +47,10 @@ public abstract class KeyComparer : IComparer<Key>
 
   private int Compare(DataValue x, DataValue y)
   {
+    // We've already checked the DataValues for null, so we can assume the underlying values are not null here.
     switch (x.DataType)
     {
       case PrimitiveDataType.Int:
-        // Unbox the int values...
-        // We've already checked for null, so we can assume the underlying value is not null here.
         int intX = (int)x!.Value!;
         int intY = (int)y!.Value!;
         return intX.CompareTo(intY);
