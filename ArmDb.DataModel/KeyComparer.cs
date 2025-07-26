@@ -15,6 +15,16 @@ public abstract class KeyComparer : IComparer<Key>
   {
     // TODO: The values should be the same length, otherwise we have an error condition...
 
+    // There probably aren't valid use cases for passing in null Key objects, though the values in
+    // the Key objects could be null. But the Key object and it's collection of values should never
+    // be null, or there is some other problem. While the semantics of the IComparer interface
+    // suggests we should do a comparison for null Key values, the better option is to throw here
+    // to let a caller know that we wer not expecting this and either a use case does exist
+    // which was unknown, or there is a bug somewhere in which a null Key object is getting passed
+    // in.
+    ArgumentNullException.ThrowIfNull(x, "Key x is null, which is unexpected!");
+    ArgumentNullException.ThrowIfNull(y, "Key y is null, which is unexpected!");
+
     // Loop through each data value in the key and perform the comparison...
     for (var i = 0; i < x!.Values.Count; i++)
     {
