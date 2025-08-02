@@ -235,13 +235,19 @@ internal static class RecordSerializer
     if (primaryKeyConstraint == null)
       throw new InvalidOperationException($"No primary key contstraint was found on table {tableDef.Name}!");
 
-    var keyColumnNames = primaryKeyConstraint.ColumnNames;
-    var keyColumns = tableDef.Columns.Where(c => keyColumnNames.Contains(c.Name));
+    var keyColumns = new ColumnDefinition[primaryKeyConstraint.ColumnNames.Count];
+    var primaryKeyColumnNames = primaryKeyConstraint.ColumnNames;
+
+    // Ensure that the order of the column list matches the primary key column order...
+    for (var i = 0; i < primaryKeyColumnNames.Count; i++)
+    {
+      keyColumns[i] = tableDef.Columns.First(c => c.Name == primaryKeyColumnNames[i]);
+    }
 
     return DeserializeKey(tableDef, keyColumns, recordData);
   }
 
-  private static Key DeserializeKey(TableDefinition tableDef, IEnumerable<ColumnDefinition> keyColumns, ReadOnlySpan<byte> recordData)
+  private static Key DeserializeKey(TableDefinition tableDef, ColumnDefinition[] keyColumns, ReadOnlySpan<byte> recordData)
   {
     var keyColumnCount = keyColumns.Count();
     var columnCount = tableDef.Columns.Count();
@@ -257,16 +263,26 @@ internal static class RecordSerializer
     var currentFixedSizedDataOffset = nullBitmapSize;
     var currentVariableSizedDataOffset = CalculateVariableLengthDataOffset(tableDef, nullBitmap);
 
-    var keyValueIndex = 0;
+    var keyColumnsFound = 0;
     for (int i = 0; i < columnCount; i++)
     {
       // Early out if we have already pulled all the primary key column values...
-      if (keyValueIndex >= keyColumnCount)
+      if (keyColumnsFound >= keyColumnCount)
         break;
 
       var columnDef = tableDef.Columns[i];
 
       var isPrimaryKeyColumn = keyColumns.Select(k => k.Name).Contains(columnDef.Name);
+      int keyColumnIndex = -1;
+      if (isPrimaryKeyColumn)
+      {
+        // Capture the index of this column so we can ensure our deserialized key is ordered correctly...
+        // TODO: This is inefficient; perhaps we should use a different data structure for the keyColumns parameter.
+        var result = keyColumns.Select((c, i) => new { Col = c, Index = i }).First(col => col.Col.Name == columnDef.Name);
+        keyColumnIndex = result.Index;
+        // Increment our columns found count...
+        keyColumnsFound++;
+      }
 
       if (IsColumnValueNull(nullBitmap, i))
       {
@@ -283,7 +299,7 @@ internal static class RecordSerializer
         // Get the size of the column from the schema definition...
         int dataSize = columnDef.DataType.GetFixedSize();
         if (isPrimaryKeyColumn)
-          rowValues[keyValueIndex++] = DeserializeFixedSizeColumnValue(columnDef, recordData, currentFixedSizedDataOffset, dataSize);
+          rowValues[keyColumnIndex] = DeserializeFixedSizeColumnValue(columnDef, recordData, currentFixedSizedDataOffset, dataSize);
         currentFixedSizedDataOffset += dataSize;
       }
       else // This is a variable length column
@@ -294,7 +310,7 @@ internal static class RecordSerializer
         // Advance our variable length data offset past the length of this value...
         currentVariableSizedDataOffset += sizeof(int);
         if (isPrimaryKeyColumn)
-          rowValues[keyValueIndex++] = DeserializeVariableSizeColumnValue(columnDef, recordData, currentVariableSizedDataOffset, dataSize);
+          rowValues[keyColumnIndex] = DeserializeVariableSizeColumnValue(columnDef, recordData, currentVariableSizedDataOffset, dataSize);
         // Advance the variable length data offset past the actual data...
         currentVariableSizedDataOffset += dataSize;
       }

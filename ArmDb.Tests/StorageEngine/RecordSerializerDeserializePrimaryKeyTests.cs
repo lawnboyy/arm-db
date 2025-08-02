@@ -191,6 +191,51 @@ public partial class RecordSerializerTests // Use partial to extend the existing
     Assert.Equal(expectedKey, actualKey);
   }
 
+  [Fact]
+  public void DeserializePrimaryKey_WithReorderedCompositeKey_ReturnsKeyInCorrectOrder()
+  {
+    // Arrange
+    // 1. Define a schema where the Primary Key column order is DIFFERENT
+    //    from the table's column order.
+    var tableDef = new TableDefinition("TestReorderedPK");
+    // Table column order: ColA (fixed), ColB (variable), ColC (fixed)
+    tableDef.AddColumn(new ColumnDefinition("ColA", new DataTypeInfo(PrimitiveDataType.Int), isNullable: false));
+    tableDef.AddColumn(new ColumnDefinition("ColB", new DataTypeInfo(PrimitiveDataType.Varchar, 50), isNullable: false));
+    tableDef.AddColumn(new ColumnDefinition("ColC", new DataTypeInfo(PrimitiveDataType.BigInt), isNullable: false));
+    // Primary Key order: ColC, ColA
+    tableDef.AddConstraint(new PrimaryKeyConstraint("TestReorderedPK", ["ColC", "ColA"]));
+
+    // 2. This is the original Key we expect to get back, in PK order (ColC, then ColA)
+    var expectedKey = new Key(
+    [
+        DataValue.CreateBigInteger(999L), // ColC's value
+        DataValue.CreateInteger(10)     // ColA's value
+    ]);
+
+    // 3. This is the serialized byte array for the full row (10, "hello", 999L).
+    //    Note that the fixed-size data is stored in TABLE order (ColA, then ColC).
+    var serializedData = new byte[]
+    {
+        // --- Header ---
+        0,                      // Null Bitmap
+        // --- Fixed-Length Data Section (in table column order) ---
+        10, 0, 0, 0,            // ColA = 10
+        231, 3, 0, 0, 0, 0, 0, 0, // ColC = 999
+        // --- Variable-Length Data Section ---
+        5, 0, 0, 0,             // Length of "hello" (5)
+        104, 101, 108, 108, 111 // "hello"
+    };
+
+    // Act
+    // The DeserializePrimaryKey method must read the data in table order
+    // but construct the Key object in primary key order.
+    Key actualKey = RecordSerializer.DeserializePrimaryKey(tableDef, serializedData.AsSpan());
+
+    // Assert
+    Assert.NotNull(actualKey);
+    Assert.Equal(expectedKey, actualKey);
+  }
+
   // Helper to create a table definition with a primary key
   private static TableDefinition CreateTestTableWithPK(string pkColumnName, params ColumnDefinition[] columns)
   {
