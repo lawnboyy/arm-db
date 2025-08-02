@@ -4,13 +4,6 @@ namespace ArmDb.DataModel;
 
 public abstract class KeyComparer : IComparer<Key>
 {
-  private readonly IReadOnlyList<ColumnDefinition> _keyColumns;
-
-  public KeyComparer(IReadOnlyList<ColumnDefinition> keyColumns)
-  {
-    _keyColumns = keyColumns;
-  }
-
   public int Compare(Key? x, Key? y)
   {
     // TODO: The values should be the same length, otherwise we have an error condition...
@@ -28,6 +21,10 @@ public abstract class KeyComparer : IComparer<Key>
     // Loop through each data value in the key and perform the comparison...
     for (var i = 0; i < x!.Values.Count; i++)
     {
+      // Sanity check to make sure the types match for each Key column value comparison.
+      if (x.Values[i].DataType != y.Values[i].DataType)
+        throw new InvalidOperationException($"Found mismatched data types comparing keys at index {i}! Cannot compare {x.Values[i].DataType} with {y.Values[i].DataType}");
+
       var valueX = x!.Values[i];
       var valueY = y!.Values[i];
 
