@@ -101,6 +101,137 @@ public class KeyComparerTests
     Assert.True(a_vs_c == 0, "Key A (123.45) should be equal to Key C (123.45)");
   }
 
+  private static readonly ColumnDefinition FloatScoreColumn = new("Score", new DataTypeInfo(PrimitiveDataType.Float), isNullable: false);
+
+  [Fact]
+  public void Compare_WithSingleFloatKey_ReturnsCorrectOrder()
+  {
+    // Arrange
+    var keySchema = new List<ColumnDefinition> { FloatScoreColumn };
+    var keyComparer = new TestKeyComparer(keySchema);
+
+    var keyA = new Key([DataValue.CreateFloat(98.6)]);
+    var keyB = new Key([DataValue.CreateFloat(101.1)]);
+    var keyC = new Key([DataValue.CreateFloat(98.6)]); // Equal to keyA
+
+    // Act
+    int a_vs_b = keyComparer.Compare(keyA, keyB);
+    int b_vs_a = keyComparer.Compare(keyB, keyA);
+    int a_vs_c = keyComparer.Compare(keyA, keyC);
+
+    // Assert
+    Assert.True(a_vs_b < 0, "Key A (98.6) should be less than Key B (101.1)");
+    Assert.True(b_vs_a > 0, "Key B (101.1) should be greater than Key A (98.6)");
+    Assert.True(a_vs_c == 0, "Key A (98.6) should be equal to Key C (98.6)");
+  }
+
+  private static readonly ColumnDefinition VarcharNameColumn = new("Name", new DataTypeInfo(PrimitiveDataType.Varchar, 50), isNullable: false);
+
+  [Fact]
+  public void Compare_WithSingleStringKey_ReturnsCorrectLexicographicalOrder()
+  {
+    // Arrange
+    var keySchema = new List<ColumnDefinition> { VarcharNameColumn };
+    var keyComparer = new TestKeyComparer(keySchema);
+
+    var keyA = new Key([DataValue.CreateString("Apple")]);
+    var keyB = new Key([DataValue.CreateString("Banana")]);
+    var keyC = new Key([DataValue.CreateString("Apple")]);
+    // Key with different casing to test case-sensitivity
+    var keyD = new Key([DataValue.CreateString("apple")]);
+
+    // Act
+    int a_vs_b = keyComparer.Compare(keyA, keyB);
+    int b_vs_a = keyComparer.Compare(keyB, keyA);
+    int a_vs_c = keyComparer.Compare(keyA, keyC);
+    int a_vs_d = keyComparer.Compare(keyA, keyD); // Case-sensitive comparison
+
+    // Assert
+    Assert.True(a_vs_b < 0, "Key A ('Apple') should be less than Key B ('Banana')");
+    Assert.True(b_vs_a > 0, "Key B ('Banana') should be greater than Key A ('Apple')");
+    Assert.True(a_vs_c == 0, "Key A ('Apple') should be equal to Key C ('Apple')");
+    Assert.True(a_vs_d < 0, "Key A ('Apple') should be less than Key D ('apple') in an Ordinal comparison");
+  }
+
+  private static readonly ColumnDefinition BoolIsActiveColumn = new("IsActive", new DataTypeInfo(PrimitiveDataType.Boolean), isNullable: false);
+
+  [Fact]
+  public void Compare_WithSingleBooleanKey_ReturnsCorrectOrder()
+  {
+    // Arrange
+    var keySchema = new List<ColumnDefinition> { BoolIsActiveColumn };
+    var keyComparer = new TestKeyComparer(keySchema);
+
+    var keyTrue = new Key([DataValue.CreateBoolean(true)]);
+    var keyFalse = new Key([DataValue.CreateBoolean(false)]);
+    var keyAnotherTrue = new Key([DataValue.CreateBoolean(true)]);
+    var keyFalse2 = new Key([DataValue.CreateBoolean(false)]);
+
+    // Act
+    int false_vs_true = keyComparer.Compare(keyFalse, keyTrue);
+    int true_vs_false = keyComparer.Compare(keyTrue, keyFalse);
+    int true_vs_true = keyComparer.Compare(keyTrue, keyAnotherTrue);
+    int false_vs_false = keyComparer.Compare(keyFalse, keyFalse2);
+
+    // Assert
+    // In C#, false.CompareTo(true) is < 0
+    Assert.True(false_vs_true < 0, "Key False should be less than Key True");
+    Assert.True(true_vs_false > 0, "Key True should be greater than Key False");
+    Assert.True(true_vs_true == 0, "Two True keys should be equal");
+    Assert.True(false_vs_false == 0, "Two False keys should be equal");
+  }
+
+  private static readonly ColumnDefinition DateTimeColumn = new("Timestamp", new DataTypeInfo(PrimitiveDataType.DateTime), isNullable: false);
+
+  [Fact]
+  public void Compare_WithSingleDateTimeKey_ReturnsCorrectOrder()
+  {
+    // Arrange
+    var keySchema = new List<ColumnDefinition> { DateTimeColumn };
+    var keyComparer = new TestKeyComparer(keySchema);
+
+    var keyA = new Key([DataValue.CreateDateTime(new DateTime(2024, 1, 1, 10, 0, 0))]); // Earlier
+    var keyB = new Key([DataValue.CreateDateTime(new DateTime(2024, 1, 1, 12, 0, 0))]); // Later
+    var keyC = new Key([DataValue.CreateDateTime(new DateTime(2024, 1, 1, 10, 0, 0))]); // Equal to keyA
+
+    // Act
+    int a_vs_b = keyComparer.Compare(keyA, keyB);
+    int b_vs_a = keyComparer.Compare(keyB, keyA);
+    int a_vs_c = keyComparer.Compare(keyA, keyC);
+
+    // Assert
+    Assert.True(a_vs_b < 0, "Key A (earlier) should be less than Key B (later)");
+    Assert.True(b_vs_a > 0, "Key B (later) should be greater than Key A (earlier)");
+    Assert.True(a_vs_c == 0, "Two identical DateTime keys should be equal");
+  }
+
+  private static readonly ColumnDefinition BlobDataColumn = new("Data", new DataTypeInfo(PrimitiveDataType.Blob, 1024), isNullable: false);
+
+  [Fact]
+  public void Compare_WithSingleBlobKey_ReturnsCorrectLexicographicalOrder()
+  {
+    // Arrange
+    var keySchema = new List<ColumnDefinition> { BlobDataColumn };
+    var keyComparer = new TestKeyComparer(keySchema);
+
+    var keyA = new Key([DataValue.CreateBlob([0x01, 0x02, 0x03])]);
+    var keyB = new Key([DataValue.CreateBlob([0x01, 0x02, 0x04])]); // Different last byte
+    var keyC = new Key([DataValue.CreateBlob([0x01, 0x02, 0x03])]); // Equal to keyA
+    var keyD = new Key([DataValue.CreateBlob([0x01, 0x02])]);      // Shorter prefix of A
+
+    // Act
+    int a_vs_b = keyComparer.Compare(keyA, keyB);
+    int b_vs_a = keyComparer.Compare(keyB, keyA);
+    int a_vs_c = keyComparer.Compare(keyA, keyC);
+    int d_vs_a = keyComparer.Compare(keyD, keyA); // Shorter vs longer
+
+    // Assert
+    Assert.True(a_vs_b < 0, "Key A should be less than Key B");
+    Assert.True(b_vs_a > 0, "Key B should be greater than Key A");
+    Assert.True(a_vs_c == 0, "Two identical Blob keys should be equal");
+    Assert.True(d_vs_a < 0, "Key D (shorter prefix) should be less than Key A");
+  }
+
   private class TestKeyComparer : KeyComparer
   {
     public TestKeyComparer(IReadOnlyList<ColumnDefinition> columns) : base(columns)

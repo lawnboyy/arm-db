@@ -50,6 +50,7 @@ public abstract class KeyComparer : IComparer<Key>
     // We've already checked the DataValues for null, so we can assume the underlying values are not null here.
     switch (x.DataType)
     {
+      // Numeric types...
       case PrimitiveDataType.Int:
         int intX = (int)x!.Value!;
         int intY = (int)y!.Value!;
@@ -65,6 +66,31 @@ public abstract class KeyComparer : IComparer<Key>
         decimal decimalY = (decimal)y!.Value!;
         return decimalX.CompareTo(decimalY);
 
+      case PrimitiveDataType.Float:
+        double doubleX = (double)x!.Value!;
+        double doubleY = (double)y!.Value!;
+        return doubleX.CompareTo(doubleY);
+
+      // Non-numeric types
+      case PrimitiveDataType.Varchar:
+        string varcharX = (string)x!.Value!;
+        string varcharY = (string)y!.Value!;
+        return string.CompareOrdinal(varcharX, varcharY);
+
+      case PrimitiveDataType.Boolean:
+        bool boolX = (bool)x!.Value!;
+        bool boolY = (bool)y!.Value!;
+        return boolX.CompareTo(boolY);
+
+      case PrimitiveDataType.DateTime:
+        DateTime timeX = (DateTime)x!.Value!;
+        DateTime timeY = (DateTime)y!.Value!;
+        return timeX.CompareTo(timeY);
+
+      case PrimitiveDataType.Blob:
+        ReadOnlySpan<byte> blobX = (byte[])x!.Value!;
+        ReadOnlySpan<byte> blobY = (byte[])y!.Value!;
+        return blobX.SequenceCompareTo(blobY);
     }
 
     throw new NotImplementedException("Support for type has not been implemented.");
