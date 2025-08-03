@@ -38,7 +38,8 @@ internal sealed class BTreeLeafNode
   /// as the bitwise complement (i.e. a negative value).
   /// </summary>
   /// <param name="searchKey"></param>
-  /// <returns></returns>
+  /// <returns>Positive integer value if exact match is found. Negative integer value representing
+  /// the insertion point index if no exact match is found.</returns>
   internal int FindPrimaryKeySlotIndex(Key searchKey)
   {
     // It provides the specific key deserialization logic as a lambda
@@ -48,7 +49,14 @@ internal sealed class BTreeLeafNode
     );
   }
 
-  internal int FindSlotIndex(Key searchKey, Func<ReadOnlySpan<byte>, Key> deserializeKey)
+  /// <summary>
+  /// Performs a binary search on the leaf node page for the given search key.
+  /// </summary>
+  /// <param name="searchKey"></param>
+  /// <param name="deserializeKey"></param>
+  /// <returns>Positive integer value if exact match is found. Negative integer value representing
+  /// the insertion point index if no exact match is found.</returns>
+  private int FindSlotIndex(Key searchKey, Func<ReadOnlySpan<byte>, Key> deserializeKey)
   {
     // Get the item count from the page header...
     var pageHeader = new PageHeader(_page);
