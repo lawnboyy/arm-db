@@ -3,7 +3,7 @@ using ArmDb.StorageEngine;
 
 namespace ArmDb.UnitTests.StorageEngine;
 
-public class BTreeLeafNodeTests
+public partial class BTreeLeafNodeTests
 {
   [Fact]
   public void Constructor_WithValidLeafPage_InitializesSuccessfully()
