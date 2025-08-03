@@ -174,6 +174,73 @@ public partial class BTreeLeafNodeTests
     Assert.Equal(expectedResult, actualResult);
   }
 
+  [Fact]
+  public void FindSlotIndex_OnEmptyPage_ReturnsCorrectInsertionIndex()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.LeafNode); // Page is empty, ItemCount is 0
+
+    var leafNode = new BTreeLeafNode(page, tableDef);
+    var searchKey = new Key([DataValue.CreateInteger(100)]); // Any key
+    int expectedResult = ~0; // Bitwise complement of insertion index 0
+
+    // Act
+    int actualResult = leafNode.FindPrimaryKeySlotIndex(searchKey);
+
+    // Assert
+    Assert.Equal(expectedResult, actualResult);
+  }
+
+  [Theory]
+  // Key to search for, Expected result (0 for match, ~0 for insert before, ~1 for insert after)
+  [InlineData(25, ~0)]
+  [InlineData(50, 0)]
+  [InlineData(75, ~1)]
+  public void FindSlotIndex_OnSingleItemPage_ReturnsCorrectResults(int keyToFind, int expectedResult)
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.LeafNode);
+    var nullVarchar = DataValue.CreateNull(PrimitiveDataType.Varchar);
+
+    // Populate with a single record
+    SlottedPage.TryAddItem(page, RecordSerializer.Serialize(tableDef, new DataRow(DataValue.CreateInteger(50), nullVarchar)), 0);
+
+    var leafNode = new BTreeLeafNode(page, tableDef);
+    var searchKey = new Key([DataValue.CreateInteger(keyToFind)]);
+
+    // Act
+    int actualResult = leafNode.FindPrimaryKeySlotIndex(searchKey);
+
+    // Assert
+    Assert.Equal(expectedResult, actualResult);
+  }
+
+  [Fact]
+  public void FindSlotIndex_WhenRecordOnPageHasNullKey_ThrowsInvalidDataException()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.LeafNode);
+
+    // Manually construct a corrupted record where the PK (Id) is marked as NULL
+    var corruptedRow = new DataRow(DataValue.CreateNull(PrimitiveDataType.Int), DataValue.CreateString("Corrupted"));
+    var corruptedBytes = RecordSerializer.Serialize(tableDef, corruptedRow);
+    SlottedPage.TryAddItem(page, corruptedBytes, 0);
+
+    var leafNode = new BTreeLeafNode(page, tableDef);
+    var searchKey = new Key([DataValue.CreateInteger(10)]); // Any search key
+
+    // Act & Assert
+    // The exception should come from RecordSerializer.DeserializePrimaryKey when it finds the null
+    var ex = Assert.Throws<InvalidDataException>(() => leafNode.FindPrimaryKeySlotIndex(searchKey));
+    Assert.Contains("Primary key column 'Id' cannot be null", ex.Message);
+  }
+
   private static TableDefinition CreateIntPKTable()
   {
     var tableDef = new TableDefinition("IntPKTable");
