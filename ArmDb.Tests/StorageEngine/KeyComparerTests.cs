@@ -11,7 +11,7 @@ public class KeyComparerTests
   public void Compare_WithSingleIntKey_ReturnsCorrectOrder()
   {
     // Arrange
-    var keyComparer = new TestKeyComparer();
+    var keyComparer = new KeyComparer();
 
     var keyA = new Key([DataValue.CreateInteger(100)]);
     var keyB = new Key([DataValue.CreateInteger(200)]);
@@ -32,7 +32,7 @@ public class KeyComparerTests
   public void Compare_WithNullValuesInKey_SortsNullsFirst()
   {
     // Arrange
-    var keyComparer = new TestKeyComparer();
+    var keyComparer = new KeyComparer();
 
     var keyWithNull = new Key([DataValue.CreateNull(PrimitiveDataType.Int)]);
     var keyWithValue = new Key([DataValue.CreateInteger(100)]);
@@ -53,7 +53,7 @@ public class KeyComparerTests
   public void Compare_WithSingleBigIntKey_ReturnsCorrectOrder()
   {
     // Arrange
-    var keyComparer = new TestKeyComparer();
+    var keyComparer = new KeyComparer();
 
     var keyA = new Key([DataValue.CreateBigInteger(5_000_000_000L)]);
     var keyB = new Key([DataValue.CreateBigInteger(6_000_000_000L)]);
@@ -74,7 +74,7 @@ public class KeyComparerTests
   public void Compare_WithSingleDecimalKey_ReturnsCorrectOrder()
   {
     // Arrange
-    var keyComparer = new TestKeyComparer();
+    var keyComparer = new KeyComparer();
 
     var keyA = new Key([DataValue.CreateDecimal(123.45m)]);
     var keyB = new Key([DataValue.CreateDecimal(678.90m)]);
@@ -95,7 +95,7 @@ public class KeyComparerTests
   public void Compare_WithSingleFloatKey_ReturnsCorrectOrder()
   {
     // Arrange
-    var keyComparer = new TestKeyComparer();
+    var keyComparer = new KeyComparer();
 
     var keyA = new Key([DataValue.CreateFloat(98.6)]);
     var keyB = new Key([DataValue.CreateFloat(101.1)]);
@@ -116,7 +116,7 @@ public class KeyComparerTests
   public void Compare_WithSingleStringKey_ReturnsCorrectLexicographicalOrder()
   {
     // Arrange
-    var keyComparer = new TestKeyComparer();
+    var keyComparer = new KeyComparer();
 
     var keyA = new Key([DataValue.CreateString("Apple")]);
     var keyB = new Key([DataValue.CreateString("Banana")]);
@@ -141,7 +141,7 @@ public class KeyComparerTests
   public void Compare_WithSingleBooleanKey_ReturnsCorrectOrder()
   {
     // Arrange
-    var keyComparer = new TestKeyComparer();
+    var keyComparer = new KeyComparer();
 
     var keyTrue = new Key([DataValue.CreateBoolean(true)]);
     var keyFalse = new Key([DataValue.CreateBoolean(false)]);
@@ -166,7 +166,7 @@ public class KeyComparerTests
   public void Compare_WithSingleDateTimeKey_ReturnsCorrectOrder()
   {
     // Arrange
-    var keyComparer = new TestKeyComparer();
+    var keyComparer = new KeyComparer();
 
     var keyA = new Key([DataValue.CreateDateTime(new DateTime(2024, 1, 1, 10, 0, 0))]); // Earlier
     var keyB = new Key([DataValue.CreateDateTime(new DateTime(2024, 1, 1, 12, 0, 0))]); // Later
@@ -187,7 +187,7 @@ public class KeyComparerTests
   public void Compare_WithSingleBlobKey_ReturnsCorrectLexicographicalOrder()
   {
     // Arrange
-    var keyComparer = new TestKeyComparer();
+    var keyComparer = new KeyComparer();
 
     var keyA = new Key([DataValue.CreateBlob([0x01, 0x02, 0x03])]);
     var keyB = new Key([DataValue.CreateBlob([0x01, 0x02, 0x04])]); // Different last byte
@@ -211,7 +211,7 @@ public class KeyComparerTests
   public void Compare_WithCompositeKey_ReturnsCorrectLexicographicalOrder()
   {
     // Arrange
-    var keyComparer = new TestKeyComparer();
+    var keyComparer = new KeyComparer();
 
     // Key format: (string, int)
     var keyA = new Key([DataValue.CreateString("Sales"), DataValue.CreateInteger(101)]);
@@ -234,7 +234,7 @@ public class KeyComparerTests
   public void Compare_WithThreeColumnKey_IsDecidedByThirdColumnWhenFirstTwoMatch()
   {
     // Arrange
-    var keyComparer = new TestKeyComparer();
+    var keyComparer = new KeyComparer();
 
     // Key format: (string, int, string)
     var keyA = new Key([
@@ -309,7 +309,7 @@ public class KeyComparerTests
   public void Compare_WithCompositeKeyAndNulls_ReturnsCorrectOrder(Key keyA, Key keyB, int expectedSign, string explanation)
   {
     // Arrange
-    var keyComparer = new TestKeyComparer();
+    var keyComparer = new KeyComparer();
 
     // Act
     int result = keyComparer.Compare(keyA, keyB);
@@ -323,7 +323,7 @@ public class KeyComparerTests
   public void Compare_WithMismatchedDataTypesInKeys_ThrowsInvalidOperationException()
   {
     // Arrange
-    var keyComparer = new TestKeyComparer();
+    var keyComparer = new KeyComparer();
 
     // Create two keys where the first value has a different data type.
     // Key A has an Integer, Key B has a Varchar.
@@ -336,12 +336,5 @@ public class KeyComparerTests
     // Optional: Verify the exception message is helpful
     Assert.Contains("Found mismatched data types comparing keys", ex.Message);
     Assert.Contains("Cannot compare Int with Varchar", ex.Message);
-  }
-
-  private class TestKeyComparer : KeyComparer
-  {
-    public TestKeyComparer()
-    {
-    }
   }
 }

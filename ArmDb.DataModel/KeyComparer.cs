@@ -2,7 +2,7 @@ using ArmDb.SchemaDefinition;
 
 namespace ArmDb.DataModel;
 
-public abstract class KeyComparer : IComparer<Key>
+public sealed class KeyComparer : IComparer<Key>
 {
   public int Compare(Key? x, Key? y)
   {
