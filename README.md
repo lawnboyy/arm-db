@@ -29,7 +29,7 @@ The project is being built with a layered, fine-grained architecture to ensure a
 * `ArmDb.Common.Utils`: Contains concrete utility implementations.
 * `ArmDb.StorageEngine`: The core storage layer, responsible for managing pages on disk and in memory. Contains components like the `DiskManager` and `BufferPoolManager`.
 * `ArmDb.Server`: The main server process responsible for handling connections and orchestrating database operations.
-* `ArmDb.Tests`: A suite of unit and integration tests to ensure correctness.
+* `ArmDb.Tests`: A suite of unit and integration tests to drive development and ensure correctness.
 
 ## Technology Stack
 
