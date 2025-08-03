@@ -236,6 +236,59 @@ public partial class RecordSerializerTests // Use partial to extend the existing
     Assert.Equal(expectedKey, actualKey);
   }
 
+  [Fact]
+  public void DeserializePrimaryKey_WithComplexReorderedCompositeKey_ReturnsKeyInCorrectOrder()
+  {
+    // Arrange
+    // 1. Define a schema where the PK order is different from the table's physical column order.
+    var tableDef = new TableDefinition("TestComplexReorderedPK");
+    // Physical column order: Region (var), CustomerID (fixed), IsActive (fixed), OrderDate (fixed), OrderID (fixed)
+    tableDef.AddColumn(new ColumnDefinition("Region", new DataTypeInfo(PrimitiveDataType.Varchar, 10), isNullable: false));
+    tableDef.AddColumn(new ColumnDefinition("CustomerID", new DataTypeInfo(PrimitiveDataType.Int), isNullable: false));
+    tableDef.AddColumn(new ColumnDefinition("IsActive", new DataTypeInfo(PrimitiveDataType.Boolean), isNullable: false));
+    tableDef.AddColumn(new ColumnDefinition("OrderDate", new DataTypeInfo(PrimitiveDataType.DateTime), isNullable: false));
+    tableDef.AddColumn(new ColumnDefinition("OrderID", new DataTypeInfo(PrimitiveDataType.BigInt), isNullable: false));
+    // Primary Key logical order: OrderDate, Region, CustomerID
+    tableDef.AddConstraint(new PrimaryKeyConstraint("TestComplexReorderedPK", new[] { "OrderDate", "Region", "CustomerID" }));
+
+    // 2. This is the original Key we expect to get back, in PK order.
+    var orderDate = new DateTime(2025, 8, 3, 10, 30, 0, DateTimeKind.Utc);
+    long ticks = orderDate.ToBinary();
+    var expectedKey = new Key(new[]
+    {
+        DataValue.CreateDateTime(orderDate), // 1st in PK
+        DataValue.CreateString("NA"),        // 2nd in PK
+        DataValue.CreateInteger(123)         // 3rd in PK
+    });
+
+    // 3. This is the serialized byte array for the full row.
+    //    Data is stored in PHYSICAL table order.
+    var serializedData = new byte[]
+    {
+        // --- Header ---
+        0,                                  // Null Bitmap
+        // --- Fixed-Length Data Section (in table column order) ---
+        123, 0, 0, 0,                       // CustomerID (int)
+        1,                                  // IsActive (bool)
+        // OrderDate (DateTime as long via ToBinary)
+        0, 4, 38, 179, 120, 210, 221, 72,
+        // OrderID (long)
+        202, 113, 15, 99, 2, 0, 0, 0,
+        // --- Variable-Length Data Section (in table column order) ---
+        2, 0, 0, 0,                         // Length of "NA" (2)
+        78, 65                              // "NA"
+    };
+
+    // Act
+    // The DeserializePrimaryKey method must read the data in physical order
+    // but construct the Key object in the logical primary key order.
+    Key actualKey = RecordSerializer.DeserializePrimaryKey(tableDef, serializedData.AsSpan());
+
+    // Assert
+    Assert.NotNull(actualKey);
+    Assert.Equal(expectedKey, actualKey);
+  }
+
   // Helper to create a table definition with a primary key
   private static TableDefinition CreateTestTableWithPK(string pkColumnName, params ColumnDefinition[] columns)
   {

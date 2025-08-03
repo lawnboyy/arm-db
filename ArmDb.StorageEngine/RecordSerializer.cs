@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Data;
+using System.Dynamic;
 using System.Runtime.InteropServices;
 using System.Text;
 using ArmDb.DataModel;
@@ -274,13 +275,12 @@ internal static class RecordSerializer
 
       var isPrimaryKeyColumn = keyColumns.Select(k => k.Name).Contains(columnDef.Name);
       int keyColumnIndex = -1;
+
       if (isPrimaryKeyColumn)
       {
         // Capture the index of this column so we can ensure our deserialized key is ordered correctly...
-        // TODO: This is inefficient; perhaps we should use a different data structure for the keyColumns parameter.
-        var result = keyColumns.Select((c, i) => new { Col = c, Index = i }).First(col => col.Col.Name == columnDef.Name);
-        keyColumnIndex = result.Index;
-        // Increment our columns found count...
+        // Determine the index of the key column within the key        
+        keyColumnIndex = Array.IndexOf(keyColumns, columnDef);
         keyColumnsFound++;
       }
 
