@@ -129,6 +129,33 @@ public partial class BTreeLeafNodeTests
     Assert.Equal(row3, actualRow);
   }
 
+  [Fact]
+  public void Search_WhenKeyDoesNotExist_ReturnsNull()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.LeafNode);
+
+    var row0 = new DataRow(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10"));
+    var row1 = new DataRow(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20"));
+    var row2 = new DataRow(DataValue.CreateInteger(40), DataValue.CreateString("Data for 40"));
+
+    SlottedPage.TryAddItem(page, RecordSerializer.Serialize(tableDef, row0), 0);
+    SlottedPage.TryAddItem(page, RecordSerializer.Serialize(tableDef, row1), 1);
+    SlottedPage.TryAddItem(page, RecordSerializer.Serialize(tableDef, row2), 2);
+
+    var leafNode = new BTreeLeafNode(page, tableDef);
+    // Search for a key that does not exist but falls between existing keys
+    var searchKey = new Key([DataValue.CreateInteger(30)]);
+
+    // Act
+    DataRow? actualRow = leafNode.Search(searchKey);
+
+    // Assert
+    Assert.Null(actualRow);
+  }
+
   private static TableDefinition CreateTestTable()
   {
     var tableDef = new TableDefinition("TestUsers");
