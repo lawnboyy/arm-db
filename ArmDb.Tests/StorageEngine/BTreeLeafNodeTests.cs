@@ -97,6 +97,38 @@ public partial class BTreeLeafNodeTests
     Assert.Equal(row1, actualRow);
   }
 
+  [Fact]
+  public void Search_WhenKeyIsNotMidpoint_ReturnsCorrectDataRow()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.LeafNode);
+
+    var row0 = new DataRow(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10"));
+    var row1 = new DataRow(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20"));
+    var row2 = new DataRow(DataValue.CreateInteger(30), DataValue.CreateString("Data for 30"));
+    var row3 = new DataRow(DataValue.CreateInteger(40), DataValue.CreateString("Data for 40"));
+    var row4 = new DataRow(DataValue.CreateInteger(50), DataValue.CreateString("Data for 50"));
+
+    SlottedPage.TryAddItem(page, RecordSerializer.Serialize(tableDef, row0), 0);
+    SlottedPage.TryAddItem(page, RecordSerializer.Serialize(tableDef, row1), 1);
+    SlottedPage.TryAddItem(page, RecordSerializer.Serialize(tableDef, row2), 2);
+    SlottedPage.TryAddItem(page, RecordSerializer.Serialize(tableDef, row3), 3);
+    SlottedPage.TryAddItem(page, RecordSerializer.Serialize(tableDef, row4), 4);
+
+    var leafNode = new BTreeLeafNode(page, tableDef);
+    // Search for a key in the upper half of the data
+    var searchKey = new Key([DataValue.CreateInteger(40)]);
+
+    // Act
+    DataRow? actualRow = leafNode.Search(searchKey);
+
+    // Assert
+    Assert.NotNull(actualRow);
+    Assert.Equal(row3, actualRow);
+  }
+
   private static TableDefinition CreateTestTable()
   {
     var tableDef = new TableDefinition("TestUsers");
