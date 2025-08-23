@@ -1,3 +1,4 @@
+using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
 using ArmDb.StorageEngine;
 
@@ -66,6 +67,34 @@ public partial class BTreeLeafNodeTests
 
     // Act & Assert
     Assert.Throws<ArgumentNullException>("tableDefinition", () => new BTreeLeafNode(page, nullTableDef!));
+  }
+
+  [Fact]
+  public void Search_WhenKeyExists_ReturnsCorrectDataRow()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.LeafNode);
+
+    var row0 = new DataRow(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10"));
+    var row1 = new DataRow(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20"));
+    var row2 = new DataRow(DataValue.CreateInteger(30), DataValue.CreateString("Data for 30"));
+
+    SlottedPage.TryAddItem(page, RecordSerializer.Serialize(tableDef, row0), 0);
+    SlottedPage.TryAddItem(page, RecordSerializer.Serialize(tableDef, row1), 1);
+    SlottedPage.TryAddItem(page, RecordSerializer.Serialize(tableDef, row2), 2);
+
+    var leafNode = new BTreeLeafNode(page, tableDef);
+    var searchKey = new Key([DataValue.CreateInteger(20)]); // Search by key
+
+    // Act
+    DataRow? actualRow = leafNode.Search(searchKey); // Use the key-based search method
+
+    // Assert
+    Assert.NotNull(actualRow);
+    // The Equals method on DataRow compares the content
+    Assert.Equal(row1, actualRow);
   }
 
   private static TableDefinition CreateTestTable()

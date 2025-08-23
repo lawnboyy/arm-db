@@ -50,6 +50,25 @@ internal sealed class BTreeLeafNode
   }
 
   /// <summary>
+  /// Searches the leaf node page for a record with the given key. The data row is returned, if
+  /// found, otherwise, null is returned.
+  /// </summary>
+  /// <param name="key">Key of the record to search for.</param>
+  /// <returns>DataRow record if found, otherwise, null.</returns>
+  internal DataRow? Search(Key key)
+  {
+    // Attempt to locate the record with the given key...
+    var slotIndex = FindPrimaryKeySlotIndex(key);
+    if (slotIndex >= 0)
+    {
+      var recordData = SlottedPage.GetRecord(_page, slotIndex);
+      return RecordSerializer.Deserialize(_tableDefinition, recordData);
+    }
+
+    return null;
+  }
+
+  /// <summary>
   /// Performs a binary search on the leaf node page for the given search key.
   /// </summary>
   /// <param name="searchKey"></param>
