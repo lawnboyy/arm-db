@@ -69,6 +69,29 @@ internal sealed class BTreeLeafNode
   }
 
   /// <summary>
+  /// Attempts to insert a new row in the leaf page. If the key is a duplicate, an exception is
+  /// thrown. If the page is full, then the leaf node will be split. If the key is not a duplicate
+  /// and there is sufficient space, the row is inserted into the leaf node.
+  /// </summary>
+  /// <param name="row"></param>
+  /// <returns></returns>
+  internal bool TryInsert(DataRow row)
+  {
+    // Find the primary key...
+    var primaryKey = row.GetPrimaryKey(_tableDefinition);
+
+    // Check if there is already a record with this primary key in this leaf node...
+    // Check if there is space available to insert the node...
+    // Insert the node.
+    var slotIndex = FindPrimaryKeySlotIndex(primaryKey);
+    var convertedIndex = ~slotIndex;
+
+    SlottedPage.TryAddItem(_page, RecordSerializer.Serialize(_tableDefinition, row), convertedIndex);
+
+    return true;
+  }
+
+  /// <summary>
   /// Performs a binary search on the leaf node page for the given search key.
   /// </summary>
   /// <param name="searchKey"></param>

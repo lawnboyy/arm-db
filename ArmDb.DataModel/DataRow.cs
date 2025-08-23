@@ -1,3 +1,5 @@
+using ArmDb.SchemaDefinition;
+
 namespace ArmDb.DataModel; // File-scoped namespace
 
 /// <summary>
