@@ -82,6 +82,14 @@ internal sealed class BTreeLeafNode
     var primaryKey = row.GetPrimaryKey(_tableDefinition);
 
     // Check if there is space available to insert the node...
+    var freeSpace = SlottedPage.GetFreeSpace(_page);
+    var serializedRecord = RecordSerializer.Serialize(_tableDefinition, row);
+    // If there is not enough space, don't insert the row and return false;
+    if (serializedRecord.Length + Slot.Size > freeSpace)
+    {
+      return false;
+    }
+
     // Insert the node.
     var slotIndex = FindPrimaryKeySlotIndex(primaryKey);
 
@@ -93,7 +101,7 @@ internal sealed class BTreeLeafNode
 
     var convertedIndex = ~slotIndex;
 
-    SlottedPage.TryAddItem(_page, RecordSerializer.Serialize(_tableDefinition, row), convertedIndex);
+    SlottedPage.TryAddItem(_page, serializedRecord, convertedIndex);
 
     return true;
   }

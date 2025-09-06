@@ -1,5 +1,6 @@
 using ArmDb.DataModel;
 using ArmDb.DataModel.Exceptions;
+using ArmDb.SchemaDefinition;
 using ArmDb.StorageEngine;
 
 namespace ArmDb.UnitTests.StorageEngine;
@@ -121,5 +122,48 @@ public partial class BTreeLeafNodeTests
 
     var recordInPage = leafNode.Search(expectedKey);
     Assert.Equal(originalRow, recordInPage); // Verify original data is untouched
+  }
+
+  [Fact]
+  public void TryInsert_WhenPageIsFull_ReturnsFalseAndDoesNotModifyPage()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.LeafNode);
+    var leafNode = new BTreeLeafNode(page, tableDef);
+
+    // Manually fill the page to a known "almost full" state using lower-level helpers
+    int availableSpace = SlottedPage.GetFreeSpace(page);
+    // Calculate the maximum possible size for the variable part of our test row.
+    // We need to account for all overhead: the slot, the null bitmap, the fixed-size 'Id' column,
+    // and the length prefix for the 'Data' column. We want to leave 1 byte free.
+    int overhead = Slot.Size + 1 /* null bitmap */ + sizeof(int) /* Id column */ + sizeof(int) /* Data length prefix */;
+    int largeRecordDataSize = availableSpace - overhead - 1; // Leave 1 byte free
+
+    var largeRow = new DataRow(DataValue.CreateInteger(1), DataValue.CreateString(new string('x', largeRecordDataSize)));
+
+    // Use SlottedPage.TryAddItem, which is already tested, for setup
+    var serializedRow = RecordSerializer.Serialize(tableDef, largeRow);
+    Assert.True(SlottedPage.TryAddItem(page, serializedRow, 0));
+
+    // At this point, GetFreeSpace() should be exactly 1 byte.
+    Assert.Equal(1, SlottedPage.GetFreeSpace(page));
+
+    // Capture a snapshot of the full page's state
+    var pageStateBefore = page.Data.ToArray();
+
+    // Create a new row that requires more than 1 byte of free space to insert
+    var rowThatWontFit = new DataRow(DataValue.CreateInteger(2), DataValue.CreateString("A"));
+
+    // Act
+    bool success = leafNode.TryInsert(rowThatWontFit);
+
+    // Assert
+    Assert.False(success, "TryInsert should return false when the page is full.");
+
+    // Verify the page was not modified by the failed insert attempt
+    var pageStateAfter = page.Data.ToArray();
+    Assert.True(pageStateBefore.SequenceEqual(pageStateAfter), "Page content should not change after a failed insert.");
   }
 }
