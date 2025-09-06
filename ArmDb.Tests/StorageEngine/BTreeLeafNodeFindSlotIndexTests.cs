@@ -259,6 +259,16 @@ public partial class BTreeLeafNodeTests
     return tableDef;
   }
 
+  private static TableDefinition CreateCompositePKTableWithIsActive()
+  {
+    var tableDef = new TableDefinition("CompositePKTable");
+    tableDef.AddColumn(new ColumnDefinition("OrgName", new DataTypeInfo(PrimitiveDataType.Varchar, 50), isNullable: false));
+    tableDef.AddColumn(new ColumnDefinition("EmployeeId", new DataTypeInfo(PrimitiveDataType.Int), isNullable: false));
+    tableDef.AddColumn(new ColumnDefinition("IsActive", new DataTypeInfo(PrimitiveDataType.Boolean), isNullable: false));
+    tableDef.AddConstraint(new PrimaryKeyConstraint("CompositePKTable", new[] { "OrgName", "EmployeeId" }));
+    return tableDef;
+  }
+
   private static TableDefinition CreateComplexCompositePKTable()
   {
     var tableDef = new TableDefinition("ComplexCompositePKTable");

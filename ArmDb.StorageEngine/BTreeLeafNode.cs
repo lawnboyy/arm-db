@@ -1,4 +1,5 @@
 using ArmDb.DataModel;
+using ArmDb.DataModel.Exceptions;
 using ArmDb.SchemaDefinition;
 
 namespace ArmDb.StorageEngine;
@@ -80,10 +81,16 @@ internal sealed class BTreeLeafNode
     // Find the primary key...
     var primaryKey = row.GetPrimaryKey(_tableDefinition);
 
-    // Check if there is already a record with this primary key in this leaf node...
     // Check if there is space available to insert the node...
     // Insert the node.
     var slotIndex = FindPrimaryKeySlotIndex(primaryKey);
+
+    // If the slot index is postive, then the key was found and we cannot insert a duplicate...
+    if (slotIndex >= 0)
+    {
+      throw new DuplicateKeyException($"The key '{primaryKey}' already exists");
+    }
+
     var convertedIndex = ~slotIndex;
 
     SlottedPage.TryAddItem(_page, RecordSerializer.Serialize(_tableDefinition, row), convertedIndex);

@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace ArmDb.DataModel;
 
 public sealed record class Key : IEquatable<Key>
@@ -33,5 +35,18 @@ public sealed record class Key : IEquatable<Key>
       }
       return hash;
     }
+  }
+
+  public override string ToString()
+  {
+    var stringBuilder = new StringBuilder();
+    foreach (var value in Values)
+    {
+      stringBuilder.Append($"{value.ToString()}+");
+    }
+
+    stringBuilder.Remove(stringBuilder.Length - 1, 1);
+
+    return stringBuilder.ToString();
   }
 }
