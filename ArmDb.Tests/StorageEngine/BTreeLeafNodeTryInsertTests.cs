@@ -8,6 +8,100 @@ namespace ArmDb.UnitTests.StorageEngine;
 public partial class BTreeLeafNodeTests
 {
   [Fact]
+  public void TryInsert_OnEmptyPage_Succeeds()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.LeafNode);
+    var leafNode = new BTreeLeafNode(page, tableDef);
+
+    var firstRow = new DataRow(DataValue.CreateInteger(100), DataValue.CreateString("First Record"));
+
+    // Act
+    bool success = leafNode.TryInsert(firstRow);
+
+    // Assert
+    Assert.True(success);
+
+    // Verify header is updated
+    var header = new PageHeader(page);
+    Assert.Equal(1, header.ItemCount);
+
+    // Verify the record can be found and is correct
+    var searchKey = new Key([DataValue.CreateInteger(100)]);
+    var recordInPage = leafNode.Search(searchKey);
+    Assert.NotNull(recordInPage);
+    Assert.Equal(firstRow, recordInPage);
+  }
+
+  [Fact]
+  public void TryInsert_WithNewSmallestKey_InsertsAtBeginning()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.LeafNode);
+    var leafNode = new BTreeLeafNode(page, tableDef);
+
+    // Pre-populate with existing records
+    var row20 = new DataRow(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20"));
+    var row30 = new DataRow(DataValue.CreateInteger(30), DataValue.CreateString("Data for 30"));
+    SlottedPage.TryAddItem(page, RecordSerializer.Serialize(tableDef, row20), 0);
+    SlottedPage.TryAddItem(page, RecordSerializer.Serialize(tableDef, row30), 1);
+
+    // The new row to insert has the smallest key
+    var row10 = new DataRow(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10"));
+
+    // Act
+    bool success = leafNode.TryInsert(row10);
+
+    // Assert
+    Assert.True(success);
+
+    var header = new PageHeader(page);
+    Assert.Equal(3, header.ItemCount);
+
+    // Verify the new logical order: 10, 20, 30
+    Assert.Equal(row10, leafNode.Search(new Key([DataValue.CreateInteger(10)])));
+    Assert.Equal(row20, leafNode.Search(new Key([DataValue.CreateInteger(20)])));
+    Assert.Equal(row30, leafNode.Search(new Key([DataValue.CreateInteger(30)])));
+  }
+
+  [Fact]
+  public void TryInsert_WithNewLargestKey_AppendsToEnd()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.LeafNode);
+    var leafNode = new BTreeLeafNode(page, tableDef);
+
+    // Pre-populate with existing records
+    var row10 = new DataRow(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10"));
+    var row20 = new DataRow(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20"));
+    SlottedPage.TryAddItem(page, RecordSerializer.Serialize(tableDef, row10), 0);
+    SlottedPage.TryAddItem(page, RecordSerializer.Serialize(tableDef, row20), 1);
+
+    // The new row to insert has the largest key
+    var row30 = new DataRow(DataValue.CreateInteger(30), DataValue.CreateString("Data for 30"));
+
+    // Act
+    bool success = leafNode.TryInsert(row30);
+
+    // Assert
+    Assert.True(success);
+
+    var header = new PageHeader(page);
+    Assert.Equal(3, header.ItemCount);
+
+    // Verify the new logical order: 10, 20, 30
+    Assert.Equal(row10, leafNode.Search(new Key([DataValue.CreateInteger(10)])));
+    Assert.Equal(row20, leafNode.Search(new Key([DataValue.CreateInteger(20)])));
+    Assert.Equal(row30, leafNode.Search(new Key([DataValue.CreateInteger(30)])));
+  }
+
+  [Fact]
   public void TryInsert_WhenSpaceAvailable_InsertsRecordInCorrectOrder()
   {
     // Arrange
