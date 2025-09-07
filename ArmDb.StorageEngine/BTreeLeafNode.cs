@@ -100,10 +100,10 @@ internal sealed class BTreeLeafNode
   }
 
   /// <summary>
-  /// Logically inserts the given data row in its ordered position. Then this leaf node's rows are split
-  /// based on the midpoint key. Data rows from index 0 up to, but excluding the midpoint, will be re-written
-  /// to this leaf node in order to compact the records. All the records from the midpoint to the end of the
-  /// leaf node will be written to the given new leaf node.
+  /// Logically inserts the given data row in its ordered position in an in-memory list. Then this leaf node's 
+  /// rows are split based on the midpoint key. Data rows from index 0 up to, but excluding the midpoint, will 
+  /// be re-written to this leaf node in order to compact the records. All the records from the midpoint to the
+  /// end of the leaf node will be written to the given new leaf node.
   /// </summary>
   /// <remarks>
   /// This method should only be called if there is insufficient space to insert the given row in the page.
