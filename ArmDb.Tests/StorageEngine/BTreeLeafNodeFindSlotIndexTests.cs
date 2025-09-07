@@ -240,45 +240,4 @@ public partial class BTreeLeafNodeTests
     var ex = Assert.Throws<InvalidDataException>(() => leafNode.FindPrimaryKeySlotIndex(searchKey));
     Assert.Contains("Primary key column 'Id' cannot be null", ex.Message);
   }
-
-  private static TableDefinition CreateIntPKTable()
-  {
-    var tableDef = new TableDefinition("IntPKTable");
-    tableDef.AddColumn(new ColumnDefinition("Id", new DataTypeInfo(PrimitiveDataType.Int), isNullable: false));
-    tableDef.AddColumn(new ColumnDefinition("Data", new DataTypeInfo(PrimitiveDataType.Varchar, 100), isNullable: true));
-    tableDef.AddConstraint(new PrimaryKeyConstraint("IntPKTable", ["Id"]));
-    return tableDef;
-  }
-
-  private static TableDefinition CreateCompositePKTable()
-  {
-    var tableDef = new TableDefinition("CompositePKTable");
-    tableDef.AddColumn(new ColumnDefinition("OrgName", new DataTypeInfo(PrimitiveDataType.Varchar, 50), isNullable: false));
-    tableDef.AddColumn(new ColumnDefinition("EmployeeId", new DataTypeInfo(PrimitiveDataType.Int), isNullable: false));
-    tableDef.AddConstraint(new PrimaryKeyConstraint("CompositePKTable", new[] { "OrgName", "EmployeeId" }));
-    return tableDef;
-  }
-
-  private static TableDefinition CreateCompositePKTableWithIsActive()
-  {
-    var tableDef = new TableDefinition("CompositePKTable");
-    tableDef.AddColumn(new ColumnDefinition("OrgName", new DataTypeInfo(PrimitiveDataType.Varchar, 50), isNullable: false));
-    tableDef.AddColumn(new ColumnDefinition("EmployeeId", new DataTypeInfo(PrimitiveDataType.Int), isNullable: false));
-    tableDef.AddColumn(new ColumnDefinition("IsActive", new DataTypeInfo(PrimitiveDataType.Boolean), isNullable: false));
-    tableDef.AddConstraint(new PrimaryKeyConstraint("CompositePKTable", new[] { "OrgName", "EmployeeId" }));
-    return tableDef;
-  }
-
-  private static TableDefinition CreateComplexCompositePKTable()
-  {
-    var tableDef = new TableDefinition("ComplexCompositePKTable");
-    // Physical column order
-    tableDef.AddColumn(new ColumnDefinition("IsActive", new DataTypeInfo(PrimitiveDataType.Boolean), isNullable: false));
-    tableDef.AddColumn(new ColumnDefinition("Department", new DataTypeInfo(PrimitiveDataType.Varchar, 50), isNullable: false));
-    tableDef.AddColumn(new ColumnDefinition("EmployeeId", new DataTypeInfo(PrimitiveDataType.Int), isNullable: false));
-    tableDef.AddColumn(new ColumnDefinition("HireDate", new DataTypeInfo(PrimitiveDataType.DateTime), isNullable: false));
-    // Primary Key logical order is different
-    tableDef.AddConstraint(new PrimaryKeyConstraint("ComplexCompositePKTable", new[] { "Department", "HireDate", "EmployeeId" }));
-    return tableDef;
-  }
 }

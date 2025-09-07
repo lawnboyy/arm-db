@@ -14,6 +14,36 @@ internal sealed class BTreeLeafNode
   private readonly TableDefinition _tableDefinition;
   private readonly KeyComparer _keyComparer = new KeyComparer();
 
+  public int ItemCount => new PageHeader(_page).ItemCount;
+
+  public int PageIndex => _page.Id.PageIndex;
+
+  public int PrevPageIndex
+  {
+    get
+    {
+      return new PageHeader(_page).PrevPageIndex;
+    }
+    set
+    {
+      var pageHeader = new PageHeader(_page);
+      pageHeader.PrevPageIndex = value;
+    }
+  }
+
+  public int NextPageIndex
+  {
+    get
+    {
+      return new PageHeader(_page).NextPageIndex;
+    }
+    set
+    {
+      var pageHeader = new PageHeader(_page);
+      pageHeader.NextPageIndex = value;
+    }
+  }
+
   public BTreeLeafNode(Page page, TableDefinition tableDefinition)
   {
     ArgumentNullException.ThrowIfNull(page);
@@ -67,6 +97,93 @@ internal sealed class BTreeLeafNode
     }
 
     return null;
+  }
+
+  /// <summary>
+  /// Logically inserts the given data row in its ordered position. Then this leaf node's rows are split
+  /// based on the midpoint key. Data rows from index 0 up to, but excluding the midpoint, will be re-written
+  /// to this leaf node in order to compact the records. All the records from the midpoint to the end of the
+  /// leaf node will be written to the given new leaf node.
+  /// </summary>
+  /// <remarks>
+  /// This method should only be called if there is insufficient space to insert the given row in the page.
+  /// If there is sufficient space an exception will be thrown.
+  /// </remarks>
+  /// <param name="rowToInsert">The new data row to insert.</param>
+  /// <param name="newNode">New node that will house half the current records.</param>
+  /// <returns>The separator key to promote to the parent node.</returns>
+  /// <exception cref="NotImplementedException"></exception>
+  internal Key SplitAndInsert(DataRow rowToInsert, BTreeLeafNode newNode)
+  {
+    var leafPageHeader = new PageHeader(_page);
+
+    // Create a sorted list of data rows by looping through the existing leaf's records and adding them to the list. Include
+    // the new row in sorted order.
+    var sortedDataRows = new DataRow[leafPageHeader.ItemCount + 1];
+    var dataKeyToInsert = rowToInsert.GetPrimaryKey(_tableDefinition);
+    var keyComparer = new KeyComparer();
+
+    int sortedRowIndex = 0;
+    bool newRowInserted = false;
+    for (int slotIndex = 0; slotIndex < ItemCount; slotIndex++)
+    {
+      // Get the record...
+      var rawRecord = SlottedPage.GetRecord(_page, slotIndex);
+      var dataRow = RecordSerializer.Deserialize(_tableDefinition, rawRecord);
+      // The slot array is ordered, but we need to determine where to insert the new record...
+      var currentDataRowKey = dataRow.GetPrimaryKey(_tableDefinition);
+      // If the key to insert is less than the current data row, insert the new row first...
+      if (!newRowInserted && keyComparer.Compare(dataKeyToInsert, currentDataRowKey) < 0)
+      {
+        sortedDataRows[sortedRowIndex++] = rowToInsert;
+        newRowInserted = true;
+      }
+      sortedDataRows[sortedRowIndex++] = dataRow;
+    }
+
+    // If we never inserted the new row, it's the largest key so add it as the last element.
+    if (sortedDataRows[sortedDataRows.Length - 1] == null)
+    {
+      sortedDataRows[sortedDataRows.Length - 1] = rowToInsert;
+    }
+
+    var totalRows = sortedDataRows.Length;
+
+    // Determine the midpoint...
+    var midpoint = totalRows / 2;
+
+    // Get our separator key at this index...
+    var midpointRow = sortedDataRows[midpoint];
+    var separatortKey = midpointRow.GetPrimaryKey(_tableDefinition);
+
+    // Wipe our original page so we can rewrite it for compaction to reclaim all space...
+    SlottedPage.Initialize(_page, PageType.LeafNode, leafPageHeader.ParentPageIndex);
+
+    // Write half our updated content to this leaf node...
+    for (int i = 0; i < midpoint; i++)
+    {
+      if (!TryInsert(sortedDataRows[i]))
+      {
+        throw new Exception("Insert failed after a split! Something went terribly wrong since all inserts after a re-init of the leaf page are guaranteed to succeed.");
+      }
+    }
+
+    // Write the second half of the data rows to the new node...
+    for (int i = midpoint; i < sortedDataRows.Length; i++)
+    {
+      if (!newNode.TryInsert(sortedDataRows[i]))
+      {
+        throw new Exception("Insert failed after a split! Something went terribly wrong since all inserts on a fresh new leaf page are guaranteed to succeed.");
+      }
+    }
+
+    // Update the sibling pointers...    
+    int newNodeNextPage = leafPageHeader.NextPageIndex;
+    leafPageHeader.NextPageIndex = newNode.PageIndex;
+    newNode.NextPageIndex = newNodeNextPage;
+    newNode.PrevPageIndex = PageIndex;
+
+    return separatortKey;
   }
 
   /// <summary>
