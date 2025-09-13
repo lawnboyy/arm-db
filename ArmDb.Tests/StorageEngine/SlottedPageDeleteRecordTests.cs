@@ -23,22 +23,20 @@ public partial class SlottedPageTests
     int initialDataStart = headerBefore.DataStartOffset;
     var slotToDeleteInfo = ReadSlot(page, 1); // Get info for slot 1 before deletion
 
+    var slot3Before = ReadSlot(page, 2);
+
     // Act
     SlottedPage.DeleteRecord(page, 1); // Delete the middle item
 
     // Assert
     var headerAfter = new PageHeader(page);
-    // 1. Header metadata should NOT change on a simple delete (no compaction)
-    Assert.Equal(initialItemCount, headerAfter.ItemCount);
+    // 1. Header metadata SHOULD change on a simple delete (slots are compacted)
+    Assert.Equal(initialItemCount - 1, headerAfter.ItemCount);
     Assert.Equal(initialDataStart, headerAfter.DataStartOffset);
 
-    // 2. Verify the targeted slot is now empty/invalid
-    var deletedSlot = ReadSlot(page, 1);
-    Assert.Equal(0, deletedSlot.RecordOffset);
-    Assert.Equal(0, deletedSlot.RecordLength);
-
-    // 3. Verify GetRecord now returns an empty span for the deleted slot
-    Assert.True(SlottedPage.GetRecord(page, 1).IsEmpty);
+    // 2. Verify the slot is shifted left
+    var slot2After = ReadSlot(page, 1);
+    Assert.Equal(slot3Before, slot2After);
 
     // 4. Verify other slots and their data are untouched
     var slot0 = ReadSlot(page, 0);
@@ -63,8 +61,8 @@ public partial class SlottedPageTests
     // Arrange
     var page = CreateTestPage();
     SlottedPage.Initialize(page, PageType.LeafNode);
-    SlottedPage.TryAddItem(page, new byte[] { 1, 2 }, 0);
-    SlottedPage.TryAddItem(page, new byte[] { 3, 4 }, 1); // Page has 2 items (indices 0, 1)
+    SlottedPage.TryAddItem(page, [1, 2], 0);
+    SlottedPage.TryAddItem(page, [3, 4], 1); // Page has 2 items (indices 0, 1)
 
     // Act & Assert
     Assert.Throws<ArgumentOutOfRangeException>("slotIndex", () =>
@@ -83,5 +81,62 @@ public partial class SlottedPageTests
         // Use null-forgiving operator (!) as we are intentionally testing the null case
         SlottedPage.DeleteRecord(nullPage!, 0)
     );
+  }
+
+  [Fact]
+  public void DeleteRecord_WhenCalled_CompactsSlotArrayAndDecrementsItemCount()
+  {
+    // Arrange
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.LeafNode);
+
+    var item1 = Encoding.UTF8.GetBytes("Item One");
+    var item2 = Encoding.UTF8.GetBytes("Item Two (to be deleted)");
+    var item3 = Encoding.UTF8.GetBytes("Item Three");
+    var item4 = Encoding.UTF8.GetBytes("Item Four");
+
+    SlottedPage.TryAddItem(page, item1, 0);
+    SlottedPage.TryAddItem(page, item2, 1);
+    SlottedPage.TryAddItem(page, item3, 2);
+    SlottedPage.TryAddItem(page, item4, 3);
+
+    // Capture state before deletion
+    var headerBefore = new PageHeader(page);
+    Assert.Equal(4, headerBefore.ItemCount); // Verify setup
+                                             // Get the slot info for the items that should be shifted
+    var slot2Before = ReadSlot(page, 2);
+    var slot3Before = ReadSlot(page, 3);
+
+    // Act
+    SlottedPage.DeleteRecord(page, 1); // Delete the middle item, forcing slots 2 and 3 to shift left
+
+    // Assert
+    var headerAfter = new PageHeader(page);
+
+    // 1. Verify the ItemCount in the header has been decremented
+    Assert.Equal(3, headerAfter.ItemCount);
+
+    // 2. Verify the slot array was compacted:
+    //    The slot that was at index 2 should now be at index 1.
+    var slot1After = ReadSlot(page, 1);
+    Assert.Equal(slot2Before, slot1After);
+
+    //    The slot that was at index 3 should now be at index 2.
+    var slot2After = ReadSlot(page, 2);
+    Assert.Equal(slot3Before, slot2After);
+
+    // 3. Verify the data for the shifted slots is still correct and accessible at their new slot indices
+    var recordAtSlot1After = SlottedPage.GetRecord(page, 1);
+    Assert.True(item3.AsSpan().SequenceEqual(recordAtSlot1After));
+    var recordAtSlot2After = SlottedPage.GetRecord(page, 2);
+    Assert.True(item4.AsSpan().SequenceEqual(recordAtSlot2After));
+
+
+    // 4. Verify the original first record is untouched
+    var recordAtSlot0After = SlottedPage.GetRecord(page, 0);
+    Assert.True(item1.AsSpan().SequenceEqual(recordAtSlot0After));
+
+    // 5. Verify that accessing the old, now out-of-bounds slot index throws an exception
+    Assert.Throws<ArgumentOutOfRangeException>("slotIndex", () => SlottedPage.GetRecord(page, 3));
   }
 }

@@ -123,7 +123,7 @@ public partial class SlottedPageTests
     SlottedPage.DeleteRecord(page, 0); // Delete the record
 
     // Act & Assert
-    Assert.Throws<InvalidOperationException>(() =>
+    Assert.Throws<ArgumentOutOfRangeException>(() =>
         SlottedPage.TryUpdateRecord(page, 0, new byte[] { 4, 5, 6 }));
   }
 

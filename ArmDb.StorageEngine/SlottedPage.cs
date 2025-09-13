@@ -195,9 +195,10 @@ internal static class SlottedPage
   }
 
   /// <summary>
-  /// Deletes a record by marking the slot offset invalid by marking the slot and the length to 0.
-  /// This makes deleting the record very performant but does not reclaim space. The compaction/vacuum
-  /// process will handle that.
+  /// Deletes a record by removing the slot from the slot array and shifting slots to the left as necessary to
+  /// keep the array compact and ordered. The actual records remain and become garbage. They will be cleaned up 
+  /// as part of the compaction/vacuum process. This guarantees a binary search will work on the set of records
+  /// on the page.
   /// </summary>
   /// <param name="page"></param>
   /// <param name="slotIndex"></param>
@@ -219,9 +220,21 @@ internal static class SlottedPage
     }
 
     // If we have a valid slot, zero out the slot offset and length.
-    DeleteSlot(page, slotIndex);
+    DeleteSlot(page, slotIndex, pageHeader.ItemCount);
+
+    // Update the item count.
+    pageHeader.ItemCount--;
   }
 
+  /// <summary>
+  /// Attempts to update an existing record at the given slot offset.
+  /// </summary>
+  /// <param name="page"></param>
+  /// <param name="slotIndex"></param>
+  /// <param name="newRecordData"></param>
+  /// <returns></returns>
+  /// <exception cref="ArgumentOutOfRangeException"></exception>
+  /// <exception cref="InvalidOperationException"></exception>
   internal static bool TryUpdateRecord(Page page, int slotIndex, ReadOnlySpan<byte> newRecordData)
   {
     // Check that the index is valid...
@@ -234,10 +247,10 @@ internal static class SlottedPage
     // Read the slot to get the offset...
     var slot = ReadSlot(page, slotIndex, out var slotOffset, out var slotRecordSizeOffset);
 
-    // You cannot update a deleted record...
+    // If the offset is 0 or the record length is zero, then the data is likely corrupted.
     if (slot.RecordOffset == 0 || slot.RecordLength == 0)
     {
-      throw new InvalidOperationException($"Cannot update the record at slot index: {slotIndex} because the record has been deleted!");
+      throw new InvalidOperationException($"Cannot update the record at slot index: {slotIndex} because the slot is invalid!");
     }
 
     if (newRecordData.Length <= slot.RecordLength)
@@ -275,15 +288,14 @@ internal static class SlottedPage
     return true;
   }
 
-  private static void DeleteSlot(Page page, int slotIndex)
+  private static void DeleteSlot(Page page, int slotIndex, int itemCount)
   {
     int slotOffset = PageHeader.HEADER_SIZE + (slotIndex * Slot.Size);
 
-    // Zero out the slot's record offset
-    page.WriteInt32(slotOffset, 0);
+    // Determine how many bytes to shift left...
+    int sizeToShiftLeft = /* Total slot array size */ itemCount * Slot.Size - /* subtract the bytes to the left of the slot */ ((slotIndex + 1) * Slot.Size);
 
-    // Zero out the slot's record length
-    page.WriteInt32(slotOffset + sizeof(int), 0);
+    page.WriteBytes(slotOffset, page.GetReadOnlySpan(slotOffset + Slot.Size, sizeToShiftLeft));
   }
 
   private static Slot ReadSlot(Page page, int slotIndex, out int slotOffset, out int slotRecordSizeOffset)
