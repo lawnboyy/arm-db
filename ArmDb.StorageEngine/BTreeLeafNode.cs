@@ -14,11 +14,11 @@ internal sealed class BTreeLeafNode
   private readonly TableDefinition _tableDefinition;
   private readonly KeyComparer _keyComparer = new KeyComparer();
 
-  public int ItemCount => new PageHeader(_page).ItemCount;
+  internal int ItemCount => new PageHeader(_page).ItemCount;
 
-  public int PageIndex => _page.Id.PageIndex;
+  internal int PageIndex => _page.Id.PageIndex;
 
-  public int PrevPageIndex
+  internal int PrevPageIndex
   {
     get
     {
@@ -31,7 +31,7 @@ internal sealed class BTreeLeafNode
     }
   }
 
-  public int NextPageIndex
+  internal int NextPageIndex
   {
     get
     {
@@ -44,7 +44,7 @@ internal sealed class BTreeLeafNode
     }
   }
 
-  public BTreeLeafNode(Page page, TableDefinition tableDefinition)
+  internal BTreeLeafNode(Page page, TableDefinition tableDefinition)
   {
     ArgumentNullException.ThrowIfNull(page);
     ArgumentNullException.ThrowIfNull(tableDefinition);
@@ -61,6 +61,33 @@ internal sealed class BTreeLeafNode
 
     _page = page;
     _tableDefinition = tableDefinition;
+  }
+
+  /// <summary>
+  /// Searches the page for a record with a matching key value. If none is
+  /// found, false is returned. If a match is found, the record is deleted
+  /// by removing the corresponding slot index and compacting the slot
+  /// array.
+  /// </summary>
+  /// <param name="keyToDelete">The key of the record to delete.</param>
+  /// <returns>True if the delete is successful, otherwise, false.</returns>
+  /// <exception cref="ArgumentNullException">Throws if the given key is null.</exception>
+  internal bool Delete(Key keyToDelete)
+  {
+    if (keyToDelete == null)
+    {
+      throw new ArgumentNullException("keyToDelete", "Given key to delete is null!");
+    }
+
+    var slotIndex = FindPrimaryKeySlotIndex(keyToDelete);
+
+    if (slotIndex >= 0)
+    { // If the slot index is greater or equal to zero, then we found a match and can delete it.
+      SlottedPage.DeleteRecord(_page, slotIndex);
+      return true;
+    }
+
+    return false;
   }
 
   /// <summary>
