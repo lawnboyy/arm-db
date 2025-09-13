@@ -110,16 +110,16 @@ internal sealed class BTreeLeafNode
   /// If there is sufficient space an exception will be thrown.
   /// </remarks>
   /// <param name="rowToInsert">The new data row to insert.</param>
-  /// <param name="newNode">New node that will house half the current records.</param>
+  /// <param name="newLeaf">New node that will house half the current records.</param>
   /// <returns>The separator key to promote to the parent node.</returns>
   /// <exception cref="NotImplementedException"></exception>
-  internal Key SplitAndInsert(DataRow rowToInsert, BTreeLeafNode newNode)
+  internal Key SplitAndInsert(DataRow rowToInsert, BTreeLeafNode newLeaf, BTreeLeafNode? rightLeafSibling = null)
   {
-    var leafPageHeader = new PageHeader(_page);
+    var thisLeafHeader = new PageHeader(_page);
 
     // Create a sorted list of data rows by looping through the existing leaf's records and adding them to the list. Include
     // the new row in sorted order.
-    var sortedDataRows = new DataRow[leafPageHeader.ItemCount + 1];
+    var sortedDataRows = new DataRow[thisLeafHeader.ItemCount + 1];
     var dataKeyToInsert = rowToInsert.GetPrimaryKey(_tableDefinition);
     var keyComparer = new KeyComparer();
 
@@ -156,8 +156,14 @@ internal sealed class BTreeLeafNode
     var midpointRow = sortedDataRows[midpoint];
     var separatortKey = midpointRow.GetPrimaryKey(_tableDefinition);
 
+    // Capture the sibling pointers before we re-initialize our page to rewrite and
+    // compact it.
+    var originalHeader = new PageHeader(_page);
+    int parentPageIndex = originalHeader.ParentPageIndex;
+    int nextLeafIndex = originalHeader.NextPageIndex;
+
     // Wipe our original page so we can rewrite it for compaction to reclaim all space...
-    SlottedPage.Initialize(_page, PageType.LeafNode, leafPageHeader.ParentPageIndex);
+    SlottedPage.Initialize(_page, PageType.LeafNode, parentPageIndex);
 
     // Write half our updated content to this leaf node...
     for (int i = 0; i < midpoint; i++)
@@ -171,17 +177,22 @@ internal sealed class BTreeLeafNode
     // Write the second half of the data rows to the new node...
     for (int i = midpoint; i < sortedDataRows.Length; i++)
     {
-      if (!newNode.TryInsert(sortedDataRows[i]))
+      if (!newLeaf.TryInsert(sortedDataRows[i]))
       {
         throw new Exception("Insert failed after a split! Something went terribly wrong since all inserts on a fresh new leaf page are guaranteed to succeed.");
       }
     }
 
-    // Update the sibling pointers...    
-    int newNodeNextPage = leafPageHeader.NextPageIndex;
-    leafPageHeader.NextPageIndex = newNode.PageIndex;
-    newNode.NextPageIndex = newNodeNextPage;
-    newNode.PrevPageIndex = PageIndex;
+    // Update the sibling pointers...
+    // Splitting this node into 2; This Leaf <-> New Leaf <-> Right Sibling Leaf
+    thisLeafHeader.NextPageIndex = newLeaf.PageIndex;
+    newLeaf.NextPageIndex = nextLeafIndex;
+    newLeaf.PrevPageIndex = this.PageIndex;
+
+    if (rightLeafSibling != null)
+    {
+      rightLeafSibling.PrevPageIndex = newLeaf.PageIndex;
+    }
 
     return separatortKey;
   }
