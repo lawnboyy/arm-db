@@ -156,6 +156,65 @@ public partial class BTreeLeafNodeTests
     Assert.Null(actualRow);
   }
 
+  [Fact]
+  public void Search_AfterDelete_ReturnsNullForDeletedRecord()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.LeafNode);
+    var leafNode = new BTreeLeafNode(page, tableDef);
+
+    // Populate with records
+    leafNode.TryInsert(new DataRow(DataValue.CreateInteger(10), DataValue.CreateString("Data A")));
+    leafNode.TryInsert(new DataRow(DataValue.CreateInteger(20), DataValue.CreateString("Data B")));
+    leafNode.TryInsert(new DataRow(DataValue.CreateInteger(30), DataValue.CreateString("Data C")));
+
+    var keyToDelete = new Key([DataValue.CreateInteger(20)]);
+
+    // Act: Delete the record
+    bool deleteSuccess = leafNode.Delete(keyToDelete);
+    Assert.True(deleteSuccess, "The delete operation should have been successful.");
+
+    // Act: Search for the now-deleted record
+    DataRow? result = leafNode.Search(keyToDelete);
+
+    // Assert
+    Assert.Null(result);
+  }
+
+  [Fact]
+  public void Search_AfterDelete_FindsRemainingRecordCorrectly()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.LeafNode);
+    var leafNode = new BTreeLeafNode(page, tableDef);
+
+    var row10 = new DataRow(DataValue.CreateInteger(10), DataValue.CreateString("Data A"));
+    var row20 = new DataRow(DataValue.CreateInteger(20), DataValue.CreateString("Data B")); // To be deleted
+    var row30 = new DataRow(DataValue.CreateInteger(30), DataValue.CreateString("Data C"));
+
+    leafNode.TryInsert(row10);
+    leafNode.TryInsert(row20);
+    leafNode.TryInsert(row30);
+
+    var keyToDelete = new Key([DataValue.CreateInteger(20)]);
+    var keyToFind = new Key([DataValue.CreateInteger(30)]);
+
+    // Act: Delete a record
+    bool deleteSuccess = leafNode.Delete(keyToDelete);
+    Assert.True(deleteSuccess, "The delete operation should have been successful.");
+
+    // Act: Search for a different, remaining record
+    DataRow? result = leafNode.Search(keyToFind);
+
+    // Assert
+    Assert.NotNull(result);
+    Assert.Equal(row30, result);
+  }
+
   private static TableDefinition CreateTestTable()
   {
     var tableDef = new TableDefinition("TestUsers");
