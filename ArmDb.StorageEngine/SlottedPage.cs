@@ -90,18 +90,18 @@ internal static class SlottedPage
   /// slots to the right to maintain order.
   /// </summary>
   /// <param name="page">The page to modify.</param>
-  /// <param name="itemData">The raw byte data of the item to insert.</param>
+  /// <param name="recordData">The raw byte data of the item to insert.</param>
   /// <param name="indexToInsertAt">The logical, 0-based index in the slot array where the new item's pointer should be inserted.</param>
   /// <returns>True if the item was successfully added; false if there was not enough free space.</returns>
   /// <exception cref="ArgumentNullException">Thrown if page is null.</exception>
   /// <exception cref="ArgumentException">Thrown if itemData is empty.</exception>
   /// <exception cref="ArgumentOutOfRangeException">Thrown if indexToInsertAt is out of the valid range [0 to current ItemCount].</exception>
-  internal static bool TryAddItem(Page page, ReadOnlySpan<byte> itemData, int indexToInsertAt)
+  internal static bool TryAddRecord(Page page, ReadOnlySpan<byte> recordData, int indexToInsertAt)
   {
     ArgumentNullException.ThrowIfNull(page);
-    if (itemData.IsEmpty)
+    if (recordData.IsEmpty)
     {
-      throw new ArgumentException("Item data to be added cannot be empty.", nameof(itemData));
+      throw new ArgumentException("Item data to be added cannot be empty.", nameof(recordData));
     }
 
     var header = new PageHeader(page);
@@ -114,7 +114,7 @@ internal static class SlottedPage
     }
 
     // 1. Calculate space needed and check for availability.
-    int spaceNeeded = itemData.Length + Slot.Size;
+    int spaceNeeded = recordData.Length + Slot.Size;
     if (spaceNeeded > GetFreeSpace(page))
     {
       // Not enough contiguous free space for the new data and its slot pointer.
@@ -122,8 +122,8 @@ internal static class SlottedPage
     }
 
     // 2. Write the new item's data into the data heap (growing backward).
-    int recordOffset = header.DataStartOffset - itemData.Length;
-    page.WriteBytes(recordOffset, itemData);
+    int recordOffset = header.DataStartOffset - recordData.Length;
+    page.WriteBytes(recordOffset, recordData);
 
     // 3. Shift existing slots to the right to make room for the new slot.
     int slotInsertionOffset = PageHeader.HEADER_SIZE + (indexToInsertAt * Slot.Size);
@@ -146,7 +146,7 @@ internal static class SlottedPage
     // Write the pointer to the new data cell...
     page.WriteInt32(slotInsertionOffset, recordOffset);
     // ...and the length of the data.
-    page.WriteInt32(slotInsertionOffset + sizeof(int), itemData.Length);
+    page.WriteInt32(slotInsertionOffset + sizeof(int), recordData.Length);
 
     // 5. Update the page header with the new state.
     header.ItemCount++; // Increment the item count

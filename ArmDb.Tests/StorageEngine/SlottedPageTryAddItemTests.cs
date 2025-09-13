@@ -17,7 +17,7 @@ public partial class SlottedPageTests // Use partial to extend the existing Slot
     var itemData = Encoding.UTF8.GetBytes("Hello, World!");
 
     // Act
-    bool success = SlottedPage.TryAddItem(page, itemData.AsSpan(), 0);
+    bool success = SlottedPage.TryAddRecord(page, itemData.AsSpan(), 0);
 
     // Assert
     Assert.True(success);
@@ -45,10 +45,10 @@ public partial class SlottedPageTests // Use partial to extend the existing Slot
     var item1Data = Encoding.UTF8.GetBytes("Item 1");
     var item2Data = Encoding.UTF8.GetBytes("The Second Item");
 
-    SlottedPage.TryAddItem(page, item1Data, 0); // Add first item
+    SlottedPage.TryAddRecord(page, item1Data, 0); // Add first item
 
     // Act: Append second item to the end (index 1)
-    bool success = SlottedPage.TryAddItem(page, item2Data, 1);
+    bool success = SlottedPage.TryAddRecord(page, item2Data, 1);
 
     // Assert
     Assert.True(success);
@@ -78,15 +78,15 @@ public partial class SlottedPageTests // Use partial to extend the existing Slot
     var item3Data = Encoding.UTF8.GetBytes("Third");   // Will be at slot 1 initially
     var item2Data = Encoding.UTF8.GetBytes("Second (Inserted)"); // Will be inserted at slot 1
 
-    SlottedPage.TryAddItem(page, item1Data, 0);
-    SlottedPage.TryAddItem(page, item3Data, 1); // item3 is at index 1
+    SlottedPage.TryAddRecord(page, item1Data, 0);
+    SlottedPage.TryAddRecord(page, item3Data, 1); // item3 is at index 1
 
     var headerBefore = new PageHeader(page);
     Assert.Equal(2, headerBefore.ItemCount);
     int originalItem3Offset = ReadSlot(page, 1).RecordOffset;
 
     // Act: Insert item2 into the middle (at index 1)
-    bool success = SlottedPage.TryAddItem(page, item2Data, 1);
+    bool success = SlottedPage.TryAddRecord(page, item2Data, 1);
 
     // Assert
     Assert.True(success);
@@ -114,12 +114,12 @@ public partial class SlottedPageTests // Use partial to extend the existing Slot
     // Create an item that is almost the size of the whole page
     var largeItem = new byte[Page.Size - PageHeader.HEADER_SIZE - Slot.Size];
     var anotherItem = new byte[1]; // There won't be space for this + another slot
-    Assert.True(SlottedPage.TryAddItem(page, largeItem, 0)); // This should succeed and fill the page
+    Assert.True(SlottedPage.TryAddRecord(page, largeItem, 0)); // This should succeed and fill the page
 
     var pageStateBefore = page.Data.ToArray(); // Snapshot the state
 
     // Act
-    bool success = SlottedPage.TryAddItem(page, anotherItem, 1);
+    bool success = SlottedPage.TryAddRecord(page, anotherItem, 1);
 
     // Assert
     Assert.False(success); // Should fail due to lack of space
@@ -135,11 +135,11 @@ public partial class SlottedPageTests // Use partial to extend the existing Slot
     // Arrange
     var page = CreateTestPage();
     SlottedPage.Initialize(page, PageType.LeafNode);
-    SlottedPage.TryAddItem(page, new byte[] { 1, 2, 3 }, 0); // Page now has 1 item (at index 0)
+    SlottedPage.TryAddRecord(page, new byte[] { 1, 2, 3 }, 0); // Page now has 1 item (at index 0)
 
     // Act & Assert
     Assert.Throws<ArgumentOutOfRangeException>("indexToInsertAt", () =>
-        SlottedPage.TryAddItem(page, new byte[] { 4, 5, 6 }, invalidIndex));
+        SlottedPage.TryAddRecord(page, new byte[] { 4, 5, 6 }, invalidIndex));
   }
 
   [Fact]
@@ -150,7 +150,7 @@ public partial class SlottedPageTests // Use partial to extend the existing Slot
     SlottedPage.Initialize(page, PageType.LeafNode);
 
     // Act & Assert
-    Assert.Throws<ArgumentException>("itemData", () =>
-        SlottedPage.TryAddItem(page, ReadOnlySpan<byte>.Empty, 0));
+    Assert.Throws<ArgumentException>("recordData", () =>
+        SlottedPage.TryAddRecord(page, ReadOnlySpan<byte>.Empty, 0));
   }
 }

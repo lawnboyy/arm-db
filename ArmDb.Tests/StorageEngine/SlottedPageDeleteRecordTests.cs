@@ -14,9 +14,9 @@ public partial class SlottedPageTests
     var item1 = Encoding.UTF8.GetBytes("Item One");
     var item2 = Encoding.UTF8.GetBytes("Item Two"); // The item to be deleted
     var item3 = Encoding.UTF8.GetBytes("Item Three");
-    SlottedPage.TryAddItem(page, item1, 0);
-    SlottedPage.TryAddItem(page, item2, 1);
-    SlottedPage.TryAddItem(page, item3, 2);
+    SlottedPage.TryAddRecord(page, item1, 0);
+    SlottedPage.TryAddRecord(page, item2, 1);
+    SlottedPage.TryAddRecord(page, item3, 2);
 
     var headerBefore = new PageHeader(page);
     int initialItemCount = headerBefore.ItemCount;
@@ -61,8 +61,8 @@ public partial class SlottedPageTests
     // Arrange
     var page = CreateTestPage();
     SlottedPage.Initialize(page, PageType.LeafNode);
-    SlottedPage.TryAddItem(page, [1, 2], 0);
-    SlottedPage.TryAddItem(page, [3, 4], 1); // Page has 2 items (indices 0, 1)
+    SlottedPage.TryAddRecord(page, [1, 2], 0);
+    SlottedPage.TryAddRecord(page, [3, 4], 1); // Page has 2 items (indices 0, 1)
 
     // Act & Assert
     Assert.Throws<ArgumentOutOfRangeException>("slotIndex", () =>
@@ -95,10 +95,10 @@ public partial class SlottedPageTests
     var item3 = Encoding.UTF8.GetBytes("Item Three");
     var item4 = Encoding.UTF8.GetBytes("Item Four");
 
-    SlottedPage.TryAddItem(page, item1, 0);
-    SlottedPage.TryAddItem(page, item2, 1);
-    SlottedPage.TryAddItem(page, item3, 2);
-    SlottedPage.TryAddItem(page, item4, 3);
+    SlottedPage.TryAddRecord(page, item1, 0);
+    SlottedPage.TryAddRecord(page, item2, 1);
+    SlottedPage.TryAddRecord(page, item3, 2);
+    SlottedPage.TryAddRecord(page, item4, 3);
 
     // Capture state before deletion
     var headerBefore = new PageHeader(page);

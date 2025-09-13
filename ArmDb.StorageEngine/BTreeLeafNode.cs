@@ -1,6 +1,7 @@
 using ArmDb.DataModel;
 using ArmDb.DataModel.Exceptions;
 using ArmDb.SchemaDefinition;
+using ArmDb.StorageEngine.Exceptions;
 
 namespace ArmDb.StorageEngine;
 
@@ -256,9 +257,30 @@ internal sealed class BTreeLeafNode
 
     var convertedIndex = ~slotIndex;
 
-    SlottedPage.TryAddItem(_page, serializedRecord, convertedIndex);
+    SlottedPage.TryAddRecord(_page, serializedRecord, convertedIndex);
 
     return true;
+  }
+
+  /// <summary>
+  /// Attempts to update the given row. It looks up the current record by primary key. If the row is not
+  /// found, then it throws an exception. Otherwise, it returns the result of updated the record in the
+  /// slotted page.
+  /// </summary>
+  /// <param name="updatedRow">The updated row</param>
+  /// <returns>True if the row is updated successfully, false otherwise.</returns>
+  /// <exception cref="InvalidOperationException">Thrown if no record is found using the given primary key.</exception>
+  internal bool TryUpdate(DataRow updatedRow)
+  {
+    Key primaryKey = updatedRow.GetPrimaryKey(_tableDefinition);
+    var slotIndex = FindPrimaryKeySlotIndex(primaryKey);
+
+    if (slotIndex >= 0)
+    {
+      return SlottedPage.TryUpdateRecord(_page, slotIndex, RecordSerializer.Serialize(_tableDefinition, updatedRow));
+    }
+
+    throw new RecordNotFoundException("Record could not be found using the given primary key.");
   }
 
   /// <summary>

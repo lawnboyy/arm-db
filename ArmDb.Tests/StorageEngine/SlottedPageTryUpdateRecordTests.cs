@@ -14,7 +14,7 @@ public partial class SlottedPageTests
     var originalData = Encoding.UTF8.GetBytes("Original Long Data"); // 18 bytes
     var newData = Encoding.UTF8.GetBytes("New Short"); // 9 bytes
 
-    Assert.True(SlottedPage.TryAddItem(page, originalData, 0)); // Add the initial record
+    Assert.True(SlottedPage.TryAddRecord(page, originalData, 0)); // Add the initial record
 
     var headerBefore = new PageHeader(page);
     var slotBefore = ReadSlot(page, 0);
@@ -50,7 +50,7 @@ public partial class SlottedPageTests
     var originalData = Encoding.UTF8.GetBytes("Small"); // 5 bytes
     var newData = Encoding.UTF8.GetBytes("This is much larger data"); // 24 bytes
 
-    Assert.True(SlottedPage.TryAddItem(page, originalData, 0));
+    Assert.True(SlottedPage.TryAddRecord(page, originalData, 0));
 
     var pageHeader = new PageHeader(page);
     var originalItemCount = pageHeader.ItemCount;
@@ -96,8 +96,8 @@ public partial class SlottedPageTests
     // Fill the page so there's not enough room for the update to grow
     var item1 = new byte[4000];
     var item2 = new byte[4000];
-    SlottedPage.TryAddItem(page, item1, 0);
-    SlottedPage.TryAddItem(page, item2, 1);
+    SlottedPage.TryAddRecord(page, item1, 0);
+    SlottedPage.TryAddRecord(page, item2, 1);
 
     var newData = new byte[item1.Length + 100]; // 100 bytes larger than original
     var pageStateBefore = page.Data.ToArray(); // Snapshot the page state
@@ -119,7 +119,7 @@ public partial class SlottedPageTests
     // Arrange
     var page = CreateTestPage();
     SlottedPage.Initialize(page, PageType.LeafNode);
-    SlottedPage.TryAddItem(page, new byte[] { 1, 2, 3 }, 0);
+    SlottedPage.TryAddRecord(page, new byte[] { 1, 2, 3 }, 0);
     SlottedPage.DeleteRecord(page, 0); // Delete the record
 
     // Act & Assert
@@ -135,7 +135,7 @@ public partial class SlottedPageTests
     // Arrange
     var page = CreateTestPage();
     SlottedPage.Initialize(page, PageType.LeafNode);
-    SlottedPage.TryAddItem(page, new byte[] { 1, 2, 3 }, 0); // Page has one item at index 0
+    SlottedPage.TryAddRecord(page, new byte[] { 1, 2, 3 }, 0); // Page has one item at index 0
 
     // Act & Assert
     Assert.Throws<ArgumentOutOfRangeException>("slotIndex", () =>

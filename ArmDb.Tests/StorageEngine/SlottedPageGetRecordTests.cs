@@ -16,9 +16,9 @@ public partial class SlottedPageTests
     var item3 = Encoding.UTF8.GetBytes("Item 3");
 
     // Use TryAddItem to populate the page
-    SlottedPage.TryAddItem(page, item1, 0);
-    SlottedPage.TryAddItem(page, item2, 1);
-    SlottedPage.TryAddItem(page, item3, 2);
+    SlottedPage.TryAddRecord(page, item1, 0);
+    SlottedPage.TryAddRecord(page, item2, 1);
+    SlottedPage.TryAddRecord(page, item3, 2);
 
     // Act
     ReadOnlySpan<byte> record1Span = SlottedPage.GetRecord(page, 0);
@@ -39,8 +39,8 @@ public partial class SlottedPageTests
     SlottedPage.Initialize(page, PageType.LeafNode);
     var item1 = Encoding.UTF8.GetBytes("I will be deleted");
     var item2 = Encoding.UTF8.GetBytes("I will remain");
-    SlottedPage.TryAddItem(page, item1, 0);
-    SlottedPage.TryAddItem(page, item2, 1);
+    SlottedPage.TryAddRecord(page, item1, 0);
+    SlottedPage.TryAddRecord(page, item2, 1);
 
     // Manually "delete" the first record by getting its slot's physical offset
     // and writing a new length of 0.
@@ -70,8 +70,8 @@ public partial class SlottedPageTests
     // Arrange
     var page = CreateTestPage();
     SlottedPage.Initialize(page, PageType.LeafNode);
-    SlottedPage.TryAddItem(page, new byte[] { 1, 2 }, 0);
-    SlottedPage.TryAddItem(page, new byte[] { 3, 4 }, 1); // Page has 2 items (indices 0, 1)
+    SlottedPage.TryAddRecord(page, new byte[] { 1, 2 }, 0);
+    SlottedPage.TryAddRecord(page, new byte[] { 3, 4 }, 1); // Page has 2 items (indices 0, 1)
 
     // Act & Assert
     var ex = Assert.Throws<ArgumentOutOfRangeException>("slotIndex", () =>
