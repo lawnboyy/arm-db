@@ -10,7 +10,7 @@ using DataRow = ArmDb.DataModel.DataRow;
 namespace ArmDb.StorageEngine;
 
 /// <summary>
-/// Serializer for Data Rows for reading and writing to slotted page cells. The format of the data
+/// Serializer for data records for reading and writing to slotted page cells. The format of the data
 /// record is | Header | Fixed Length Data | Variable Length Data |
 /// 
 /// Example:
@@ -45,7 +45,7 @@ internal static class RecordSerializer
   {
     // Initialize byte array to hold the serialized row...
     Dictionary<string, int> variableLengthColumnSizeLookup;
-    var totalRecordSize = CalculateSerializedRecordSize(tableDef, row, out var nullBitmapSize, out variableLengthColumnSizeLookup);
+    var totalRecordSize = CalculateSerializedRecordSize(tableDef.Columns, row, out var nullBitmapSize, out variableLengthColumnSizeLookup);
     byte[] bytes = new byte[totalRecordSize];
     var recordSpan = bytes.AsSpan();
 
@@ -183,9 +183,8 @@ internal static class RecordSerializer
   /// <returns></returns>
   public static byte[] Serialize(TableDefinition tableDef, Key key, PageId childPageId)
   {
-    // First we need to get the primary key constraint columns with type information.
-    var primaryKeyConstraint = tableDef.GetPrimaryKeyConstraint();
-    // Get the list of columnn definitions for the primary key...
+    // First we need to get the primary key column definitions to examine the types...
+    var primaryKeyColumns = tableDef.GetPrimaryKeyColumnDefinitions();
 
 
     return [];
@@ -409,9 +408,9 @@ internal static class RecordSerializer
     return rowValue;
   }
 
-  private static int CalculateSerializedRecordSize(TableDefinition tableDef, DataRow row, out int nullBitmapSize, out Dictionary<string, int> variableDataSizeLookup)
+  private static int CalculateSerializedRecordSize(IReadOnlyList<ColumnDefinition> columns, DataRow row, out int nullBitmapSize, out Dictionary<string, int> variableDataSizeLookup)
   {
-    var columnCount = tableDef.Columns.Count();
+    var columnCount = columns.Count();
 
     // Determine the size of the null bitmap in bytes based on how many columns we have. We need
     // 1 byte for every 8 columns, which gives us 1 bit per column.
@@ -429,7 +428,7 @@ internal static class RecordSerializer
       if (rowValue.IsNull)
         continue;
 
-      var columnDef = tableDef.Columns[i];
+      var columnDef = columns[i];
       if (columnDef.DataType.IsFixedSize)
       {
         totalRecordSize += columnDef.DataType.GetFixedSize();
