@@ -34,7 +34,7 @@ public partial class RecordSerializerTests
 
     // Act
     // 3. Serialize the row to bytes
-    byte[] serializedBytes = RecordSerializer.Serialize(tableDef, originalRow);
+    byte[] serializedBytes = RecordSerializer.Serialize(tableDef.Columns, originalRow);
 
     // 4. Deserialize the bytes back into a new row object
     DataRow deserializedRow = RecordSerializer.Deserialize(tableDef, serializedBytes.AsSpan());

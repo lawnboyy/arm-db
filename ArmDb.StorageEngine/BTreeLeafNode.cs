@@ -239,7 +239,7 @@ internal sealed class BTreeLeafNode
 
     // Check if there is space available to insert the node...
     var freeSpace = SlottedPage.GetFreeSpace(_page);
-    var serializedRecord = RecordSerializer.Serialize(_tableDefinition, row);
+    var serializedRecord = RecordSerializer.Serialize(_tableDefinition.Columns, row);
     // If there is not enough space, don't insert the row and return false;
     if (serializedRecord.Length + Slot.Size > freeSpace)
     {
@@ -277,7 +277,7 @@ internal sealed class BTreeLeafNode
 
     if (slotIndex >= 0)
     {
-      return SlottedPage.TryUpdateRecord(_page, slotIndex, RecordSerializer.Serialize(_tableDefinition, updatedRow));
+      return SlottedPage.TryUpdateRecord(_page, slotIndex, RecordSerializer.Serialize(_tableDefinition.Columns, updatedRow));
     }
 
     throw new RecordNotFoundException("Record could not be found using the given primary key.");

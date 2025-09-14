@@ -47,8 +47,8 @@ public partial class BTreeLeafNodeTests
     // Pre-populate with existing records
     var row20 = new DataRow(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20"));
     var row30 = new DataRow(DataValue.CreateInteger(30), DataValue.CreateString("Data for 30"));
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef, row20), 0);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef, row30), 1);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, row20), 0);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, row30), 1);
 
     // The new row to insert has the smallest key
     var row10 = new DataRow(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10"));
@@ -80,8 +80,8 @@ public partial class BTreeLeafNodeTests
     // Pre-populate with existing records
     var row10 = new DataRow(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10"));
     var row20 = new DataRow(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20"));
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef, row10), 0);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef, row20), 1);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, row10), 0);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, row20), 1);
 
     // The new row to insert has the largest key
     var row30 = new DataRow(DataValue.CreateInteger(30), DataValue.CreateString("Data for 30"));
@@ -115,8 +115,8 @@ public partial class BTreeLeafNodeTests
     var row30 = new DataRow(DataValue.CreateInteger(30), DataValue.CreateString("Data for 30"));
 
     // Use SlottedPage.TryAddItem for test setup to avoid dependency on the method under test
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef, row10), 0);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef, row30), 1);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, row10), 0);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, row30), 1);
 
     // The new row to insert
     var row20 = new DataRow(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20"));
@@ -238,7 +238,7 @@ public partial class BTreeLeafNodeTests
     var largeRow = new DataRow(DataValue.CreateInteger(1), DataValue.CreateString(new string('x', largeRecordDataSize)));
 
     // Use SlottedPage.TryAddItem, which is already tested, for setup
-    var serializedRow = RecordSerializer.Serialize(tableDef, largeRow);
+    var serializedRow = RecordSerializer.Serialize(tableDef.Columns, largeRow);
     Assert.True(SlottedPage.TryAddRecord(page, serializedRow, 0));
 
     // At this point, GetFreeSpace() should be exactly 1 byte.

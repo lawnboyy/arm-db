@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.Data;
-using System.Dynamic;
 using System.Runtime.InteropServices;
 using System.Text;
 using ArmDb.DataModel;
@@ -33,19 +32,25 @@ namespace ArmDb.StorageEngine;
 /// </summary>
 internal static class RecordSerializer
 {
+  // For serializing key, child pointer pairs in internal nodes.
+  private static ColumnDefinition _tableIdColumnDefinition = new ColumnDefinition("_internal_tableId", new DataTypeInfo(PrimitiveDataType.Int), false);
+  private static ColumnDefinition _pageIndexColumnDefinition = new ColumnDefinition("_internal_pageIndex", new DataTypeInfo(PrimitiveDataType.Int), false);
+
+
   /// <summary>
-  /// Serializes a DataRow into a byte array.
+  /// Serializes a DataRow into a byte array using the given column definitions. It is expected that
+  /// the row column data matches the ordering and types of the table column definitions.
   /// </summary>
   /// <param name="tableDef"></param>
   /// <param name="row"></param>
   /// <returns></returns>
   /// <exception cref="Exception"></exception>
   /// <exception cref="ArgumentNullException"></exception>
-  public static byte[] Serialize(TableDefinition tableDef, DataRow row)
+  public static byte[] Serialize(IReadOnlyList<ColumnDefinition> columns, DataRow row)
   {
     // Initialize byte array to hold the serialized row...
     Dictionary<string, int> variableLengthColumnSizeLookup;
-    var totalRecordSize = CalculateSerializedRecordSize(tableDef.Columns, row, out var nullBitmapSize, out variableLengthColumnSizeLookup);
+    var totalRecordSize = CalculateSerializedRecordSize(columns, row, out var nullBitmapSize, out variableLengthColumnSizeLookup);
     byte[] bytes = new byte[totalRecordSize];
     var recordSpan = bytes.AsSpan();
 
@@ -56,7 +61,6 @@ internal static class RecordSerializer
     // TODO: We could refactor this to a single loop with separate offsets for fixed and variable length data...
 
     // Row values are stored in the same order as the schema column definition order...
-    var columns = tableDef.Columns;
     var columnCount = columns.Count();
 
     // Our starting index is be immediately after the null bitmap header.
@@ -175,22 +179,6 @@ internal static class RecordSerializer
   }
 
   /// <summary>
-  /// Serializes key / page ID pairs for internal nodes in a clustered index.
-  /// </summary>
-  /// <param name="tableDef">The table schema definition</param>
-  /// <param name="key">The separator key</param>
-  /// <param name="pageId">The pointer to the child page</param>
-  /// <returns></returns>
-  public static byte[] Serialize(TableDefinition tableDef, Key key, PageId childPageId)
-  {
-    // First we need to get the primary key column definitions to examine the types...
-    var primaryKeyColumns = tableDef.GetPrimaryKeyColumnDefinitions();
-
-
-    return [];
-  }
-
-  /// <summary>
   /// Deserializes a read-only span of bytes into a DataRow.
   /// </summary>
   /// <param name="tableDef"></param>
@@ -210,7 +198,7 @@ internal static class RecordSerializer
 
     // We'll use 2 pointers, one for fixed size data and one for variable size data...
     var currentFixedSizedDataOffset = nullBitmapSize;
-    var currentVariableSizedDataOffset = CalculateVariableLengthDataOffset(tableDef, nullBitmap);
+    var currentVariableSizedDataOffset = CalculateVariableLengthDataOffset(tableDef.Columns, nullBitmap);
 
     for (int i = 0; i < columnCount; i++)
     {
@@ -250,6 +238,16 @@ internal static class RecordSerializer
     return DeserializeKey(tableDef, keyColumns, recordData);
   }
 
+  /// <summary>
+  /// Serializes a DataRow into a byte array based on the given column definitions.
+  /// </summary>
+  /// <param name="tableDef"></param>
+  /// <param name="row"></param>
+  /// <returns></returns>
+  /// <exception cref="Exception"></exception>
+  /// <exception cref="ArgumentNullException"></exception>
+
+
   private static Key DeserializeKey(TableDefinition tableDef, ColumnDefinition[] keyColumns, ReadOnlySpan<byte> recordData)
   {
     var keyColumnCount = keyColumns.Count();
@@ -264,7 +262,7 @@ internal static class RecordSerializer
 
     // We'll use 2 pointers, one for fixed size data and one for variable size data...
     var currentFixedSizedDataOffset = nullBitmapSize;
-    var currentVariableSizedDataOffset = CalculateVariableLengthDataOffset(tableDef, nullBitmap);
+    var currentVariableSizedDataOffset = CalculateVariableLengthDataOffset(tableDef.Columns, nullBitmap);
 
     var keyColumnsFound = 0;
     for (int i = 0; i < columnCount; i++)
@@ -466,9 +464,9 @@ internal static class RecordSerializer
     return totalRecordSize;
   }
 
-  private static int CalculateVariableLengthDataOffset(TableDefinition tableDef, ReadOnlySpan<byte> nullBitmap)
+  private static int CalculateVariableLengthDataOffset(IReadOnlyList<ColumnDefinition> columns, ReadOnlySpan<byte> nullBitmap)
   {
-    var columnCount = tableDef.Columns.Count();
+    var columnCount = columns.Count();
 
     // Determine the size of the null bitmap in bytes based on how many columns we have. We need
     // 1 byte for every 8 columns, which gives us 1 bit per column.
@@ -482,7 +480,7 @@ internal static class RecordSerializer
       if (IsColumnValueNull(nullBitmap, i))
         continue;
 
-      var columnDef = tableDef.Columns[i];
+      var columnDef = columns[i];
       if (columnDef.DataType.IsFixedSize)
       {
         offset += columnDef.DataType.GetFixedSize();

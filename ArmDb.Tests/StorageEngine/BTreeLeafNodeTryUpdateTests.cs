@@ -96,7 +96,7 @@ public partial class BTreeLeafNodeTests
 
     // 1. Fill the page almost completely, leaving a small amount of free space
     var smallRow = new DataRow(DataValue.CreateInteger(100), DataValue.CreateString("small"));
-    var largeData = new byte[SlottedPage.GetFreeSpace(page) - RecordSerializer.Serialize(tableDef, smallRow).Length - Slot.Size - 50]; // Leave 50 bytes free
+    var largeData = new byte[SlottedPage.GetFreeSpace(page) - RecordSerializer.Serialize(tableDef.Columns, smallRow).Length - Slot.Size - 50]; // Leave 50 bytes free
     var largeRow = new DataRow(DataValue.CreateInteger(200), DataValue.CreateString(Encoding.UTF8.GetString(largeData)));
     Assert.True(leafNode.TryInsert(smallRow));
     Assert.True(leafNode.TryInsert(largeRow));

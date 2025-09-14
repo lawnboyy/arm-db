@@ -42,7 +42,7 @@ public partial class RecordSerializerTests
 
     // Act
     // Call the static Serialize method (which doesn't exist yet)
-    byte[] actualBytes = RecordSerializer.Serialize(tableDef, row);
+    byte[] actualBytes = RecordSerializer.Serialize(tableDef.Columns, row);
 
     // Assert
     Assert.NotNull(actualBytes);
@@ -93,7 +93,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    byte[] actualBytes = RecordSerializer.Serialize(tableDef, row);
+    byte[] actualBytes = RecordSerializer.Serialize(tableDef.Columns, row);
 
     // Assert
     Assert.NotNull(actualBytes);
@@ -146,7 +146,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    byte[] actualBytes = RecordSerializer.Serialize(tableDef, row);
+    byte[] actualBytes = RecordSerializer.Serialize(tableDef.Columns, row);
 
     // Assert
     Assert.NotNull(actualBytes);
@@ -202,7 +202,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    byte[] actualBytes = RecordSerializer.Serialize(tableDef, row);
+    byte[] actualBytes = RecordSerializer.Serialize(tableDef.Columns, row);
 
     // Assert
     Assert.NotNull(actualBytes);
@@ -250,7 +250,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    byte[] actualBytes = RecordSerializer.Serialize(tableDef, row);
+    byte[] actualBytes = RecordSerializer.Serialize(tableDef.Columns, row);
 
     // Assert
     Assert.NotNull(actualBytes);
@@ -300,7 +300,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    byte[] actualBytes = RecordSerializer.Serialize(tableDef, row);
+    byte[] actualBytes = RecordSerializer.Serialize(tableDef.Columns, row);
 
     // Assert
     // With the bug, the 'Caption' length and data would overwrite the 'ImageData' data
@@ -352,7 +352,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    byte[] actualBytes = RecordSerializer.Serialize(tableDef, row);
+    byte[] actualBytes = RecordSerializer.Serialize(tableDef.Columns, row);
 
     // Assert
     Assert.NotNull(actualBytes);
@@ -404,7 +404,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    byte[] actualBytes = RecordSerializer.Serialize(tableDef, row);
+    byte[] actualBytes = RecordSerializer.Serialize(tableDef.Columns, row);
 
     // Assert
     Assert.NotNull(actualBytes);
@@ -444,7 +444,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    byte[] actualBytes = RecordSerializer.Serialize(tableDef, row);
+    byte[] actualBytes = RecordSerializer.Serialize(tableDef.Columns, row);
 
     // Assert
     Assert.NotNull(actualBytes);
@@ -495,7 +495,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    byte[] actualBytes = RecordSerializer.Serialize(tableDef, row);
+    byte[] actualBytes = RecordSerializer.Serialize(tableDef.Columns, row);
 
     // Assert
     Assert.NotNull(actualBytes);
@@ -563,7 +563,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    byte[] actualBytes = RecordSerializer.Serialize(tableDef, row);
+    byte[] actualBytes = RecordSerializer.Serialize(tableDef.Columns, row);
 
     // Assert
     Assert.NotNull(actualBytes);
