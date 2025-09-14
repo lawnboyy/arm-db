@@ -1,3 +1,4 @@
+using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
 
 namespace ArmDb.StorageEngine;
@@ -31,5 +32,70 @@ internal sealed class BTreeInternalNode
 
     _page = page;
     _tableDef = tableDef;
+  }
+
+  /// <summary>
+  /// Use the given key to find the corresponding child pointer. We need to do a binary
+  /// search across the interal node's records and find the smallest separator key that
+  /// is larger than the given key. If such a key exists, return the corresponding child
+  /// pointer. If no key exists, return the right-most (largest) separator key in this
+  /// internal node.
+  /// </summary>
+  /// <param name="searchKey"></param>
+  /// <returns></returns>
+  /// <exception cref="NotImplementedException"></exception>
+  internal PageId LookupChildPage(Key searchKey)
+  {
+    // TODO: Implement binary search over slots.
+    // For each slot, deserialize the (Key, PageId) pair.
+    // Use KeyComparer to find the correct child pointer.
+    // Handle the right-most pointer case.
+    throw new NotImplementedException();
+  }
+
+  // You will also need these helpers (or similar)
+  internal static byte[] SerializeEntry(Key key, PageId childPageId, TableDefinition tableDef)
+  {
+    // First, construct a column list that represents the internal node record. This will be the primary key
+    // columns, followed by the columns that make up the child pointer columns, the table ID and the page index.
+    var nodeColumns = tableDef.GetPrimaryKeyColumnDefinitions();
+    nodeColumns.Append(_tableIdColumnDefinition);
+    nodeColumns.Append(_pageIndexColumnDefinition);
+
+    // Construct our data row (should really be called record since it represents an abstraction below a data row)
+    var tableId = DataValue.CreateInteger(childPageId.TableId);
+    var pageIndex = DataValue.CreateInteger(childPageId.PageIndex);
+    var values = key.Values.ToList();
+    values.AddRange([tableId, pageIndex]);
+    DataRow record = new DataRow(values);
+
+    var bytes = RecordSerializer.Serialize(nodeColumns, record);
+
+    return bytes;
+  }
+
+  internal static (Key key, PageId childPageId) DeserializeEntry(ReadOnlySpan<byte> recordData, TableDefinition tableDef)
+  {
+    // First, construct a column list that represents the internal node record. This will be the primary key
+    // columns, followed by the columns that make up the child pointer columns, the table ID and the page index.
+    var nodeColumns = tableDef.GetPrimaryKeyColumnDefinitions();
+    nodeColumns.Append(_tableIdColumnDefinition);
+    nodeColumns.Append(_pageIndexColumnDefinition);
+
+    // Now we can deserialize an internal node record entry.
+    var data = RecordSerializer.Deserialize(nodeColumns, recordData);
+
+    if (data == null)
+    {
+      throw new Exception("Deserialized entry was null!");
+    }
+
+    var values = data.Values;
+    var keyValues = values.Take(values.Count - 2).ToList();
+    var key = new Key(keyValues);
+    int tableId = (int)values[values.Count - 2].Value!;
+    int pageIndex = (int)values[values.Count - 1].Value!;
+    var pageId = new PageId(tableId, pageIndex);
+    return (key, childPageId: pageId);
   }
 }

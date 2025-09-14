@@ -3,7 +3,7 @@ using ArmDb.StorageEngine;
 
 namespace ArmDb.UnitTests.StorageEngine;
 
-public class BTreeInternalNodeTests
+public partial class BTreeInternalNodeTests
 {
   [Fact]
   public void Constructor_WithValidInternalPage_InitializesSuccessfully()
