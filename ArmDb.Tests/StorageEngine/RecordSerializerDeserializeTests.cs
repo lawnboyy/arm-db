@@ -37,7 +37,7 @@ public partial class RecordSerializerTests
 
     // Act
     // Call the Deserialize method (which you will implement)
-    DataRow actualRow = RecordSerializer.Deserialize(tableDef, serializedData.AsSpan());
+    DataRow actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
 
     // Assert
     Assert.NotNull(actualRow);
@@ -86,7 +86,7 @@ public partial class RecordSerializerTests
 
     // Act
     // Call the Deserialize method with the serialized data
-    DataRow actualRow = RecordSerializer.Deserialize(tableDef, serializedData.AsSpan());
+    DataRow actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
 
     // Assert
     Assert.NotNull(actualRow);
@@ -134,7 +134,7 @@ public partial class RecordSerializerTests
     // Act
     // Call the Deserialize method with the serialized data
     var ex = Assert.Throws<InvalidDataException>(() =>
-        RecordSerializer.Deserialize(tableDef, serializedData.AsSpan())
+        RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan())
     );
   }
 
@@ -173,7 +173,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    DataRow actualRow = RecordSerializer.Deserialize(tableDef, serializedData.AsSpan());
+    DataRow actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
 
     // Assert
     Assert.NotNull(actualRow);
@@ -218,7 +218,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    DataRow actualRow = RecordSerializer.Deserialize(tableDef, serializedData.AsSpan());
+    DataRow actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
 
     // Assert
     Assert.NotNull(actualRow);
@@ -259,7 +259,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    DataRow actualRow = RecordSerializer.Deserialize(tableDef, serializedData.AsSpan());
+    DataRow actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
 
     // Assert
     Assert.NotNull(actualRow);
@@ -301,7 +301,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    DataRow actualRow = RecordSerializer.Deserialize(tableDef, serializedData.AsSpan());
+    DataRow actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
 
     // Assert
     Assert.NotNull(actualRow);
@@ -337,7 +337,7 @@ public partial class RecordSerializerTests
     var serializedData = new byte[] { 7 };
 
     // Act
-    DataRow actualRow = RecordSerializer.Deserialize(tableDef, serializedData.AsSpan());
+    DataRow actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
 
     // Assert
     Assert.NotNull(actualRow);
@@ -378,7 +378,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    DataRow actualRow = RecordSerializer.Deserialize(tableDef, serializedData.AsSpan());
+    DataRow actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
 
     // Assert
     Assert.NotNull(actualRow);
@@ -431,7 +431,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    DataRow actualRow = RecordSerializer.Deserialize(tableDef, serializedData.AsSpan());
+    DataRow actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
 
     // Assert
     Assert.NotNull(actualRow);
@@ -474,7 +474,7 @@ public partial class RecordSerializerTests
       var serializedData = ms.ToArray();
 
       // Act
-      DataRow actualRow = RecordSerializer.Deserialize(tableDef, serializedData.AsSpan());
+      DataRow actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
 
       // Assert
       Assert.NotNull(actualRow);

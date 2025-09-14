@@ -121,7 +121,7 @@ internal sealed class BTreeLeafNode
     if (slotIndex >= 0)
     {
       var recordData = SlottedPage.GetRecord(_page, slotIndex);
-      return RecordSerializer.Deserialize(_tableDefinition, recordData);
+      return RecordSerializer.Deserialize(_tableDefinition.Columns, recordData);
     }
 
     return null;
@@ -157,7 +157,7 @@ internal sealed class BTreeLeafNode
     {
       // Get the record...
       var rawRecord = SlottedPage.GetRecord(_page, slotIndex);
-      var dataRow = RecordSerializer.Deserialize(_tableDefinition, rawRecord);
+      var dataRow = RecordSerializer.Deserialize(_tableDefinition.Columns, rawRecord);
       // The slot array is ordered, but we need to determine where to insert the new record...
       var currentDataRowKey = dataRow.GetPrimaryKey(_tableDefinition);
       // If the key to insert is less than the current data row, insert the new row first...

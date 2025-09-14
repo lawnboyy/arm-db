@@ -185,9 +185,9 @@ internal static class RecordSerializer
   /// <param name="recordData"></param>
   /// <returns></returns>
   /// <exception cref="Exception"></exception>
-  public static DataRow Deserialize(TableDefinition tableDef, ReadOnlySpan<byte> recordData)
+  public static DataRow Deserialize(IReadOnlyList<ColumnDefinition> columns, ReadOnlySpan<byte> recordData)
   {
-    var columnCount = tableDef.Columns.Count();
+    var columnCount = columns.Count();
     var rowValues = new DataValue[columnCount];
 
     // Determine the size of the null bitmap in bytes based on how many columns we have. We need
@@ -198,11 +198,11 @@ internal static class RecordSerializer
 
     // We'll use 2 pointers, one for fixed size data and one for variable size data...
     var currentFixedSizedDataOffset = nullBitmapSize;
-    var currentVariableSizedDataOffset = CalculateVariableLengthDataOffset(tableDef.Columns, nullBitmap);
+    var currentVariableSizedDataOffset = CalculateVariableLengthDataOffset(columns, nullBitmap);
 
     for (int i = 0; i < columnCount; i++)
     {
-      var columnDef = tableDef.Columns[i];
+      var columnDef = columns[i];
       if (IsColumnValueNull(nullBitmap, i))
       {
         if (!columnDef.IsNullable)
