@@ -179,6 +179,26 @@ public sealed class TableDefinition
     return _constraints.OfType<ForeignKeyConstraint>();
   }
 
+  public ColumnDefinition[] GetPrimaryKeyColumnDefinitions()
+  {
+    // Determine the primary key columns...
+    var primaryKeyConstraint = GetPrimaryKeyConstraint();
+
+    if (primaryKeyConstraint == null)
+      throw new InvalidOperationException($"No primary key contstraint was found on table {Name}!");
+
+    var keyColumns = new ColumnDefinition[primaryKeyConstraint.ColumnNames.Count];
+    var primaryKeyColumnNames = primaryKeyConstraint.ColumnNames;
+
+    // Ensure that the order of the column list matches the primary key column order...
+    for (var i = 0; i < primaryKeyColumnNames.Count; i++)
+    {
+      keyColumns[i] = Columns.First(c => c.Name == primaryKeyColumnNames[i]);
+    }
+
+    return keyColumns;
+  }
+
   // Add similar helpers for UniqueConstraint, CheckConstraint if needed.
 
   // Consider adding ToString() override for debugging

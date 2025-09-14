@@ -175,6 +175,23 @@ internal static class RecordSerializer
   }
 
   /// <summary>
+  /// Serializes key / page ID pairs for internal nodes in a clustered index.
+  /// </summary>
+  /// <param name="tableDef">The table schema definition</param>
+  /// <param name="key">The separator key</param>
+  /// <param name="pageId">The pointer to the child page</param>
+  /// <returns></returns>
+  public static byte[] Serialize(TableDefinition tableDef, Key key, PageId childPageId)
+  {
+    // First we need to get the primary key constraint columns with type information.
+    var primaryKeyConstraint = tableDef.GetPrimaryKeyConstraint();
+    // Get the list of columnn definitions for the primary key...
+
+
+    return [];
+  }
+
+  /// <summary>
   /// Deserializes a read-only span of bytes into a DataRow.
   /// </summary>
   /// <param name="tableDef"></param>
@@ -230,21 +247,7 @@ internal static class RecordSerializer
   /// <exception cref="InvalidOperationException"></exception>
   public static Key DeserializePrimaryKey(TableDefinition tableDef, ReadOnlySpan<byte> recordData)
   {
-    // Determine the primary key columns...
-    var primaryKeyConstraint = tableDef.GetPrimaryKeyConstraint();
-
-    if (primaryKeyConstraint == null)
-      throw new InvalidOperationException($"No primary key contstraint was found on table {tableDef.Name}!");
-
-    var keyColumns = new ColumnDefinition[primaryKeyConstraint.ColumnNames.Count];
-    var primaryKeyColumnNames = primaryKeyConstraint.ColumnNames;
-
-    // Ensure that the order of the column list matches the primary key column order...
-    for (var i = 0; i < primaryKeyColumnNames.Count; i++)
-    {
-      keyColumns[i] = tableDef.Columns.First(c => c.Name == primaryKeyColumnNames[i]);
-    }
-
+    var keyColumns = tableDef.GetPrimaryKeyColumnDefinitions();
     return DeserializeKey(tableDef, keyColumns, recordData);
   }
 
