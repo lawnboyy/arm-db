@@ -37,6 +37,9 @@ internal sealed class BTreeInternalNode : BTreeNode
     // Use slot lookup binary search to determine which record to lookup and deserialize the child page pointer.
     var slotIndex = FindSlotIndex(searchKey, recordData => DeserializeEntryKey(_tableDefinition, recordData));
 
+    // If we get a slot index that is less than zero, then that means we did not find an exact match and the index
+    // is the insertion point. In the case of our internal node, this index will be used to look up the separator
+    // key we need to find the child page pointer.
     if (slotIndex < 0)
     {
       var convertedIndex = ~slotIndex;
