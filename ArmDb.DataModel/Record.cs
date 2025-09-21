@@ -1,9 +1,7 @@
-using ArmDb.SchemaDefinition;
-
-namespace ArmDb.DataModel; // File-scoped namespace
+namespace ArmDb.DataModel;
 
 /// <summary>
-/// Represents a single row of data as an immutable, ordered sequence of DataValue objects.
+/// Represents a single record of data as an immutable, ordered sequence of DataValue objects.
 /// </summary>
 public sealed class Record : IEquatable<Record>
 {
