@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
-using DataRow = ArmDb.DataModel.DataRow;
+using Record = ArmDb.DataModel.Record;
 
 namespace ArmDb.StorageEngine;
 
@@ -46,7 +46,7 @@ internal static class RecordSerializer
   /// <returns></returns>
   /// <exception cref="Exception"></exception>
   /// <exception cref="ArgumentNullException"></exception>
-  public static byte[] Serialize(IReadOnlyList<ColumnDefinition> columns, DataRow row)
+  public static byte[] Serialize(IReadOnlyList<ColumnDefinition> columns, Record row)
   {
     // Initialize byte array to hold the serialized row...
     Dictionary<string, int> variableLengthColumnSizeLookup;
@@ -185,7 +185,7 @@ internal static class RecordSerializer
   /// <param name="recordData"></param>
   /// <returns></returns>
   /// <exception cref="Exception"></exception>
-  public static DataRow Deserialize(IReadOnlyList<ColumnDefinition> columns, ReadOnlySpan<byte> recordData)
+  public static Record Deserialize(IReadOnlyList<ColumnDefinition> columns, ReadOnlySpan<byte> recordData)
   {
     var columnCount = columns.Count();
     var rowValues = new DataValue[columnCount];
@@ -219,7 +219,7 @@ internal static class RecordSerializer
       rowValues[i] = DeserializeColumnValue(columnDef, recordData, ref currentFixedSizedDataOffset, ref currentVariableSizedDataOffset);
     }
 
-    return new DataRow(rowValues);
+    return new Record(rowValues);
   }
 
   /// <summary>
@@ -406,7 +406,7 @@ internal static class RecordSerializer
     return rowValue;
   }
 
-  private static int CalculateSerializedRecordSize(IReadOnlyList<ColumnDefinition> columns, DataRow row, out int nullBitmapSize, out Dictionary<string, int> variableDataSizeLookup)
+  private static int CalculateSerializedRecordSize(IReadOnlyList<ColumnDefinition> columns, Record row, out int nullBitmapSize, out Dictionary<string, int> variableDataSizeLookup)
   {
     var columnCount = columns.Count();
 

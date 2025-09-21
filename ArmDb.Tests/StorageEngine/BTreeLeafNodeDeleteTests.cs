@@ -48,7 +48,7 @@ public partial class BTreeLeafNodeTests
     // Populate the page with the initial set of records
     foreach (var key in initialKeys)
     {
-      var row = new DataRow(DataValue.CreateInteger(key), DataValue.CreateString($"Data for {key}"));
+      var row = new ArmDb.DataModel.Record(DataValue.CreateInteger(key), DataValue.CreateString($"Data for {key}"));
       var result = leafNode.TryInsert(row);
       Assert.True(result);
     }
@@ -84,8 +84,8 @@ public partial class BTreeLeafNodeTests
     SlottedPage.Initialize(page, PageType.LeafNode);
     var leafNode = new BTreeLeafNode(page, tableDef);
 
-    var row10 = new DataRow(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10"));
-    var row30 = new DataRow(DataValue.CreateInteger(30), DataValue.CreateString("Data for 30"));
+    var row10 = new ArmDb.DataModel.Record(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10"));
+    var row30 = new ArmDb.DataModel.Record(DataValue.CreateInteger(30), DataValue.CreateString("Data for 30"));
     leafNode.TryInsert(row10);
     leafNode.TryInsert(row30);
 
@@ -114,7 +114,7 @@ public partial class BTreeLeafNodeTests
     var page = CreateTestPage();
     SlottedPage.Initialize(page, PageType.LeafNode);
     var leafNode = new BTreeLeafNode(page, tableDef);
-    leafNode.TryInsert(new DataRow(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10")));
+    leafNode.TryInsert(new ArmDb.DataModel.Record(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10")));
     Key? nullKey = null;
 
     // Act & Assert

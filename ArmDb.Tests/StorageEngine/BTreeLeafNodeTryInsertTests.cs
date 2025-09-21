@@ -16,7 +16,7 @@ public partial class BTreeLeafNodeTests
     SlottedPage.Initialize(page, PageType.LeafNode);
     var leafNode = new BTreeLeafNode(page, tableDef);
 
-    var firstRow = new DataRow(DataValue.CreateInteger(100), DataValue.CreateString("First Record"));
+    var firstRow = new ArmDb.DataModel.Record(DataValue.CreateInteger(100), DataValue.CreateString("First Record"));
 
     // Act
     bool success = leafNode.TryInsert(firstRow);
@@ -45,13 +45,13 @@ public partial class BTreeLeafNodeTests
     var leafNode = new BTreeLeafNode(page, tableDef);
 
     // Pre-populate with existing records
-    var row20 = new DataRow(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20"));
-    var row30 = new DataRow(DataValue.CreateInteger(30), DataValue.CreateString("Data for 30"));
+    var row20 = new ArmDb.DataModel.Record(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20"));
+    var row30 = new ArmDb.DataModel.Record(DataValue.CreateInteger(30), DataValue.CreateString("Data for 30"));
     SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, row20), 0);
     SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, row30), 1);
 
     // The new row to insert has the smallest key
-    var row10 = new DataRow(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10"));
+    var row10 = new ArmDb.DataModel.Record(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10"));
 
     // Act
     bool success = leafNode.TryInsert(row10);
@@ -78,13 +78,13 @@ public partial class BTreeLeafNodeTests
     var leafNode = new BTreeLeafNode(page, tableDef);
 
     // Pre-populate with existing records
-    var row10 = new DataRow(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10"));
-    var row20 = new DataRow(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20"));
+    var row10 = new ArmDb.DataModel.Record(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10"));
+    var row20 = new ArmDb.DataModel.Record(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20"));
     SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, row10), 0);
     SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, row20), 1);
 
     // The new row to insert has the largest key
-    var row30 = new DataRow(DataValue.CreateInteger(30), DataValue.CreateString("Data for 30"));
+    var row30 = new ArmDb.DataModel.Record(DataValue.CreateInteger(30), DataValue.CreateString("Data for 30"));
 
     // Act
     bool success = leafNode.TryInsert(row30);
@@ -111,15 +111,15 @@ public partial class BTreeLeafNodeTests
     var leafNode = new BTreeLeafNode(page, tableDef);
 
     // Pre-populate the page with some records, leaving a gap
-    var row10 = new DataRow(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10"));
-    var row30 = new DataRow(DataValue.CreateInteger(30), DataValue.CreateString("Data for 30"));
+    var row10 = new ArmDb.DataModel.Record(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10"));
+    var row30 = new ArmDb.DataModel.Record(DataValue.CreateInteger(30), DataValue.CreateString("Data for 30"));
 
     // Use SlottedPage.TryAddItem for test setup to avoid dependency on the method under test
     SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, row10), 0);
     SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, row30), 1);
 
     // The new row to insert
-    var row20 = new DataRow(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20"));
+    var row20 = new ArmDb.DataModel.Record(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20"));
 
     // Act
     bool success = leafNode.TryInsert(row20);
@@ -147,11 +147,11 @@ public partial class BTreeLeafNodeTests
     var leafNode = new BTreeLeafNode(page, tableDef);
 
     // Pre-populate the page with a record
-    var originalRow = new DataRow(DataValue.CreateInteger(100), DataValue.CreateString("Original Data"));
+    var originalRow = new ArmDb.DataModel.Record(DataValue.CreateInteger(100), DataValue.CreateString("Original Data"));
     leafNode.TryInsert(originalRow);
 
     // Create a new row with the SAME primary key but different data
-    var duplicateKeyRow = new DataRow(DataValue.CreateInteger(100), DataValue.CreateString("Duplicate Data"));
+    var duplicateKeyRow = new ArmDb.DataModel.Record(DataValue.CreateInteger(100), DataValue.CreateString("Duplicate Data"));
     var expectedKey = new Key([DataValue.CreateInteger(100)]);
 
     var headerBefore = new PageHeader(page);
@@ -182,7 +182,7 @@ public partial class BTreeLeafNodeTests
     SlottedPage.Initialize(page, PageType.LeafNode);
     var leafNode = new BTreeLeafNode(page, tableDef);
 
-    var originalRow = new DataRow(
+    var originalRow = new ArmDb.DataModel.Record(
         DataValue.CreateString("Sales"),
         DataValue.CreateInteger(901),
         DataValue.CreateBoolean(true)
@@ -190,7 +190,7 @@ public partial class BTreeLeafNodeTests
     leafNode.TryInsert(originalRow);
 
     // Create a new row with the SAME composite key but different non-key data
-    var duplicateKeyRow = new DataRow(
+    var duplicateKeyRow = new ArmDb.DataModel.Record(
         DataValue.CreateString("Sales"),
         DataValue.CreateInteger(901),
         DataValue.CreateBoolean(false) // Different non-key value
@@ -235,7 +235,7 @@ public partial class BTreeLeafNodeTests
     int overhead = Slot.Size + 1 /* null bitmap */ + sizeof(int) /* Id column */ + sizeof(int) /* Data length prefix */;
     int largeRecordDataSize = availableSpace - overhead - 1; // Leave 1 byte free
 
-    var largeRow = new DataRow(DataValue.CreateInteger(1), DataValue.CreateString(new string('x', largeRecordDataSize)));
+    var largeRow = new ArmDb.DataModel.Record(DataValue.CreateInteger(1), DataValue.CreateString(new string('x', largeRecordDataSize)));
 
     // Use SlottedPage.TryAddItem, which is already tested, for setup
     var serializedRow = RecordSerializer.Serialize(tableDef.Columns, largeRow);
@@ -248,7 +248,7 @@ public partial class BTreeLeafNodeTests
     var pageStateBefore = page.Data.ToArray();
 
     // Create a new row that requires more than 1 byte of free space to insert
-    var rowThatWontFit = new DataRow(DataValue.CreateInteger(2), DataValue.CreateString("A"));
+    var rowThatWontFit = new ArmDb.DataModel.Record(DataValue.CreateInteger(2), DataValue.CreateString("A"));
 
     // Act
     bool success = leafNode.TryInsert(rowThatWontFit);

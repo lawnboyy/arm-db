@@ -22,13 +22,13 @@ public partial class BTreeLeafNodeTests
     var nullVarchar = DataValue.CreateNull(PrimitiveDataType.Varchar);
 
     // Populate the page with a larger, odd number of sorted records
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateInteger(10), nullVarchar)), 0);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateInteger(20), nullVarchar)), 1);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateInteger(30), nullVarchar)), 2);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateInteger(40), nullVarchar)), 3);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateInteger(50), nullVarchar)), 4);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateInteger(60), nullVarchar)), 5);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateInteger(70), nullVarchar)), 6);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateInteger(10), nullVarchar)), 0);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateInteger(20), nullVarchar)), 1);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateInteger(30), nullVarchar)), 2);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateInteger(40), nullVarchar)), 3);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateInteger(50), nullVarchar)), 4);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateInteger(60), nullVarchar)), 5);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateInteger(70), nullVarchar)), 6);
 
     var leafNode = new BTreeLeafNode(page, tableDef);
     var searchKey = new Key([DataValue.CreateInteger(keyToFind)]);
@@ -55,13 +55,13 @@ public partial class BTreeLeafNodeTests
     var nullVarchar = DataValue.CreateNull(PrimitiveDataType.Varchar);
 
     // Populate page with gaps in the key sequence
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateInteger(10), nullVarchar)), 0);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateInteger(20), nullVarchar)), 1);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateInteger(30), nullVarchar)), 2);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateInteger(40), nullVarchar)), 3);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateInteger(50), nullVarchar)), 4);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateInteger(60), nullVarchar)), 5);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateInteger(70), nullVarchar)), 6);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateInteger(10), nullVarchar)), 0);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateInteger(20), nullVarchar)), 1);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateInteger(30), nullVarchar)), 2);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateInteger(40), nullVarchar)), 3);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateInteger(50), nullVarchar)), 4);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateInteger(60), nullVarchar)), 5);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateInteger(70), nullVarchar)), 6);
 
     var leafNode = new BTreeLeafNode(page, tableDef);
     var searchKey = new Key([DataValue.CreateInteger(keyToFind)]);
@@ -94,11 +94,11 @@ public partial class BTreeLeafNodeTests
     SlottedPage.Initialize(page, PageType.LeafNode);
 
     // Populate with a larger set of sorted composite keys
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateString("Engineering"), DataValue.CreateInteger(101))), 0);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateString("HR"), DataValue.CreateInteger(20))), 1);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateString("Sales"), DataValue.CreateInteger(50))), 2);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateString("Sales"), DataValue.CreateInteger(52))), 3);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateString("Support"), DataValue.CreateInteger(80))), 4);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateString("Engineering"), DataValue.CreateInteger(101))), 0);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateString("HR"), DataValue.CreateInteger(20))), 1);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateString("Sales"), DataValue.CreateInteger(50))), 2);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateString("Sales"), DataValue.CreateInteger(52))), 3);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateString("Support"), DataValue.CreateInteger(80))), 4);
 
     var leafNode = new BTreeLeafNode(page, tableDef);
     var searchKey = new Key([DataValue.CreateString(orgName), DataValue.CreateInteger(employeeId)]);
@@ -123,11 +123,11 @@ public partial class BTreeLeafNodeTests
     SlottedPage.Initialize(page, PageType.LeafNode);
 
     // Populate with the same larger set of sorted composite keys
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateString("Engineering"), DataValue.CreateInteger(101))), 0);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateString("HR"), DataValue.CreateInteger(20))), 1);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateString("Sales"), DataValue.CreateInteger(50))), 2);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateString("Sales"), DataValue.CreateInteger(52))), 3);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateString("Support"), DataValue.CreateInteger(80))), 4);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateString("Engineering"), DataValue.CreateInteger(101))), 0);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateString("HR"), DataValue.CreateInteger(20))), 1);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateString("Sales"), DataValue.CreateInteger(50))), 2);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateString("Sales"), DataValue.CreateInteger(52))), 3);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateString("Support"), DataValue.CreateInteger(80))), 4);
 
     var leafNode = new BTreeLeafNode(page, tableDef);
     var searchKey = new Key([DataValue.CreateString(orgName), DataValue.CreateInteger(employeeId)]);
@@ -159,10 +159,10 @@ public partial class BTreeLeafNodeTests
 
     // Populate with sorted composite keys (Department, HireDate, EmployeeId)
     // Physical row order: (IsActive, Department, EmployeeId, HireDate)
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateBoolean(true), DataValue.CreateString("HR"), DataValue.CreateInteger(101), DataValue.CreateDateTime(DateTime.Parse("2023-01-15").ToUniversalTime()))), 0);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateBoolean(true), DataValue.CreateString("Sales"), DataValue.CreateInteger(50), DataValue.CreateDateTime(DateTime.Parse("2022-05-20").ToUniversalTime()))), 1);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateBoolean(false), DataValue.CreateString("Sales"), DataValue.CreateInteger(52), DataValue.CreateDateTime(DateTime.Parse("2024-02-10").ToUniversalTime()))), 2);
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateBoolean(true), DataValue.CreateString("Sales"), DataValue.CreateInteger(55), DataValue.CreateDateTime(DateTime.Parse("2024-02-10").ToUniversalTime()))), 3);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateBoolean(true), DataValue.CreateString("HR"), DataValue.CreateInteger(101), DataValue.CreateDateTime(DateTime.Parse("2023-01-15").ToUniversalTime()))), 0);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateBoolean(true), DataValue.CreateString("Sales"), DataValue.CreateInteger(50), DataValue.CreateDateTime(DateTime.Parse("2022-05-20").ToUniversalTime()))), 1);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateBoolean(false), DataValue.CreateString("Sales"), DataValue.CreateInteger(52), DataValue.CreateDateTime(DateTime.Parse("2024-02-10").ToUniversalTime()))), 2);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateBoolean(true), DataValue.CreateString("Sales"), DataValue.CreateInteger(55), DataValue.CreateDateTime(DateTime.Parse("2024-02-10").ToUniversalTime()))), 3);
 
     var leafNode = new BTreeLeafNode(page, tableDef);
     var searchKey = new Key([DataValue.CreateString(dept), DataValue.CreateDateTime(hireDate), DataValue.CreateInteger(empId)]);
@@ -207,7 +207,7 @@ public partial class BTreeLeafNodeTests
     var nullVarchar = DataValue.CreateNull(PrimitiveDataType.Varchar);
 
     // Populate with a single record
-    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new DataRow(DataValue.CreateInteger(50), nullVarchar)), 0);
+    SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, new ArmDb.DataModel.Record(DataValue.CreateInteger(50), nullVarchar)), 0);
 
     var leafNode = new BTreeLeafNode(page, tableDef);
     var searchKey = new Key([DataValue.CreateInteger(keyToFind)]);
@@ -228,7 +228,7 @@ public partial class BTreeLeafNodeTests
     SlottedPage.Initialize(page, PageType.LeafNode);
 
     // Manually construct a corrupted record where the PK (Id) is marked as NULL
-    var corruptedRow = new DataRow(DataValue.CreateNull(PrimitiveDataType.Int), DataValue.CreateString("Corrupted"));
+    var corruptedRow = new ArmDb.DataModel.Record(DataValue.CreateNull(PrimitiveDataType.Int), DataValue.CreateString("Corrupted"));
     var corruptedBytes = RecordSerializer.Serialize(tableDef.Columns, corruptedRow);
     SlottedPage.TryAddRecord(page, corruptedBytes, 0);
 

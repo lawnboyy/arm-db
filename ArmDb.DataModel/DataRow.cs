@@ -5,7 +5,7 @@ namespace ArmDb.DataModel; // File-scoped namespace
 /// <summary>
 /// Represents a single row of data as an immutable, ordered sequence of DataValue objects.
 /// </summary>
-public sealed class DataRow : IEquatable<DataRow>
+public sealed class Record : IEquatable<Record>
 {
   // Internal storage - readonly array ensures the array reference doesn't change.
   // Immutability of the row's *content* relies on copying input in constructors
@@ -31,13 +31,13 @@ public sealed class DataRow : IEquatable<DataRow>
   public DataValue this[int index] => _values[index];
 
   /// <summary>
-  /// Initializes a new instance of the <see cref="DataRow"/> class from a sequence of DataValue objects.
+  /// Initializes a new instance of the <see cref="Record"/> class from a sequence of DataValue objects.
   /// Creates a copy of the input sequence to ensure immutability.
   /// </summary>
   /// <param name="values">The sequence of DataValue objects for the row. Cannot be null or contain null elements.</param>
   /// <exception cref="ArgumentNullException">Thrown if values is null.</exception>
   /// <exception cref="ArgumentException">Thrown if the values sequence contains any null DataValue elements.</exception>
-  public DataRow(IEnumerable<DataValue> values)
+  public Record(IEnumerable<DataValue> values)
   {
     ArgumentNullException.ThrowIfNull(values);
 
@@ -54,13 +54,13 @@ public sealed class DataRow : IEquatable<DataRow>
   }
 
   /// <summary>
-  /// Initializes a new instance of the <see cref="DataRow"/> class from a parameter array of DataValue objects.
+  /// Initializes a new instance of the <see cref="Record"/> class from a parameter array of DataValue objects.
   /// Creates a clone of the input array to ensure immutability if the caller retains the original array.
   /// </summary>
   /// <param name="values">The array of DataValue objects for the row. Cannot be null or contain null elements.</param>
   /// <exception cref="ArgumentNullException">Thrown if values is null.</exception>
   /// <exception cref="ArgumentException">Thrown if the values array contains any null DataValue elements.</exception>
-  public DataRow(params DataValue[] values)
+  public Record(params DataValue[] values)
   {
     ArgumentNullException.ThrowIfNull(values);
 
@@ -90,14 +90,14 @@ public sealed class DataRow : IEquatable<DataRow>
   /// </summary>
   public override bool Equals(object? obj)
   {
-    return Equals(obj as DataRow);
+    return Equals(obj as Record);
   }
 
   /// <summary>
   /// Indicates whether the current DataRow is equal to another DataRow object.
   /// Equality is based on the sequential equality of the contained DataValue objects.
   /// </summary>
-  public bool Equals(DataRow? other)
+  public bool Equals(Record? other)
   {
     if (other is null) return false;
     if (ReferenceEquals(this, other)) return true;
@@ -127,7 +127,7 @@ public sealed class DataRow : IEquatable<DataRow>
   /// <summary>
   /// Determines whether two specified DataRow objects have the same value sequence.
   /// </summary>
-  public static bool operator ==(DataRow? left, DataRow? right)
+  public static bool operator ==(Record? left, Record? right)
   {
     if (ReferenceEquals(left, right)) return true; // Same instance or both null
     if (left is null || right is null) return false; // One is null, the other isn't
@@ -137,7 +137,7 @@ public sealed class DataRow : IEquatable<DataRow>
   /// <summary>
   /// Determines whether two specified DataRow objects have different value sequences.
   /// </summary>
-  public static bool operator !=(DataRow? left, DataRow? right)
+  public static bool operator !=(Record? left, Record? right)
   {
     return !(left == right);
   }

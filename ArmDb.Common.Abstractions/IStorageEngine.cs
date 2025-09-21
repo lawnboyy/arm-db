@@ -29,7 +29,7 @@ namespace ArmDb.Common.Abstractions
     /// <summary>
     /// Inserts a single row of data into the specified table.
     /// </summary>
-    Task InsertRowAsync(string tableName, DataRow row);
+    Task InsertRowAsync(string tableName, Record row);
 
     // Add methods for Read, Update, Delete, Scan, etc. later
   }

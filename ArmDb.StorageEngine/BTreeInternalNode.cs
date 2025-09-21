@@ -67,7 +67,7 @@ internal sealed class BTreeInternalNode
     var pageIndex = DataValue.CreateInteger(childPageId.PageIndex);
     var values = key.Values.ToList();
     values.AddRange([tableId, pageIndex]);
-    DataRow record = new DataRow(values);
+    Record record = new Record(values);
 
     var bytes = RecordSerializer.Serialize(nodeColumns, record);
 

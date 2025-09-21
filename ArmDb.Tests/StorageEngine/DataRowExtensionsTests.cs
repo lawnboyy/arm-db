@@ -17,7 +17,7 @@ public class DataRowExtensionsTests
     );
 
     // 2. Create the source DataRow
-    var row = new DataRow(
+    var row = new ArmDb.DataModel.Record(
         DataValue.CreateInteger(123),
         DataValue.CreateString("Test")
     );
@@ -46,7 +46,7 @@ public class DataRowExtensionsTests
     );
 
     // 2. Create the source DataRow
-    var row = new DataRow(
+    var row = new ArmDb.DataModel.Record(
         DataValue.CreateString("Sales"),
         DataValue.CreateInteger(901),
         DataValue.CreateBoolean(true)
@@ -80,7 +80,7 @@ public class DataRowExtensionsTests
     );
 
     // 2. Create the source DataRow, with values matching the physical table column order
-    var row = new DataRow(
+    var row = new ArmDb.DataModel.Record(
         DataValue.CreateString("Alice"), // FirstName
         DataValue.CreateBoolean(true),   // IsActive
         DataValue.CreateString("Smith")  // LastName

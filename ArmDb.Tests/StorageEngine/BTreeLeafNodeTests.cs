@@ -15,7 +15,7 @@ public partial class BTreeLeafNodeTests
     SlottedPage.Initialize(page, PageType.LeafNode); // Correctly format the page
 
     // Act
-    var exception = Record.Exception(() => new BTreeLeafNode(page, tableDef));
+    var exception = Xunit.Record.Exception(() => new BTreeLeafNode(page, tableDef));
 
     // Assert
     Assert.Null(exception); // Should not throw
@@ -77,9 +77,9 @@ public partial class BTreeLeafNodeTests
     var page = CreateTestPage();
     SlottedPage.Initialize(page, PageType.LeafNode);
 
-    var row0 = new DataRow(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10"));
-    var row1 = new DataRow(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20"));
-    var row2 = new DataRow(DataValue.CreateInteger(30), DataValue.CreateString("Data for 30"));
+    var row0 = new ArmDb.DataModel.Record(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10"));
+    var row1 = new ArmDb.DataModel.Record(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20"));
+    var row2 = new ArmDb.DataModel.Record(DataValue.CreateInteger(30), DataValue.CreateString("Data for 30"));
 
     SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, row0), 0);
     SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, row1), 1);
@@ -89,7 +89,7 @@ public partial class BTreeLeafNodeTests
     var searchKey = new Key([DataValue.CreateInteger(20)]); // Search by key
 
     // Act
-    DataRow? actualRow = leafNode.Search(searchKey); // Use the key-based search method
+    ArmDb.DataModel.Record? actualRow = leafNode.Search(searchKey); // Use the key-based search method
 
     // Assert
     Assert.NotNull(actualRow);
@@ -105,11 +105,11 @@ public partial class BTreeLeafNodeTests
     var page = CreateTestPage();
     SlottedPage.Initialize(page, PageType.LeafNode);
 
-    var row0 = new DataRow(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10"));
-    var row1 = new DataRow(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20"));
-    var row2 = new DataRow(DataValue.CreateInteger(30), DataValue.CreateString("Data for 30"));
-    var row3 = new DataRow(DataValue.CreateInteger(40), DataValue.CreateString("Data for 40"));
-    var row4 = new DataRow(DataValue.CreateInteger(50), DataValue.CreateString("Data for 50"));
+    var row0 = new ArmDb.DataModel.Record(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10"));
+    var row1 = new ArmDb.DataModel.Record(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20"));
+    var row2 = new ArmDb.DataModel.Record(DataValue.CreateInteger(30), DataValue.CreateString("Data for 30"));
+    var row3 = new ArmDb.DataModel.Record(DataValue.CreateInteger(40), DataValue.CreateString("Data for 40"));
+    var row4 = new ArmDb.DataModel.Record(DataValue.CreateInteger(50), DataValue.CreateString("Data for 50"));
 
     SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, row0), 0);
     SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, row1), 1);
@@ -122,7 +122,7 @@ public partial class BTreeLeafNodeTests
     var searchKey = new Key([DataValue.CreateInteger(40)]);
 
     // Act
-    DataRow? actualRow = leafNode.Search(searchKey);
+    ArmDb.DataModel.Record? actualRow = leafNode.Search(searchKey);
 
     // Assert
     Assert.NotNull(actualRow);
@@ -137,9 +137,9 @@ public partial class BTreeLeafNodeTests
     var page = CreateTestPage();
     SlottedPage.Initialize(page, PageType.LeafNode);
 
-    var row0 = new DataRow(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10"));
-    var row1 = new DataRow(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20"));
-    var row2 = new DataRow(DataValue.CreateInteger(40), DataValue.CreateString("Data for 40"));
+    var row0 = new ArmDb.DataModel.Record(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10"));
+    var row1 = new ArmDb.DataModel.Record(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20"));
+    var row2 = new ArmDb.DataModel.Record(DataValue.CreateInteger(40), DataValue.CreateString("Data for 40"));
 
     SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, row0), 0);
     SlottedPage.TryAddRecord(page, RecordSerializer.Serialize(tableDef.Columns, row1), 1);
@@ -150,7 +150,7 @@ public partial class BTreeLeafNodeTests
     var searchKey = new Key([DataValue.CreateInteger(30)]);
 
     // Act
-    DataRow? actualRow = leafNode.Search(searchKey);
+    ArmDb.DataModel.Record? actualRow = leafNode.Search(searchKey);
 
     // Assert
     Assert.Null(actualRow);
@@ -166,9 +166,9 @@ public partial class BTreeLeafNodeTests
     var leafNode = new BTreeLeafNode(page, tableDef);
 
     // Populate with records
-    leafNode.TryInsert(new DataRow(DataValue.CreateInteger(10), DataValue.CreateString("Data A")));
-    leafNode.TryInsert(new DataRow(DataValue.CreateInteger(20), DataValue.CreateString("Data B")));
-    leafNode.TryInsert(new DataRow(DataValue.CreateInteger(30), DataValue.CreateString("Data C")));
+    leafNode.TryInsert(new ArmDb.DataModel.Record(DataValue.CreateInteger(10), DataValue.CreateString("Data A")));
+    leafNode.TryInsert(new ArmDb.DataModel.Record(DataValue.CreateInteger(20), DataValue.CreateString("Data B")));
+    leafNode.TryInsert(new ArmDb.DataModel.Record(DataValue.CreateInteger(30), DataValue.CreateString("Data C")));
 
     var keyToDelete = new Key([DataValue.CreateInteger(20)]);
 
@@ -177,7 +177,7 @@ public partial class BTreeLeafNodeTests
     Assert.True(deleteSuccess, "The delete operation should have been successful.");
 
     // Act: Search for the now-deleted record
-    DataRow? result = leafNode.Search(keyToDelete);
+    ArmDb.DataModel.Record? result = leafNode.Search(keyToDelete);
 
     // Assert
     Assert.Null(result);
@@ -192,9 +192,9 @@ public partial class BTreeLeafNodeTests
     SlottedPage.Initialize(page, PageType.LeafNode);
     var leafNode = new BTreeLeafNode(page, tableDef);
 
-    var row10 = new DataRow(DataValue.CreateInteger(10), DataValue.CreateString("Data A"));
-    var row20 = new DataRow(DataValue.CreateInteger(20), DataValue.CreateString("Data B")); // To be deleted
-    var row30 = new DataRow(DataValue.CreateInteger(30), DataValue.CreateString("Data C"));
+    var row10 = new ArmDb.DataModel.Record(DataValue.CreateInteger(10), DataValue.CreateString("Data A"));
+    var row20 = new ArmDb.DataModel.Record(DataValue.CreateInteger(20), DataValue.CreateString("Data B")); // To be deleted
+    var row30 = new ArmDb.DataModel.Record(DataValue.CreateInteger(30), DataValue.CreateString("Data C"));
 
     leafNode.TryInsert(row10);
     leafNode.TryInsert(row20);
@@ -208,7 +208,7 @@ public partial class BTreeLeafNodeTests
     Assert.True(deleteSuccess, "The delete operation should have been successful.");
 
     // Act: Search for a different, remaining record
-    DataRow? result = leafNode.Search(keyToFind);
+    ArmDb.DataModel.Record? result = leafNode.Search(keyToFind);
 
     // Assert
     Assert.NotNull(result);

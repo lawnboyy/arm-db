@@ -18,7 +18,7 @@ public partial class RecordSerializerTests
     );
 
     // 2. Create the original DataRow that we expect to get back
-    var expectedRow = new DataRow(
+    var expectedRow = new ArmDb.DataModel.Record(
         DataValue.CreateInteger(1024),
         DataValue.CreateBigInteger(5_000_000_000L),
         DataValue.CreateBoolean(true)
@@ -37,7 +37,7 @@ public partial class RecordSerializerTests
 
     // Act
     // Call the Deserialize method (which you will implement)
-    DataRow actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
+    ArmDb.DataModel.Record actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
 
     // Assert
     Assert.NotNull(actualRow);
@@ -65,7 +65,7 @@ public partial class RecordSerializerTests
     );
 
     // 2. This is the original DataRow we expect to get back after deserialization
-    var expectedRow = new DataRow(
+    var expectedRow = new ArmDb.DataModel.Record(
         DataValue.CreateInteger(10),
         DataValue.CreateNull(PrimitiveDataType.DateTime), // LastLogin is NULL
         DataValue.CreateInteger(200),
@@ -86,7 +86,7 @@ public partial class RecordSerializerTests
 
     // Act
     // Call the Deserialize method with the serialized data
-    DataRow actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
+    ArmDb.DataModel.Record actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
 
     // Assert
     Assert.NotNull(actualRow);
@@ -116,7 +116,7 @@ public partial class RecordSerializerTests
     );
 
     // 2. This is the original DataRow we expect to get back after deserialization
-    var expectedRow = new DataRow(
+    var expectedRow = new ArmDb.DataModel.Record(
         DataValue.CreateInteger(10),
         DataValue.CreateNull(PrimitiveDataType.DateTime) // LastLogin is NULL
     );
@@ -151,7 +151,7 @@ public partial class RecordSerializerTests
     );
 
     // 2. This is the original DataRow we expect to get back
-    var expectedRow = new DataRow(
+    var expectedRow = new ArmDb.DataModel.Record(
         DataValue.CreateInteger(123),
         DataValue.CreateString("Test User"),
         DataValue.CreateBoolean(true),
@@ -173,7 +173,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    DataRow actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
+    ArmDb.DataModel.Record actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
 
     // Assert
     Assert.NotNull(actualRow);
@@ -199,7 +199,7 @@ public partial class RecordSerializerTests
 
     // 2. This is the original DataRow we expect to get back
     var blobData = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE };
-    var expectedRow = new DataRow(
+    var expectedRow = new ArmDb.DataModel.Record(
         DataValue.CreateInteger(1337),
         DataValue.CreateBlob(blobData)
     );
@@ -218,7 +218,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    DataRow actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
+    ArmDb.DataModel.Record actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
 
     // Assert
     Assert.NotNull(actualRow);
@@ -240,7 +240,7 @@ public partial class RecordSerializerTests
     );
 
     // 2. This is the original DataRow we expect to get back
-    var expectedRow = new DataRow(
+    var expectedRow = new ArmDb.DataModel.Record(
         DataValue.CreateInteger(404),
         DataValue.CreateString("") // The Tag is an empty string
     );
@@ -259,7 +259,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    DataRow actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
+    ArmDb.DataModel.Record actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
 
     // Assert
     Assert.NotNull(actualRow);
@@ -282,7 +282,7 @@ public partial class RecordSerializerTests
     );
 
     // 2. This is the original DataRow we expect to get back
-    var expectedRow = new DataRow(
+    var expectedRow = new ArmDb.DataModel.Record(
         DataValue.CreateInteger(500),
         DataValue.CreateBlob(Array.Empty<byte>()) // The Data is an empty byte array
     );
@@ -301,7 +301,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    DataRow actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
+    ArmDb.DataModel.Record actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
 
     // Assert
     Assert.NotNull(actualRow);
@@ -325,7 +325,7 @@ public partial class RecordSerializerTests
     );
 
     // 2. This is the original DataRow we expect to get back
-    var expectedRow = new DataRow(
+    var expectedRow = new ArmDb.DataModel.Record(
         DataValue.CreateNull(PrimitiveDataType.Int),
         DataValue.CreateNull(PrimitiveDataType.Varchar),
         DataValue.CreateNull(PrimitiveDataType.Boolean)
@@ -337,7 +337,7 @@ public partial class RecordSerializerTests
     var serializedData = new byte[] { 7 };
 
     // Act
-    DataRow actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
+    ArmDb.DataModel.Record actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
 
     // Assert
     Assert.NotNull(actualRow);
@@ -359,7 +359,7 @@ public partial class RecordSerializerTests
 
     // 2. This is the original DataRow we expect to get back
     string cityValue = "Zürich";
-    var expectedRow = new DataRow(
+    var expectedRow = new ArmDb.DataModel.Record(
         DataValue.CreateInteger(101),
         DataValue.CreateString(cityValue)
     );
@@ -378,7 +378,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    DataRow actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
+    ArmDb.DataModel.Record actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
 
     // Assert
     Assert.NotNull(actualRow);
@@ -404,7 +404,7 @@ public partial class RecordSerializerTests
     );
 
     // 2. This is the original DataRow we expect to get back
-    var expectedRow = new DataRow(
+    var expectedRow = new ArmDb.DataModel.Record(
         DataValue.CreateInteger(101),
         DataValue.CreateString("Test User"),
         DataValue.CreateNull(PrimitiveDataType.DateTime),  // LastLogin is NULL
@@ -431,7 +431,7 @@ public partial class RecordSerializerTests
     };
 
     // Act
-    DataRow actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
+    ArmDb.DataModel.Record actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
 
     // Assert
     Assert.NotNull(actualRow);
@@ -454,7 +454,7 @@ public partial class RecordSerializerTests
     var localTimestamp = new DateTime(2025, 7, 5, 10, 30, 0, DateTimeKind.Local);
 
     // This is the original DataRow we expect to get back
-    var expectedRow = new DataRow(
+    var expectedRow = new ArmDb.DataModel.Record(
         DataValue.CreateInteger(42),
         DataValue.CreateDateTime(utcTimestamp),
         DataValue.CreateDateTime(localTimestamp)
@@ -474,7 +474,7 @@ public partial class RecordSerializerTests
       var serializedData = ms.ToArray();
 
       // Act
-      DataRow actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
+      ArmDb.DataModel.Record actualRow = RecordSerializer.Deserialize(tableDef.Columns, serializedData.AsSpan());
 
       // Assert
       Assert.NotNull(actualRow);

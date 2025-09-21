@@ -6,7 +6,7 @@ namespace ArmDb.StorageEngine;
 
 public static class DataRowExtensions
 {
-  public static Key GetPrimaryKey(this DataRow row, TableDefinition tableDefinition)
+  public static Key GetPrimaryKey(this Record row, TableDefinition tableDefinition)
   {
     var primaryKey = tableDefinition.GetPrimaryKeyConstraint();
     var allColumns = tableDefinition.Columns;

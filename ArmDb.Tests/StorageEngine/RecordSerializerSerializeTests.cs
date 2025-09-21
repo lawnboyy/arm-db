@@ -19,7 +19,7 @@ public partial class RecordSerializerTests
     );
 
     // 2. Create the data row corresponding to the schema
-    var row = new DataRow(
+    var row = new ArmDb.DataModel.Record(
         DataValue.CreateInteger(1024),          // ID = 1024
         DataValue.CreateBigInteger(5000000000L),  // Balance = 5 billion
         DataValue.CreateBoolean(true)           // IsActive = true
@@ -63,7 +63,7 @@ public partial class RecordSerializerTests
     );
 
     // 2. Create data row where LastLogin (column 1) is NULL
-    var row = new DataRow(
+    var row = new ArmDb.DataModel.Record(
         DataValue.CreateInteger(10),                             // ID
         DataValue.CreateNull(PrimitiveDataType.DateTime),      // LastLogin = NULL
         DataValue.CreateInteger(200),                            // StatusCode
@@ -115,7 +115,7 @@ public partial class RecordSerializerTests
     // 2. Create data row
     string nameValue = "Alice";
     string statusValue = "Active";
-    var row = new DataRow(
+    var row = new ArmDb.DataModel.Record(
         DataValue.CreateInteger(99),
         DataValue.CreateString(nameValue),
         DataValue.CreateString(statusValue)
@@ -167,7 +167,7 @@ public partial class RecordSerializerTests
 
     // 2. Create data row. Make the last column NULL to test all features at once.
     string nameValue = "Test User"; // 9 bytes in UTF-8
-    var row = new DataRow(
+    var row = new ArmDb.DataModel.Record(
         DataValue.CreateInteger(123),
         DataValue.CreateString(nameValue),
         DataValue.CreateBoolean(true),
@@ -222,7 +222,7 @@ public partial class RecordSerializerTests
 
     // 2. Create data row with a sample byte array for the blob
     var blobData = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE }; // 6 bytes
-    var row = new DataRow(
+    var row = new ArmDb.DataModel.Record(
         DataValue.CreateInteger(1337),
         DataValue.CreateBlob(blobData)
     );
@@ -273,7 +273,7 @@ public partial class RecordSerializerTests
     var blobData = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF }; // 4 bytes
     string captionValue = "A Photo"; // 7 bytes in UTF-8
 
-    var row = new DataRow(
+    var row = new ArmDb.DataModel.Record(
         DataValue.CreateInteger(200),
         DataValue.CreateBlob(blobData),
         DataValue.CreateString(captionValue)
@@ -322,7 +322,7 @@ public partial class RecordSerializerTests
     );
 
     // 2. Create data row where the Name column (index 1) is NULL
-    var row = new DataRow(
+    var row = new ArmDb.DataModel.Record(
         DataValue.CreateInteger(789),
         DataValue.CreateNull(PrimitiveDataType.Varchar), // Name = NULL
         DataValue.CreateBoolean(true)                   // IsActive = false
@@ -371,7 +371,7 @@ public partial class RecordSerializerTests
     );
 
     // 2. Create data row with an empty string and an empty byte array
-    var row = new DataRow(
+    var row = new ArmDb.DataModel.Record(
         DataValue.CreateInteger(2025),
         DataValue.CreateString(""),            // Name is an empty string
         DataValue.CreateBlob(Array.Empty<byte>()) // Data is an empty byte array
@@ -423,7 +423,7 @@ public partial class RecordSerializerTests
     );
 
     // 2. Create data row where every value is NULL
-    var row = new DataRow(
+    var row = new ArmDb.DataModel.Record(
         DataValue.CreateNull(PrimitiveDataType.Int),
         DataValue.CreateNull(PrimitiveDataType.Varchar),
         DataValue.CreateNull(PrimitiveDataType.Boolean)
@@ -468,7 +468,7 @@ public partial class RecordSerializerTests
     int cityByteLength = cityBytes.Length;
     Assert.NotEqual(cityValue.Length, cityByteLength); // Verify our test case is valid
 
-    var row = new DataRow(
+    var row = new ArmDb.DataModel.Record(
         DataValue.CreateInteger(101),
         DataValue.CreateString(cityValue)
     );
@@ -520,7 +520,7 @@ public partial class RecordSerializerTests
     // 2. Create a data row that exercises all cases
     string nameValue = "Test User"; // 9 bytes
     string notesValue = "";        // 0 bytes
-    var row = new DataRow(
+    var row = new ArmDb.DataModel.Record(
         DataValue.CreateInteger(101),
         DataValue.CreateString(nameValue),
         DataValue.CreateNull(PrimitiveDataType.DateTime),  // LastLogin is NULL

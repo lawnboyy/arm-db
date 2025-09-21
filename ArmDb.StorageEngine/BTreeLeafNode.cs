@@ -114,7 +114,7 @@ internal sealed class BTreeLeafNode
   /// </summary>
   /// <param name="key">Key of the record to search for.</param>
   /// <returns>DataRow record if found, otherwise, null.</returns>
-  internal DataRow? Search(Key key)
+  internal Record? Search(Key key)
   {
     // Attempt to locate the record with the given key...
     var slotIndex = FindPrimaryKeySlotIndex(key);
@@ -141,13 +141,13 @@ internal sealed class BTreeLeafNode
   /// <param name="newLeaf">New node that will house half the current records.</param>
   /// <returns>The separator key to promote to the parent node.</returns>
   /// <exception cref="NotImplementedException"></exception>
-  internal Key SplitAndInsert(DataRow rowToInsert, BTreeLeafNode newLeaf, BTreeLeafNode? rightLeafSibling = null)
+  internal Key SplitAndInsert(Record rowToInsert, BTreeLeafNode newLeaf, BTreeLeafNode? rightLeafSibling = null)
   {
     var thisLeafHeader = new PageHeader(_page);
 
     // Create a sorted list of data rows by looping through the existing leaf's records and adding them to the list. Include
     // the new row in sorted order.
-    var sortedDataRows = new DataRow[thisLeafHeader.ItemCount + 1];
+    var sortedDataRows = new Record[thisLeafHeader.ItemCount + 1];
     var dataKeyToInsert = rowToInsert.GetPrimaryKey(_tableDefinition);
     var keyComparer = new KeyComparer();
 
@@ -232,7 +232,7 @@ internal sealed class BTreeLeafNode
   /// </summary>
   /// <param name="row"></param>
   /// <returns></returns>
-  internal bool TryInsert(DataRow row)
+  internal bool TryInsert(Record row)
   {
     // Find the primary key...
     var primaryKey = row.GetPrimaryKey(_tableDefinition);
@@ -270,7 +270,7 @@ internal sealed class BTreeLeafNode
   /// <param name="updatedRow">The updated row</param>
   /// <returns>True if the row is updated successfully, false otherwise.</returns>
   /// <exception cref="InvalidOperationException">Thrown if no record is found using the given primary key.</exception>
-  internal bool TryUpdate(DataRow updatedRow)
+  internal bool TryUpdate(Record updatedRow)
   {
     Key primaryKey = updatedRow.GetPrimaryKey(_tableDefinition);
     var slotIndex = FindPrimaryKeySlotIndex(primaryKey);

@@ -1,5 +1,6 @@
 using ArmDb.DataModel;
 using ArmDb.StorageEngine;
+using Record = ArmDb.DataModel.Record;
 
 namespace ArmDb.UnitTests.StorageEngine;
 
@@ -21,12 +22,12 @@ public partial class BTreeLeafNodeTests
     // Populate nodeA with an even number of records
     var initialRows = new[]
     {
-            new DataRow(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10")),
-            new DataRow(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20")),
-            new DataRow(DataValue.CreateInteger(30), DataValue.CreateString("Data for 30")),
-            new DataRow(DataValue.CreateInteger(50), DataValue.CreateString("Data for 50")),
-            new DataRow(DataValue.CreateInteger(60), DataValue.CreateString("Data for 60")),
-            new DataRow(DataValue.CreateInteger(70), DataValue.CreateString("Data for 70"))
+            new ArmDb.DataModel.Record(DataValue.CreateInteger(10), DataValue.CreateString("Data for 10")),
+            new ArmDb.DataModel.Record(DataValue.CreateInteger(20), DataValue.CreateString("Data for 20")),
+            new ArmDb.DataModel.Record(DataValue.CreateInteger(30), DataValue.CreateString("Data for 30")),
+            new ArmDb.DataModel.Record(DataValue.CreateInteger(50), DataValue.CreateString("Data for 50")),
+            new ArmDb.DataModel.Record(DataValue.CreateInteger(60), DataValue.CreateString("Data for 60")),
+            new ArmDb.DataModel.Record(DataValue.CreateInteger(70), DataValue.CreateString("Data for 70"))
         };
 
     foreach (var row in initialRows)
@@ -36,7 +37,7 @@ public partial class BTreeLeafNodeTests
     Assert.Equal(6, nodeA.ItemCount); // Verify setup
 
     // The new row to insert, which will be the median of the combined 7 records
-    var newRowToInsert = new DataRow(DataValue.CreateInteger(40), DataValue.CreateString("Data for 40"));
+    var newRowToInsert = new ArmDb.DataModel.Record(DataValue.CreateInteger(40), DataValue.CreateString("Data for 40"));
     var expectedSeparatorKey = new Key([DataValue.CreateInteger(40)]);
 
     // Act
@@ -91,7 +92,7 @@ public partial class BTreeLeafNodeTests
 
     // Populate with an odd number of records
     var initialRows = Enumerable.Range(0, 5).Select(i =>
-        new DataRow(DataValue.CreateInteger(i * 10), DataValue.CreateString($"Data for {i * 10}"))
+        new Record(DataValue.CreateInteger(i * 10), DataValue.CreateString($"Data for {i * 10}"))
     ).ToList(); // 0, 10, 20, 30, 40
 
     foreach (var row in initialRows)
@@ -100,7 +101,7 @@ public partial class BTreeLeafNodeTests
     }
     Assert.Equal(5, nodeA.ItemCount);
 
-    var newRowToInsert = new DataRow(DataValue.CreateInteger(25), DataValue.CreateString("Data for 25"));
+    var newRowToInsert = new ArmDb.DataModel.Record(DataValue.CreateInteger(25), DataValue.CreateString("Data for 25"));
     var expectedSeparatorKey = new Key([DataValue.CreateInteger(25)]);
 
     // Act
@@ -155,10 +156,10 @@ public partial class BTreeLeafNodeTests
     // Populate P2 with some data
     for (int i = 0; i < 4; i++)
     {
-      leafToSplit.TryInsert(new DataRow(DataValue.CreateInteger(i * 10), DataValue.CreateString($"Data for {i * 10}")));
+      leafToSplit.TryInsert(new ArmDb.DataModel.Record(DataValue.CreateInteger(i * 10), DataValue.CreateString($"Data for {i * 10}")));
     }
 
-    var newRowToInsert = new DataRow(DataValue.CreateInteger(25), DataValue.CreateString($"Data for {25}"));
+    var newRowToInsert = new ArmDb.DataModel.Record(DataValue.CreateInteger(25), DataValue.CreateString($"Data for {25}"));
 
     // Act
     // Split P2. The new page P4 should be inserted between P2 and P3.
