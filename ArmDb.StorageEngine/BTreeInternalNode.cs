@@ -8,30 +8,18 @@ namespace ArmDb.StorageEngine;
 /// key and a pointer to a child node that contains key values less than the separator key, but greater
 /// than the previous separator key.
 /// </summary>
-internal sealed class BTreeInternalNode
+internal sealed class BTreeInternalNode : BTreeNode
 {
-  private readonly Page _page;
-  private readonly TableDefinition _tableDef;
   private static ColumnDefinition _tableIdColumnDefinition = new ColumnDefinition("_internal_tableId", new DataTypeInfo(PrimitiveDataType.Int), false);
   private static ColumnDefinition _pageIndexColumnDefinition = new ColumnDefinition("_internal_pageIndex", new DataTypeInfo(PrimitiveDataType.Int), false);
 
-  public BTreeInternalNode(Page page, TableDefinition tableDef)
+  public BTreeInternalNode(Page page, TableDefinition tableDef) : base(page, tableDef)
   {
-    ArgumentNullException.ThrowIfNull(page);
-    ArgumentNullException.ThrowIfNull(tableDef);
-
     var header = SlottedPage.GetHeader(page);
-    if (header.PageType == PageType.Invalid)
-    {
-      throw new ArgumentException($"Received an invalid Page!", "page");
-    }
     if (header.PageType != PageType.InternalNode)
     {
       throw new ArgumentException($"Expected an internal node page but recieved: {header.PageType}", "page");
     }
-
-    _page = page;
-    _tableDef = tableDef;
   }
 
   /// <summary>
