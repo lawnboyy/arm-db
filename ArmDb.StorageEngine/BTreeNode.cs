@@ -3,7 +3,7 @@ using ArmDb.SchemaDefinition;
 
 namespace ArmDb.StorageEngine;
 
-internal class BTreeNode
+internal abstract class BTreeNode
 {
   protected readonly Page _page;
   protected readonly TableDefinition _tableDefinition;

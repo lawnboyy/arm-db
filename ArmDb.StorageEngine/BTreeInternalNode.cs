@@ -34,7 +34,9 @@ internal sealed class BTreeInternalNode : BTreeNode
   /// <exception cref="NotImplementedException"></exception>
   internal PageId LookupChildPage(Key searchKey)
   {
-    // TODO: Implement binary search over slots.
+    // TODO: Use slot lookup binary search to determine which record to lookup and deserialize the child page pointer.
+    // var slotResult = FindSlotIndex(searchKey, )
+
     // For each slot, deserialize the (Key, PageId) pair.
     // Use KeyComparer to find the correct child pointer.
     // Handle the right-most pointer case.

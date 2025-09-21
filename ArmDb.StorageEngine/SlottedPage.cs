@@ -3,7 +3,7 @@ namespace ArmDb.StorageEngine;
 /// <summary>
 /// A static helper class providing methods to manage the structure of a Slotted Page.
 /// It operates directly on Page objects, interpreting their memory according to the layout:
-/// [ Header | Slots -> | Free Space | <- Data Cells ]
+/// [ Header | Slots -> | Free Space | <- Data Record Cells ]
 /// </summary>
 internal static class SlottedPage
 {
