@@ -25,7 +25,7 @@ internal class BTreeNode
   }
 
   /// <summary>
-  /// Performs a binary search on the leaf node page for the given search key.
+  /// Performs a binary search on the node page for the given search key.
   /// </summary>
   /// <param name="searchKey"></param>
   /// <param name="deserializeKey"></param>
