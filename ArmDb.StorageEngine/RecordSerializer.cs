@@ -248,7 +248,7 @@ internal static class RecordSerializer
   /// <exception cref="ArgumentNullException"></exception>
 
 
-  private static Key DeserializeKey(IReadOnlyList<ColumnDefinition> recordColumns, ColumnDefinition[] keyColumns, ReadOnlySpan<byte> recordData)
+  public static Key DeserializeKey(IReadOnlyList<ColumnDefinition> recordColumns, ColumnDefinition[] keyColumns, ReadOnlySpan<byte> recordData)
   {
     var keyColumnCount = keyColumns.Count();
     var columnCount = recordColumns.Count();

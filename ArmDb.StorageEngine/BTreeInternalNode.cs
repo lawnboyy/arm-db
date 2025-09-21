@@ -34,13 +34,22 @@ internal sealed class BTreeInternalNode : BTreeNode
   /// <exception cref="NotImplementedException"></exception>
   internal PageId LookupChildPage(Key searchKey)
   {
-    // TODO: Use slot lookup binary search to determine which record to lookup and deserialize the child page pointer.
-    // var slotResult = FindSlotIndex(searchKey, )
+    // Use slot lookup binary search to determine which record to lookup and deserialize the child page pointer.
+    var slotIndex = FindSlotIndex(searchKey, recordData => DeserializeEntryKey(_tableDefinition, recordData));
+
+    if (slotIndex < 0)
+    {
+      var convertedIndex = ~slotIndex;
+      // Return the page ID associated with the record at the given slot.
+      var recordData = SlottedPage.GetRecord(_page, convertedIndex);
+      var (key, pageId) = DeserializeEntry(_tableDefinition, recordData);
+      return pageId;
+    }
 
     // For each slot, deserialize the (Key, PageId) pair.
     // Use KeyComparer to find the correct child pointer.
     // Handle the right-most pointer case.
-    throw new NotImplementedException();
+    throw new Exception("TODO: Handle additional cases.");
   }
 
   // You will also need these helpers (or similar)
@@ -48,9 +57,11 @@ internal sealed class BTreeInternalNode : BTreeNode
   {
     // First, construct a column list that represents the internal node record. This will be the primary key
     // columns, followed by the columns that make up the child pointer columns, the table ID and the page index.
-    var nodeColumns = tableDef.GetPrimaryKeyColumnDefinitions();
-    nodeColumns.Append(_tableIdColumnDefinition);
-    nodeColumns.Append(_pageIndexColumnDefinition);
+    var keyColumns = tableDef.GetPrimaryKeyColumnDefinitions();
+    var recordColumns = new List<ColumnDefinition>();
+    recordColumns.AddRange(keyColumns);
+    recordColumns.Add(_tableIdColumnDefinition);
+    recordColumns.Add(_pageIndexColumnDefinition);
 
     // Construct our data row (should really be called record since it represents an abstraction below a data row)
     var tableId = DataValue.CreateInteger(childPageId.TableId);
@@ -59,21 +70,23 @@ internal sealed class BTreeInternalNode : BTreeNode
     values.AddRange([tableId, pageIndex]);
     Record record = new Record(values);
 
-    var bytes = RecordSerializer.Serialize(nodeColumns, record);
+    var bytes = RecordSerializer.Serialize(recordColumns, record);
 
     return bytes;
   }
 
-  internal static (Key key, PageId childPageId) DeserializeEntry(ReadOnlySpan<byte> recordData, TableDefinition tableDef)
+  internal static (Key key, PageId childPageId) DeserializeEntry(TableDefinition tableDef, ReadOnlySpan<byte> recordData)
   {
     // First, construct a column list that represents the internal node record. This will be the primary key
     // columns, followed by the columns that make up the child pointer columns, the table ID and the page index.
-    var nodeColumns = tableDef.GetPrimaryKeyColumnDefinitions();
-    nodeColumns.Append(_tableIdColumnDefinition);
-    nodeColumns.Append(_pageIndexColumnDefinition);
+    var keyColumns = tableDef.GetPrimaryKeyColumnDefinitions();
+    var recordColumns = new List<ColumnDefinition>();
+    recordColumns.AddRange(keyColumns);
+    recordColumns.Add(_tableIdColumnDefinition);
+    recordColumns.Add(_pageIndexColumnDefinition);
 
     // Now we can deserialize an internal node record entry.
-    var data = RecordSerializer.Deserialize(nodeColumns, recordData);
+    var data = RecordSerializer.Deserialize(recordColumns, recordData);
 
     if (data == null)
     {
@@ -87,5 +100,27 @@ internal sealed class BTreeInternalNode : BTreeNode
     int pageIndex = (int)values[values.Count - 1].Value!;
     var pageId = new PageId(tableId, pageIndex);
     return (key, childPageId: pageId);
+  }
+
+  private static Key DeserializeEntryKey(TableDefinition tableDef, ReadOnlySpan<byte> recordData)
+  {
+    // First, construct a column list that represents the internal node record. This will be the primary key
+    // columns, followed by the columns that make up the child pointer columns, the table ID and the page index.
+    var keyColumns = tableDef.GetPrimaryKeyColumnDefinitions();
+    var recordColumns = new List<ColumnDefinition>();
+    recordColumns.AddRange(keyColumns);
+    recordColumns.Add(_tableIdColumnDefinition);
+    recordColumns.Add(_pageIndexColumnDefinition);
+
+    // Now we can deserialize an internal node record entry's key.
+    var data = RecordSerializer.DeserializeKey(recordColumns, keyColumns, recordData);
+
+    if (data == null)
+    {
+      throw new Exception("Deserialized entry was null!");
+    }
+
+    var key = new Key(data.Values);
+    return key;
   }
 }
