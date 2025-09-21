@@ -273,10 +273,10 @@ internal static class RecordSerializer
 
       var columnDef = tableDef.Columns[i];
 
-      var isPrimaryKeyColumn = keyColumns.Select(k => k.Name).Contains(columnDef.Name);
+      var isKeyColumn = keyColumns.Select(k => k.Name).Contains(columnDef.Name);
       int keyColumnIndex = -1;
 
-      if (isPrimaryKeyColumn)
+      if (isKeyColumn)
       {
         // Capture the index of this column so we can ensure our deserialized key is ordered correctly...
         // Determine the index of the key column within the key        
@@ -287,7 +287,7 @@ internal static class RecordSerializer
       if (IsColumnValueNull(nullBitmap, i))
       {
         // Create the null value for the column and continue...
-        if (isPrimaryKeyColumn)
+        if (isKeyColumn)
           throw new InvalidDataException($"Primary key column '{columnDef.Name}' cannot be null.");
 
         // There is no data written if the value is null, so we don't need to update either offset here...
@@ -298,7 +298,7 @@ internal static class RecordSerializer
       {
         // Get the size of the column from the schema definition...
         int dataSize = columnDef.DataType.GetFixedSize();
-        if (isPrimaryKeyColumn)
+        if (isKeyColumn)
           rowValues[keyColumnIndex] = DeserializeFixedSizeColumnValue(columnDef, recordData, currentFixedSizedDataOffset, dataSize);
         currentFixedSizedDataOffset += dataSize;
       }
@@ -309,7 +309,7 @@ internal static class RecordSerializer
         int dataSize = BinaryUtilities.ReadInt32LittleEndian(dataSizeData);
         // Advance our variable length data offset past the length of this value...
         currentVariableSizedDataOffset += sizeof(int);
-        if (isPrimaryKeyColumn)
+        if (isKeyColumn)
           rowValues[keyColumnIndex] = DeserializeVariableSizeColumnValue(columnDef, recordData, currentVariableSizedDataOffset, dataSize);
         // Advance the variable length data offset past the actual data...
         currentVariableSizedDataOffset += dataSize;
