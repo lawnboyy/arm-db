@@ -235,7 +235,7 @@ internal static class RecordSerializer
   public static Key DeserializePrimaryKey(TableDefinition tableDef, ReadOnlySpan<byte> recordData)
   {
     var keyColumns = tableDef.GetPrimaryKeyColumnDefinitions();
-    return DeserializeKey(tableDef, keyColumns, recordData);
+    return DeserializeKey(tableDef.Columns, keyColumns, recordData);
   }
 
   /// <summary>
@@ -248,10 +248,10 @@ internal static class RecordSerializer
   /// <exception cref="ArgumentNullException"></exception>
 
 
-  private static Key DeserializeKey(TableDefinition tableDef, ColumnDefinition[] keyColumns, ReadOnlySpan<byte> recordData)
+  private static Key DeserializeKey(IReadOnlyList<ColumnDefinition> recordColumns, ColumnDefinition[] keyColumns, ReadOnlySpan<byte> recordData)
   {
     var keyColumnCount = keyColumns.Count();
-    var columnCount = tableDef.Columns.Count();
+    var columnCount = recordColumns.Count();
     var rowValues = new DataValue[keyColumnCount];
 
     // Determine the size of the null bitmap in bytes based on how many columns we have. We need
@@ -262,7 +262,7 @@ internal static class RecordSerializer
 
     // We'll use 2 pointers, one for fixed size data and one for variable size data...
     var currentFixedSizedDataOffset = nullBitmapSize;
-    var currentVariableSizedDataOffset = CalculateVariableLengthDataOffset(tableDef.Columns, nullBitmap);
+    var currentVariableSizedDataOffset = CalculateVariableLengthDataOffset(recordColumns, nullBitmap);
 
     var keyColumnsFound = 0;
     for (int i = 0; i < columnCount; i++)
@@ -271,7 +271,7 @@ internal static class RecordSerializer
       if (keyColumnsFound >= keyColumnCount)
         break;
 
-      var columnDef = tableDef.Columns[i];
+      var columnDef = recordColumns[i];
 
       var isKeyColumn = keyColumns.Select(k => k.Name).Contains(columnDef.Name);
       int keyColumnIndex = -1;
