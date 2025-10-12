@@ -115,4 +115,77 @@ public partial class BTreeInternalNodeTests
     // Assert
     Assert.Equal(expectedChildPageId, actualChildPageId);
   }
+
+  [Fact]
+  public void LookupChildPage_WhenKeyEqualsLargestKey_ReturnsRightmostPointer()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.InternalNode);
+    var internalNode = new BTreeInternalNode(page, tableDef);
+
+    // Setup is the same as the previous tests
+    var key100 = new Key([DataValue.CreateInteger(100)]);
+    var childPageId10 = new PageId(1, 10);
+    var key200 = new Key([DataValue.CreateInteger(200)]); // Largest key
+    var childPageId20 = new PageId(1, 20);
+    var rightmostChildPageId = new PageId(1, 30);
+
+    var entry1Bytes = BTreeInternalNode.SerializeEntry(key100, childPageId10, tableDef);
+    var entry2Bytes = BTreeInternalNode.SerializeEntry(key200, childPageId20, tableDef);
+    SlottedPage.TryAddRecord(page, entry1Bytes, 0);
+    SlottedPage.TryAddRecord(page, entry2Bytes, 1);
+    new PageHeader(page).RightmostChildPageIndex = rightmostChildPageId.PageIndex;
+
+    // The key to search for is EQUAL to the largest key in the node
+    var searchKey = new Key([DataValue.CreateInteger(200)]);
+    var expectedChildPageId = rightmostChildPageId;
+
+    // Act
+    PageId actualChildPageId = internalNode.LookupChildPage(searchKey);
+
+    // Assert
+    Assert.Equal(expectedChildPageId, actualChildPageId);
+  }
+
+  [Fact]
+  public void LookupChildPage_WhenKeyEqualsNonLargestKey_ReturnsCorrectPointer()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.InternalNode);
+    var internalNode = new BTreeInternalNode(page, tableDef);
+
+    // Setup with three separator keys
+    // Ptr at slot 0 (page 10): keys < 100
+    // Ptr at slot 1 (page 20): keys >= 100 and < 200
+    // Ptr at slot 2 (page 30): keys >= 200 and < 300
+    // Rightmost ptr (page 40): for keys >= 300
+    var key100 = new Key([DataValue.CreateInteger(100)]);
+    var childPageId10 = new PageId(1, 10);
+    var key200 = new Key([DataValue.CreateInteger(200)]);
+    var childPageId20 = new PageId(1, 20);
+    var key300 = new Key([DataValue.CreateInteger(300)]);
+    var childPageId30 = new PageId(1, 30);
+    var rightmostChildPageId = new PageId(1, 40);
+
+    SlottedPage.TryAddRecord(page, BTreeInternalNode.SerializeEntry(key100, childPageId10, tableDef), 0);
+    SlottedPage.TryAddRecord(page, BTreeInternalNode.SerializeEntry(key200, childPageId20, tableDef), 1);
+    SlottedPage.TryAddRecord(page, BTreeInternalNode.SerializeEntry(key300, childPageId30, tableDef), 2);
+    new PageHeader(page).RightmostChildPageIndex = rightmostChildPageId.PageIndex;
+
+    // The key to search for is EQUAL to the first key in the node
+    var searchKey = new Key([DataValue.CreateInteger(100)]);
+    // Since key >= 100, we should follow the pointer for the next range [100..200),
+    // which is the pointer stored with the key 200.
+    var expectedChildPageId = childPageId20;
+
+    // Act
+    PageId actualChildPageId = internalNode.LookupChildPage(searchKey);
+
+    // Assert
+    Assert.Equal(expectedChildPageId, actualChildPageId);
+  }
 }

@@ -34,6 +34,11 @@ internal sealed class BTreeInternalNode : BTreeNode
   /// <exception cref="NotImplementedException"></exception>
   internal PageId LookupChildPage(Key searchKey)
   {
+    // All the records for this page and it's children will have the same table ID since it is a clustered
+    // index for a single table.
+    var tableId = _page.Id.TableId;
+    var header = SlottedPage.GetHeader(_page);
+
     // Use slot lookup binary search to determine which record to lookup and deserialize the child page pointer.
     var slotIndex = FindSlotIndex(searchKey, recordData => DeserializeEntryKey(_tableDefinition, recordData));
 
@@ -46,27 +51,40 @@ internal sealed class BTreeInternalNode : BTreeNode
 
       // If the slot index of the insertion point is equal to the number of records in the page, then the key we're looking for
       // is greater than or equal to the largest key and we need to return the right-most child pointer.
-      var header = SlottedPage.GetHeader(_page);
       if (convertedIndex >= header.ItemCount)
       {
-        // Construct the page ID to return...
-        // All the records for this page and it's children will have the same table ID since it is a clustered
-        // index for a single table.
-        var tableId = _page.Id.TableId;
-        var rightmostPageId = new PageId(tableId, header.RightmostChildPageIndex);
-        return rightmostPageId;
+        // Construct the page ID of the right-most child pointer to return...        
+        var rightmostChildPageId = new PageId(tableId, header.RightmostChildPageIndex);
+        return rightmostChildPageId;
       }
-
-      // Return the page ID associated with the record at the given slot.
-      var recordData = SlottedPage.GetRecord(_page, convertedIndex);
-      var (key, pageId) = DeserializeEntry(_tableDefinition, recordData);
-      return pageId;
+      else // Return the separator key node's child pointer.
+      {
+        // Return the page ID associated with the record at the given slot.
+        var recordData = SlottedPage.GetRecord(_page, convertedIndex);
+        var (key, childPageId) = DeserializeEntry(_tableDefinition, recordData);
+        return childPageId;
+      }
     }
-
-    // For each slot, deserialize the (Key, PageId) pair.
-    // Use KeyComparer to find the correct child pointer.
-    // Handle the right-most pointer case.
-    throw new Exception("TODO: Handle additional cases.");
+    else // We got a separate key match. The separator keys are the exclusive upper bound, so we need to return the pointer to the right of the separator key.
+    {
+      // Since the key is a match for a separator key which is an upper bounds, we want to return the slot to the right of the found key.
+      var adjustedSlotIndex = slotIndex + 1;
+      // First check if the slot index is equal to or greater than the number of records.
+      // If so, then we need to return the right-most pointer.
+      if (adjustedSlotIndex == header.ItemCount)
+      {
+        // Construct the page ID of the right-most child pointer to return...        
+        var rightmostChildPageId = new PageId(tableId, header.RightmostChildPageIndex);
+        return rightmostChildPageId;
+      }
+      else // Otherwise, we need to return the child page ID of the separator key node to the right of the slot index.
+      {
+        // Return the page ID associated with the record at the given slot.
+        var recordData = SlottedPage.GetRecord(_page, adjustedSlotIndex);
+        var (key, childPageId) = DeserializeEntry(_tableDefinition, recordData);
+        return childPageId;
+      }
+    }
   }
 
   // You will also need these helpers (or similar)
