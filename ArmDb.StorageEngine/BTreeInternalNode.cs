@@ -34,6 +34,11 @@ internal sealed class BTreeInternalNode : BTreeNode
   /// <exception cref="NotImplementedException"></exception>
   internal PageId LookupChildPage(Key searchKey)
   {
+    if (searchKey == null)
+    {
+      throw new ArgumentNullException(nameof(searchKey), "Search key cannot be null!");
+    }
+
     // All the records for this page and it's children will have the same table ID since it is a clustered
     // index for a single table.
     var tableId = _page.Id.TableId;

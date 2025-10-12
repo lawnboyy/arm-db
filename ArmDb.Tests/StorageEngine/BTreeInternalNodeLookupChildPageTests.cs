@@ -188,4 +188,157 @@ public partial class BTreeInternalNodeTests
     // Assert
     Assert.Equal(expectedChildPageId, actualChildPageId);
   }
+
+  [Fact]
+  public void LookupChildPage_OnEmptyNode_AlwaysReturnsRightmostPointer()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.InternalNode);
+    var internalNode = new BTreeInternalNode(page, tableDef);
+
+    // Set the rightmost pointer on the empty page
+    var rightmostChildPageId = new PageId(1, 50);
+    new PageHeader(page).RightmostChildPageIndex = rightmostChildPageId.PageIndex;
+
+    // The search key can be anything, as there are no keys to compare against
+    var searchKey = new Key([DataValue.CreateInteger(12345)]);
+    var expectedChildPageId = rightmostChildPageId;
+
+    // Act
+    PageId actualChildPageId = internalNode.LookupChildPage(searchKey);
+
+    // Assert
+    Assert.Equal(expectedChildPageId, actualChildPageId);
+  }
+
+  [Theory]
+  [InlineData(50, 10)] // Key < separator, should return left pointer
+  [InlineData(100, 20)] // Key == separator, should return right pointer
+  [InlineData(150, 20)] // Key > separator, should return right pointer
+  public void LookupChildPage_OnSingleEntryNode_ReturnsCorrectPointers(int searchKeyValue, int expectedPageIndex)
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.InternalNode);
+    var internalNode = new BTreeInternalNode(page, tableDef);
+
+    // Node contains one separator key (100)
+    // Its pointer (page 10) is for keys < 100
+    // The rightmost pointer (page 20) is for keys >= 100
+    var separatorKey = new Key([DataValue.CreateInteger(100)]);
+    var leftChildPageId = new PageId(1, 10);
+    var rightChildPageId = new PageId(1, 20);
+
+    var entryBytes = BTreeInternalNode.SerializeEntry(separatorKey, leftChildPageId, tableDef);
+    SlottedPage.TryAddRecord(page, entryBytes, 0);
+    new PageHeader(page).RightmostChildPageIndex = rightChildPageId.PageIndex;
+
+    var searchKey = new Key([DataValue.CreateInteger(searchKeyValue)]);
+    var expectedChildPageId = new PageId(1, expectedPageIndex);
+
+    // Act
+    PageId actualChildPageId = internalNode.LookupChildPage(searchKey);
+
+    // Assert
+    Assert.Equal(expectedChildPageId, actualChildPageId);
+  }
+
+  // --- Test Data Source for Composite Key Lookups ---
+  public static IEnumerable<object[]> CompositeKeyLookup_TestData()
+  {
+    // Setup:
+    // Page contains two separator keys: ('Engineering', 200) and ('Sales', 100)
+    // Pointers:
+    // - childPageId10: for keys < ('Engineering', 200)
+    // - childPageId20: for keys >= ('Engineering', 200) AND < ('Sales', 100)
+    // - rightmostChildPageId (30): for keys >= ('Sales', 100)
+
+    // Case 1: Search key is less than all keys
+    yield return new object[]
+    {
+      new Key([DataValue.CreateString("Admin"), DataValue.CreateInteger(999)]),
+      10 // Expected PageIndex
+    };
+
+    // Case 2: Search key's first part matches, second part is smaller
+    yield return new object[]
+    {
+        new Key([DataValue.CreateString("Engineering"), DataValue.CreateInteger(150)]),
+        10 // Expected PageIndex
+    };
+
+    // Case 3: Search key exactly matches the first separator key
+    yield return new object[]
+    {
+      new Key([DataValue.CreateString("Engineering"), DataValue.CreateInteger(200)]),
+      20 // Expected PageIndex (should go to the next bucket)
+    };
+
+    // Case 4: Search key is between the two separator keys
+    yield return new object[]
+    {
+      new Key([DataValue.CreateString("Marketing"), DataValue.CreateInteger(1)]),
+      20 // Expected PageIndex
+    };
+
+    // Case 5: Search key exactly matches the second (largest) separator key
+    yield return new object[]
+    {
+      new Key([DataValue.CreateString("Sales"), DataValue.CreateInteger(100)]),
+      30 // Expected PageIndex (should go to rightmost pointer)
+    };
+
+    // Case 6: Search key is greater than all keys
+    yield return new object[]
+    {
+      new Key([DataValue.CreateString("Support"), DataValue.CreateInteger(1)]),
+      30 // Expected PageIndex (should go to rightmost pointer)
+    };
+  }
+
+  [Theory]
+  [MemberData(nameof(CompositeKeyLookup_TestData))]
+  public void LookupChildPage_WithCompositeKey_ReturnsCorrectPointer(Key searchKey, int expectedPageIndex)
+  {
+    // Arrange
+    var tableDef = CreateCompositePKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.InternalNode);
+    var internalNode = new BTreeInternalNode(page, tableDef);
+
+    var keyEng = new Key([DataValue.CreateString("Engineering"), DataValue.CreateInteger(200)]);
+    var childPageId10 = new PageId(1, 10);
+    var keySales = new Key([DataValue.CreateString("Sales"), DataValue.CreateInteger(100)]);
+    var childPageId20 = new PageId(1, 20);
+    var rightmostChildPageId = new PageId(1, 30);
+
+    SlottedPage.TryAddRecord(page, BTreeInternalNode.SerializeEntry(keyEng, childPageId10, tableDef), 0);
+    SlottedPage.TryAddRecord(page, BTreeInternalNode.SerializeEntry(keySales, childPageId20, tableDef), 1);
+    new PageHeader(page).RightmostChildPageIndex = rightmostChildPageId.PageIndex;
+
+    var expectedChildPageId = new PageId(1, expectedPageIndex);
+
+    // Act
+    PageId actualChildPageId = internalNode.LookupChildPage(searchKey);
+
+    // Assert
+    Assert.Equal(expectedChildPageId, actualChildPageId);
+  }
+
+  [Fact]
+  public void LookupChildPage_WithNullSearchKey_ThrowsArgumentNullException()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.InternalNode);
+    var internalNode = new BTreeInternalNode(page, tableDef);
+    Key? nullKey = null;
+
+    // Act & Assert
+    Assert.Throws<ArgumentNullException>("searchKey", () => internalNode.LookupChildPage(nullKey!));
+  }
 }

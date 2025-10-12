@@ -53,4 +53,13 @@ public partial class BTreeInternalNodeTests
     var buffer = new byte[Page.Size];
     return new Page(new PageId(1, pageIndex), buffer.AsMemory());
   }
+
+  private static TableDefinition CreateCompositePKTable()
+  {
+    var tableDef = new TableDefinition("CompositePKTable");
+    tableDef.AddColumn(new ColumnDefinition("OrgName", new DataTypeInfo(PrimitiveDataType.Varchar, 50), isNullable: false));
+    tableDef.AddColumn(new ColumnDefinition("EmployeeId", new DataTypeInfo(PrimitiveDataType.Int), isNullable: false));
+    tableDef.AddConstraint(new PrimaryKeyConstraint("CompositePKTable", new[] { "OrgName", "EmployeeId" }));
+    return tableDef;
+  }
 }
