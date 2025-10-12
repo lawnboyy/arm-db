@@ -8,8 +8,6 @@ namespace ArmDb.StorageEngine;
 /// </summary>
 public readonly ref struct PageHeader
 {
-  // --- Header Constants: Layout and Offsets ---
-
   /// <summary>
   /// Total size of the page header in bytes.
   /// </summary>
@@ -19,7 +17,7 @@ public readonly ref struct PageHeader
 
   internal const int PAGE_LSN_OFFSET = 0;
   internal const int ITEM_COUNT_OFFSET = 8;
-  internal const int DATA_START_OFFSET = 12; // Renamed const, resolving conflict
+  internal const int DATA_START_OFFSET = 12;
   internal const int PARENT_PAGE_INDEX_OFFSET = 16;
   internal const int TYPE_SPECIFIC_POINTER_1_OFFSET = 20;
   internal const int TYPE_SPECIFIC_POINTER_2_OFFSET = 24;
@@ -125,8 +123,6 @@ public readonly ref struct PageHeader
       BinaryPrimitives.WriteInt32LittleEndian(_headerSpan.Slice(TYPE_SPECIFIC_POINTER_2_OFFSET), value);
     }
   }
-
-  // --- B+Tree Internal Page Specific Property ---
 
   /// <summary>
   /// Gets or sets the PageIndex of the right-most child pointer in a B+Tree internal node.

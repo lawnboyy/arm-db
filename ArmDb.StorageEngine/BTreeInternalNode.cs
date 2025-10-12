@@ -4,7 +4,7 @@ using ArmDb.SchemaDefinition;
 namespace ArmDb.StorageEngine;
 
 /// <summary>
-/// Represents an internal node in a B*Tree clustered index. Each internal node a contain separator
+/// Represents an internal node in a B*Tree clustered index. Each internal node contains a separator
 /// key and a pointer to a child node that contains key values less than the separator key, but greater
 /// than the previous separator key.
 /// </summary>
@@ -43,6 +43,20 @@ internal sealed class BTreeInternalNode : BTreeNode
     if (slotIndex < 0)
     {
       var convertedIndex = ~slotIndex;
+
+      // If the slot index of the insertion point is equal to the number of records in the page, then the key we're looking for
+      // is greater than or equal to the largest key and we need to return the right-most child pointer.
+      var header = SlottedPage.GetHeader(_page);
+      if (convertedIndex >= header.ItemCount)
+      {
+        // Construct the page ID to return...
+        // All the records for this page and it's children will have the same table ID since it is a clustered
+        // index for a single table.
+        var tableId = _page.Id.TableId;
+        var rightmostPageId = new PageId(tableId, header.RightmostChildPageIndex);
+        return rightmostPageId;
+      }
+
       // Return the page ID associated with the record at the given slot.
       var recordData = SlottedPage.GetRecord(_page, convertedIndex);
       var (key, pageId) = DeserializeEntry(_tableDefinition, recordData);
