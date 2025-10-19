@@ -1,4 +1,5 @@
 using ArmDb.DataModel;
+using ArmDb.DataModel.Exceptions;
 using ArmDb.StorageEngine;
 
 namespace ArmDb.UnitTests.StorageEngine;
@@ -98,5 +99,100 @@ public partial class BTreeInternalNodeTests
     // Verify the page content was not modified by the failed insert
     var pageStateAfter = page.Data.ToArray();
     Assert.True(pageStateBefore.SequenceEqual(pageStateAfter), "Page content should not be modified on a failed insert.");
+  }
+
+  [Fact]
+  public void TryInsert_WhenKeyAlreadyExists_ThrowsDuplicateKeyException()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.InternalNode);
+    var internalNode = new BTreeInternalNode(page, tableDef);
+
+    var existingKey = new Key([DataValue.CreateInteger(100)]);
+    var existingPageId = new PageId(1, 10);
+    internalNode.InsertEntryForTest(existingKey, existingPageId);
+
+    var pageStateBefore = page.Data.ToArray(); // Snapshot state
+
+    var newPageIdForDuplicateKey = new PageId(1, 20);
+
+    // Act & Assert
+    var ex = Assert.Throws<DuplicateKeyException>(() =>
+        internalNode.TryInsert(existingKey, newPageIdForDuplicateKey)
+    );
+
+    Assert.Contains($"The key '{existingKey}' already exists", ex.Message);
+
+    // Verify the page was not modified
+    var pageStateAfter = page.Data.ToArray();
+    Assert.True(pageStateBefore.SequenceEqual(pageStateAfter), "Page should not be modified on a duplicate key error.");
+  }
+
+  [Fact]
+  public void TryInsert_WithNewSmallestKey_InsertsAtBeginning()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.InternalNode);
+    var internalNode = new BTreeInternalNode(page, tableDef);
+
+    // Pre-populate with existing entries
+    internalNode.InsertEntryForTest(new Key([DataValue.CreateInteger(100)]), new PageId(1, 10));
+    internalNode.InsertEntryForTest(new Key([DataValue.CreateInteger(200)]), new PageId(1, 20));
+
+    // The new entry has the smallest key
+    var keyToInsert = new Key([DataValue.CreateInteger(50)]);
+    var pageIdToInsert = new PageId(1, 5);
+
+    // Act
+    bool success = internalNode.TryInsert(keyToInsert, pageIdToInsert);
+
+    // Assert
+    Assert.True(success);
+    var header = new PageHeader(page);
+    Assert.Equal(3, header.ItemCount);
+
+    // Verify the new entry is now at slot 0
+    var entry0 = internalNode.GetEntryForTest(0);
+    Assert.Equal(keyToInsert, entry0.key);
+    Assert.Equal(pageIdToInsert, entry0.childPageId);
+
+    // Verify the other entries were shifted right
+    var entry1 = internalNode.GetEntryForTest(1);
+    Assert.Equal(new Key([DataValue.CreateInteger(100)]), entry1.key);
+  }
+
+  [Fact]
+  public void TryInsert_WithNewLargestKey_InsertsAtEnd()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.InternalNode);
+    var internalNode = new BTreeInternalNode(page, tableDef);
+
+    // Pre-populate with existing entries
+    internalNode.InsertEntryForTest(new Key([DataValue.CreateInteger(100)]), new PageId(1, 10));
+    internalNode.InsertEntryForTest(new Key([DataValue.CreateInteger(200)]), new PageId(1, 20));
+
+    // The new entry has the largest key
+    var keyToInsert = new Key([DataValue.CreateInteger(300)]);
+    var pageIdToInsert = new PageId(1, 30);
+
+    // Act
+    bool success = internalNode.TryInsert(keyToInsert, pageIdToInsert);
+
+    // Assert
+    Assert.True(success);
+    var header = new PageHeader(page);
+    Assert.Equal(3, header.ItemCount);
+
+    // Verify the new entry is now at the last slot (index 2)
+    var entry2 = internalNode.GetEntryForTest(2);
+    Assert.Equal(keyToInsert, entry2.key);
+    Assert.Equal(pageIdToInsert, entry2.childPageId);
   }
 }
