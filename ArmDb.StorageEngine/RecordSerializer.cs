@@ -32,13 +32,8 @@ namespace ArmDb.StorageEngine;
 /// </summary>
 internal static class RecordSerializer
 {
-  // For serializing key, child pointer pairs in internal nodes.
-  private static ColumnDefinition _tableIdColumnDefinition = new ColumnDefinition("_internal_tableId", new DataTypeInfo(PrimitiveDataType.Int), false);
-  private static ColumnDefinition _pageIndexColumnDefinition = new ColumnDefinition("_internal_pageIndex", new DataTypeInfo(PrimitiveDataType.Int), false);
-
-
   /// <summary>
-  /// Serializes a DataRow into a byte array using the given column definitions. It is expected that
+  /// Serializes a Record into a byte array using the given column definitions. It is expected that
   /// the row column data matches the ordering and types of the table column definitions.
   /// </summary>
   /// <param name="tableDef"></param>

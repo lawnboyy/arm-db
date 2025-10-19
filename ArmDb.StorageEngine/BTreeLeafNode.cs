@@ -214,38 +214,16 @@ internal sealed class BTreeLeafNode : BTreeNode
   /// <summary>
   /// Attempts to insert a new row in the leaf page. If the key is a duplicate, an exception is
   /// thrown. If the page is full, then the leaf node will be split. If the key is not a duplicate
-  /// and there is sufficient space, the row is inserted into the leaf node.
+  /// and there is sufficient space, the row is inserted into the leaf node. Delegates to the base
+  /// class TryInsert method.
   /// </summary>
   /// <param name="row"></param>
   /// <returns></returns>
   internal bool TryInsert(Record row)
   {
-    // Find the primary key...
-    var primaryKey = row.GetPrimaryKey(_tableDefinition);
-
-    // Check if there is space available to insert the node...
-    var freeSpace = SlottedPage.GetFreeSpace(_page);
-    var serializedRecord = RecordSerializer.Serialize(_tableDefinition.Columns, row);
-    // If there is not enough space, don't insert the row and return false;
-    if (serializedRecord.Length + Slot.Size > freeSpace)
-    {
-      return false;
-    }
-
-    // Insert the node.
-    var slotIndex = FindPrimaryKeySlotIndex(primaryKey);
-
-    // If the slot index is postive, then the key was found and we cannot insert a duplicate...
-    if (slotIndex >= 0)
-    {
-      throw new DuplicateKeyException($"The key '{primaryKey}' already exists");
-    }
-
-    var convertedIndex = ~slotIndex;
-
-    SlottedPage.TryAddRecord(_page, serializedRecord, convertedIndex);
-
-    return true;
+    // Call the BTreeNode base class TryInsert method...
+    return TryInsert(row, _tableDefinition.Columns, recordBytes =>
+        RecordSerializer.DeserializePrimaryKey(_tableDefinition, recordBytes));
   }
 
   /// <summary>

@@ -1,4 +1,5 @@
 using ArmDb.DataModel;
+using ArmDb.DataModel.Exceptions;
 using ArmDb.SchemaDefinition;
 
 namespace ArmDb.StorageEngine;
@@ -22,6 +23,44 @@ internal abstract class BTreeNode
 
     _page = page;
     _tableDefinition = tableDefinition;
+  }
+
+  /// <summary>
+  /// Attempts to insert a new row in the page. If the key is a duplicate, an exception is
+  /// thrown. If the page is full, the method returns false indicating the node must be split. 
+  /// If the key is not a duplicate and there is sufficient space, the row is inserted into the
+  /// node.
+  /// </summary>
+  /// <param name="row"></param>
+  /// <returns></returns>
+  internal bool TryInsert(Record row, IReadOnlyList<ColumnDefinition> columnDefinitions, Func<ReadOnlySpan<byte>, Key> deserializeKey)
+  {
+    // Find the primary key...
+    var primaryKey = row.GetPrimaryKey(_tableDefinition);
+
+    // Check if there is space available to insert the node...
+    var freeSpace = SlottedPage.GetFreeSpace(_page);
+    var serializedRecord = RecordSerializer.Serialize(columnDefinitions, row);
+    // If there is not enough space, don't insert the row and return false;
+    if (serializedRecord.Length + Slot.Size > freeSpace)
+    {
+      return false;
+    }
+
+    // Insert the node.
+    var slotIndex = FindSlotIndex(primaryKey, deserializeKey);
+
+    // If the slot index is postive, then the key was found and we cannot insert a duplicate...
+    if (slotIndex >= 0)
+    {
+      throw new DuplicateKeyException($"The key '{primaryKey}' already exists");
+    }
+
+    var convertedIndex = ~slotIndex;
+
+    SlottedPage.TryAddRecord(_page, serializedRecord, convertedIndex);
+
+    return true;
   }
 
   /// <summary>
