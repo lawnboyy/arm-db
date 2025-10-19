@@ -26,21 +26,21 @@ internal abstract class BTreeNode
   }
 
   /// <summary>
-  /// Attempts to insert a new row in the page. If the key is a duplicate, an exception is
+  /// Attempts to insert a new record in the page. If the key is a duplicate, an exception is
   /// thrown. If the page is full, the method returns false indicating the node must be split. 
   /// If the key is not a duplicate and there is sufficient space, the row is inserted into the
   /// node.
   /// </summary>
-  /// <param name="row"></param>
+  /// <param name="record"></param>
   /// <returns></returns>
-  internal bool TryInsert(Record row, IReadOnlyList<ColumnDefinition> columnDefinitions, Func<ReadOnlySpan<byte>, Key> deserializeKey)
+  internal bool TryInsert(Record record, IReadOnlyList<ColumnDefinition> columnDefinitions, Func<ReadOnlySpan<byte>, Key> deserializeKey)
   {
     // Find the primary key...
-    var primaryKey = row.GetPrimaryKey(_tableDefinition);
+    var primaryKey = record.GetPrimaryKey(_tableDefinition);
 
     // Check if there is space available to insert the node...
     var freeSpace = SlottedPage.GetFreeSpace(_page);
-    var serializedRecord = RecordSerializer.Serialize(columnDefinitions, row);
+    var serializedRecord = RecordSerializer.Serialize(columnDefinitions, record);
     // If there is not enough space, don't insert the row and return false;
     if (serializedRecord.Length + Slot.Size > freeSpace)
     {
@@ -69,7 +69,7 @@ internal abstract class BTreeNode
   /// <param name="searchKey"></param>
   /// <param name="deserializeKey"></param>
   /// <returns>Positive integer value if exact match is found. Negative integer value representing
-  /// the insertion point index if no exact match is found.</returns>
+  /// the bitwise complement of the insertion point index if no exact match is found.</returns>
   protected int FindSlotIndex(Key searchKey, Func<ReadOnlySpan<byte>, Key> deserializeKey)
   {
     // Get the item count from the page header...
