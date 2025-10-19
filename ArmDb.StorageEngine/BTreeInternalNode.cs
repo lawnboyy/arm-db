@@ -66,7 +66,7 @@ internal sealed class BTreeInternalNode : BTreeNode
       {
         // Return the page ID associated with the record at the given slot.
         var recordData = SlottedPage.GetRecord(_page, convertedIndex);
-        var (key, childPageId) = DeserializeEntry(_tableDefinition, recordData);
+        var (key, childPageId) = DeserializeRecord(_tableDefinition, recordData);
         return childPageId;
       }
     }
@@ -86,14 +86,13 @@ internal sealed class BTreeInternalNode : BTreeNode
       {
         // Return the page ID associated with the record at the given slot.
         var recordData = SlottedPage.GetRecord(_page, adjustedSlotIndex);
-        var (key, childPageId) = DeserializeEntry(_tableDefinition, recordData);
+        var (key, childPageId) = DeserializeRecord(_tableDefinition, recordData);
         return childPageId;
       }
     }
   }
 
-  // You will also need these helpers (or similar)
-  internal static byte[] SerializeEntry(Key key, PageId childPageId, TableDefinition tableDef)
+  internal static byte[] SerializeRecord(Key key, PageId childPageId, TableDefinition tableDef)
   {
     // First, construct a column list that represents the internal node record. This will be the primary key
     // columns, followed by the columns that make up the child pointer columns, the table ID and the page index.
@@ -115,7 +114,7 @@ internal sealed class BTreeInternalNode : BTreeNode
     return bytes;
   }
 
-  internal static (Key key, PageId childPageId) DeserializeEntry(TableDefinition tableDef, ReadOnlySpan<byte> recordData)
+  internal static (Key key, PageId childPageId) DeserializeRecord(TableDefinition tableDef, ReadOnlySpan<byte> recordData)
   {
     // First, construct a column list that represents the internal node record. This will be the primary key
     // columns, followed by the columns that make up the child pointer columns, the table ID and the page index.
@@ -163,4 +162,22 @@ internal sealed class BTreeInternalNode : BTreeNode
     var key = new Key(data.Values);
     return key;
   }
+
+#if DEBUG
+  // Helper for test setup
+  internal void InsertEntryForTest(Key key, PageId childPageId)
+  {
+    // Simplified insert that assumes order and space, for test setup only
+    var header = new PageHeader(_page);
+    var entryBytes = SerializeRecord(key, childPageId, _tableDefinition);
+    SlottedPage.TryAddRecord(_page, entryBytes, header.ItemCount);
+  }
+
+  // Helper for test verification
+  internal (Key key, PageId childPageId) GetEntryForTest(int slotIndex)
+  {
+    var recordBytes = SlottedPage.GetRecord(_page, slotIndex);
+    return DeserializeRecord(_tableDefinition, recordBytes);
+  }
+#endif
 }

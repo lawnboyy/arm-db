@@ -26,8 +26,8 @@ public partial class BTreeInternalNodeTests
 
     // Manually add the entries to the page using lower-level helpers
     // (BTreeInternalNode.Insert will be tested later)
-    var entry1Bytes = BTreeInternalNode.SerializeEntry(key100, childPageId10, tableDef);
-    var entry2Bytes = BTreeInternalNode.SerializeEntry(key200, childPageId20, tableDef);
+    var entry1Bytes = BTreeInternalNode.SerializeRecord(key100, childPageId10, tableDef);
+    var entry2Bytes = BTreeInternalNode.SerializeRecord(key200, childPageId20, tableDef);
     SlottedPage.TryAddRecord(page, entry1Bytes, 0);
     SlottedPage.TryAddRecord(page, entry2Bytes, 1);
     new PageHeader(page).RightmostChildPageIndex = rightmostChildPageId.PageIndex;
@@ -62,8 +62,8 @@ public partial class BTreeInternalNodeTests
     var childPageId20 = new PageId(1, 20);
     var rightmostChildPageId = new PageId(1, 30);
 
-    var entry1Bytes = BTreeInternalNode.SerializeEntry(key100, childPageId10, tableDef);
-    var entry2Bytes = BTreeInternalNode.SerializeEntry(key200, childPageId20, tableDef);
+    var entry1Bytes = BTreeInternalNode.SerializeRecord(key100, childPageId10, tableDef);
+    var entry2Bytes = BTreeInternalNode.SerializeRecord(key200, childPageId20, tableDef);
     SlottedPage.TryAddRecord(page, entry1Bytes, 0);
     SlottedPage.TryAddRecord(page, entry2Bytes, 1);
     new PageHeader(page).RightmostChildPageIndex = rightmostChildPageId.PageIndex;
@@ -99,8 +99,8 @@ public partial class BTreeInternalNodeTests
     var childPageId20 = new PageId(1, 20);
     var rightmostChildPageId = new PageId(1, 30);
 
-    var entry1Bytes = BTreeInternalNode.SerializeEntry(key100, childPageId10, tableDef);
-    var entry2Bytes = BTreeInternalNode.SerializeEntry(key200, childPageId20, tableDef);
+    var entry1Bytes = BTreeInternalNode.SerializeRecord(key100, childPageId10, tableDef);
+    var entry2Bytes = BTreeInternalNode.SerializeRecord(key200, childPageId20, tableDef);
     SlottedPage.TryAddRecord(page, entry1Bytes, 0);
     SlottedPage.TryAddRecord(page, entry2Bytes, 1);
     new PageHeader(page).RightmostChildPageIndex = rightmostChildPageId.PageIndex;
@@ -132,8 +132,8 @@ public partial class BTreeInternalNodeTests
     var childPageId20 = new PageId(1, 20);
     var rightmostChildPageId = new PageId(1, 30);
 
-    var entry1Bytes = BTreeInternalNode.SerializeEntry(key100, childPageId10, tableDef);
-    var entry2Bytes = BTreeInternalNode.SerializeEntry(key200, childPageId20, tableDef);
+    var entry1Bytes = BTreeInternalNode.SerializeRecord(key100, childPageId10, tableDef);
+    var entry2Bytes = BTreeInternalNode.SerializeRecord(key200, childPageId20, tableDef);
     SlottedPage.TryAddRecord(page, entry1Bytes, 0);
     SlottedPage.TryAddRecord(page, entry2Bytes, 1);
     new PageHeader(page).RightmostChildPageIndex = rightmostChildPageId.PageIndex;
@@ -171,9 +171,9 @@ public partial class BTreeInternalNodeTests
     var childPageId30 = new PageId(1, 30);
     var rightmostChildPageId = new PageId(1, 40);
 
-    SlottedPage.TryAddRecord(page, BTreeInternalNode.SerializeEntry(key100, childPageId10, tableDef), 0);
-    SlottedPage.TryAddRecord(page, BTreeInternalNode.SerializeEntry(key200, childPageId20, tableDef), 1);
-    SlottedPage.TryAddRecord(page, BTreeInternalNode.SerializeEntry(key300, childPageId30, tableDef), 2);
+    SlottedPage.TryAddRecord(page, BTreeInternalNode.SerializeRecord(key100, childPageId10, tableDef), 0);
+    SlottedPage.TryAddRecord(page, BTreeInternalNode.SerializeRecord(key200, childPageId20, tableDef), 1);
+    SlottedPage.TryAddRecord(page, BTreeInternalNode.SerializeRecord(key300, childPageId30, tableDef), 2);
     new PageHeader(page).RightmostChildPageIndex = rightmostChildPageId.PageIndex;
 
     // The key to search for is EQUAL to the first key in the node
@@ -232,7 +232,7 @@ public partial class BTreeInternalNodeTests
     var leftChildPageId = new PageId(1, 10);
     var rightChildPageId = new PageId(1, 20);
 
-    var entryBytes = BTreeInternalNode.SerializeEntry(separatorKey, leftChildPageId, tableDef);
+    var entryBytes = BTreeInternalNode.SerializeRecord(separatorKey, leftChildPageId, tableDef);
     SlottedPage.TryAddRecord(page, entryBytes, 0);
     new PageHeader(page).RightmostChildPageIndex = rightChildPageId.PageIndex;
 
@@ -315,8 +315,8 @@ public partial class BTreeInternalNodeTests
     var childPageId20 = new PageId(1, 20);
     var rightmostChildPageId = new PageId(1, 30);
 
-    SlottedPage.TryAddRecord(page, BTreeInternalNode.SerializeEntry(keyEng, childPageId10, tableDef), 0);
-    SlottedPage.TryAddRecord(page, BTreeInternalNode.SerializeEntry(keySales, childPageId20, tableDef), 1);
+    SlottedPage.TryAddRecord(page, BTreeInternalNode.SerializeRecord(keyEng, childPageId10, tableDef), 0);
+    SlottedPage.TryAddRecord(page, BTreeInternalNode.SerializeRecord(keySales, childPageId20, tableDef), 1);
     new PageHeader(page).RightmostChildPageIndex = rightmostChildPageId.PageIndex;
 
     var expectedChildPageId = new PageId(1, expectedPageIndex);
