@@ -22,6 +22,8 @@ internal sealed class BTreeInternalNode : BTreeNode
     }
   }
 
+  internal void SetRightmostChildId(int pageIndex) => new PageHeader(_page).RightmostChildPageIndex = pageIndex;
+
   /// <summary>
   /// Use the given key to find the corresponding child pointer. We need to do a binary
   /// search across the interal node's records and find the smallest separator key that
@@ -103,11 +105,99 @@ internal sealed class BTreeInternalNode : BTreeNode
   {
     // Construct the record we want to insert into the internal node. This is a (separator key, child pointer) pair.
     var recordToInsert = GetRecord(separatorKey, childPageId);
+    return TryInsert(recordToInsert);
+  }
+
+  /// <summary>
+  /// This method splits this internal node, adds the new separator key entry that points to the given child page ID,
+  /// then promotes the midpoint separator key record to its parent node, removing it from this internal node.
+  /// </summary>
+  /// <param name="newSeparatorKey">The new separator key to insert. It will either be in this node, the new sibling, or
+  /// promoted to this internal node's parent.</param>
+  /// <param name="childPageId">The page ID of the child this new separator key points to.</param>
+  /// <param name="newSiblingNode">A new right side sibling node to move half the records of this node to as part of the split.</param>
+  /// <returns>The midpoint separator key, removed from the current node, to promote to the parent.</returns>
+  internal Key SplitAndInsert(Key newSeparatorKey, PageId childPageId, BTreeInternalNode newSiblingNode)
+  {
+    var thisNodeHeader = new PageHeader(_page);
+
+    // Create a record for the new entry to insert.
+    var newRecord = new Record([
+      .. newSeparatorKey.Values,
+      DataValue.CreateInteger(childPageId.TableId),
+      DataValue.CreateInteger(childPageId.PageIndex)
+    ]);
+
+    // Create a sorted list of all the records for this node, including the internal node record we want to
+    // add.
+    var sortedRecords = new Record[thisNodeHeader.ItemCount + 1];
+    var keyComparer = new KeyComparer();
     var keyColumns = _tableDefinition.GetPrimaryKeyColumnDefinitions();
-    // Get the record column definition list for internal nodes.
-    var recordColumns = GetInternalNodeColumnDefinitions(keyColumns);
-    // Delegate the insert to the BTreeNode base class.
-    return TryInsert(recordToInsert, recordColumns, recordData => DeserializeRecordKey(_tableDefinition, recordData));
+
+    int sortedRecordIndex = 0;
+    bool newRecordInserted = false;
+    for (int slotIndex = 0; slotIndex < thisNodeHeader.ItemCount; slotIndex++)
+    {
+      // Fetch the record at the slot offset and deserialize it...
+      var currentRawRecord = SlottedPage.GetRecord(_page, slotIndex);
+      var internalNodeRecord = RecordSerializer.Deserialize(GetInternalNodeColumnDefinitions(keyColumns), currentRawRecord);
+      // The slot array is ordered, but we need to determine where to insert the new record...
+      var currentRecordKey = internalNodeRecord.GetPrimaryKey(_tableDefinition);
+      // If the key to insert is less than the current data row, insert the new row first...
+      if (!newRecordInserted && keyComparer.Compare(newSeparatorKey, currentRecordKey) < 0)
+      {
+        sortedRecords[sortedRecordIndex++] = newRecord;
+        newRecordInserted = true;
+      }
+      sortedRecords[sortedRecordIndex++] = internalNodeRecord;
+    }
+
+    // If we never inserted the new record, then it's the largest separator key so add it at the end...
+    if (sortedRecords[sortedRecords.Length - 1] == null)
+    {
+      sortedRecords[sortedRecords.Length - 1] = newRecord;
+    }
+
+    var totalRecords = sortedRecords.Length;
+
+    // Determine the midpoint key to promote to the parent.
+    var midpoint = totalRecords / 2;
+
+    // Get the separator key to promote
+    var midpointRecord = sortedRecords[midpoint];
+    var (keyToPromote, midpointPageId) = ExtractKeyAndPageId(_tableDefinition, midpointRecord);
+    var parentPageIndex = thisNodeHeader.ParentPageIndex;
+
+    // Capture the right-most child pointer of this node so we can move it to the new right hand sibling.
+    var newSiblingRightmostChildPageIndex = thisNodeHeader.RightmostChildPageIndex;
+
+    // Wipe our original page to prep for rewriting half the records and reclaiming fragmented space...
+    SlottedPage.Initialize(_page, PageType.InternalNode, parentPageIndex);
+
+    // Write the first half of our recoreds to this internal node...
+    for (int i = 0; i < midpoint; i++)
+    {
+      if (!TryInsert(sortedRecords[i]))
+      {
+        throw new Exception("Insert failed after a split! Something went terribly wrong since all inserts after a re-init of the leaf page are guaranteed to succeed.");
+      }
+    }
+
+    thisNodeHeader.RightmostChildPageIndex = midpointPageId.PageIndex;
+
+    // Write the second half of the data rows to the new node...
+    for (int i = midpoint + 1; i < sortedRecords.Length; i++)
+    {
+      if (!newSiblingNode.TryInsert(sortedRecords[i]))
+      {
+        throw new Exception("Insert failed after a split! Something went terribly wrong since all inserts on a fresh new leaf page are guaranteed to succeed.");
+      }
+    }
+
+    // Set the new right node's right most pointer...
+    newSiblingNode.SetRightmostChildId(newSiblingRightmostChildPageIndex);
+
+    return keyToPromote;
   }
 
   internal static byte[] SerializeRecord(Key key, PageId childPageId, TableDefinition tableDef)
@@ -139,20 +229,18 @@ internal sealed class BTreeInternalNode : BTreeNode
     recordColumns.Add(_pageIndexColumnDefinition);
 
     // Now we can deserialize an internal node record entry.
-    var data = RecordSerializer.Deserialize(recordColumns, recordData);
+    var record = RecordSerializer.Deserialize(recordColumns, recordData);
 
-    if (data == null)
-    {
-      throw new Exception("Deserialized entry was null!");
-    }
+    return ExtractKeyAndPageId(tableDef, record);
+  }
 
-    var values = data.Values;
-    var keyValues = values.Take(values.Count - 2).ToList();
-    var key = new Key(keyValues);
-    int tableId = (int)values[values.Count - 2].Value!;
-    int pageIndex = (int)values[values.Count - 1].Value!;
-    var pageId = new PageId(tableId, pageIndex);
-    return (key, childPageId: pageId);
+  private bool TryInsert(Record recordToInsert)
+  {
+    var keyColumns = _tableDefinition.GetPrimaryKeyColumnDefinitions();
+    // Get the record column definition list for internal nodes.
+    var recordColumns = GetInternalNodeColumnDefinitions(keyColumns);
+    // Delegate the insert to the BTreeNode base class.
+    return TryInsert(recordToInsert, recordColumns, recordData => DeserializeRecordKey(_tableDefinition, recordData));
   }
 
   private static Key DeserializeRecordKey(TableDefinition tableDef, ReadOnlySpan<byte> recordData)
@@ -199,6 +287,22 @@ internal sealed class BTreeInternalNode : BTreeNode
     recordColumns.Add(_pageIndexColumnDefinition);
 
     return recordColumns;
+  }
+
+  private static (Key key, PageId childPageId) ExtractKeyAndPageId(TableDefinition tableDef, Record record)
+  {
+    if (record == null)
+    {
+      throw new Exception("Deserialized entry was null!");
+    }
+
+    var values = record.Values;
+    var keyValues = values.Take(values.Count - 2).ToList();
+    var key = new Key(keyValues);
+    int tableId = (int)values[values.Count - 2].Value!;
+    int pageIndex = (int)values[values.Count - 1].Value!;
+    var pageId = new PageId(tableId, pageIndex);
+    return (key, childPageId: pageId);
   }
 
 #if DEBUG
