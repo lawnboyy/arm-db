@@ -11,8 +11,6 @@ namespace ArmDb.StorageEngine;
 /// </summary>
 internal sealed class BTreeLeafNode : BTreeNode
 {
-  internal int ItemCount => new PageHeader(_page).ItemCount;
-
   internal int PageIndex => _page.Id.PageIndex;
 
   internal int PrevPageIndex
@@ -129,6 +127,11 @@ internal sealed class BTreeLeafNode : BTreeNode
   /// <exception cref="NotImplementedException"></exception>
   internal Key SplitAndInsert(Record rowToInsert, BTreeLeafNode newLeaf, BTreeLeafNode? rightLeafSibling = null)
   {
+    if (newLeaf.ItemCount != 0)
+    {
+      throw new ArgumentException("The new sibling leaf must be an empty, initialized page", nameof(newLeaf));
+    }
+
     var thisLeafHeader = new PageHeader(_page);
 
     // Create a sorted list of data rows by looping through the existing leaf's records and adding them to the list. Include

@@ -10,6 +10,8 @@ internal abstract class BTreeNode
   protected readonly TableDefinition _tableDefinition;
   private readonly KeyComparer _keyComparer = new KeyComparer();
 
+  internal int ItemCount => new PageHeader(_page).ItemCount;
+
   internal BTreeNode(Page page, TableDefinition tableDefinition)
   {
     ArgumentNullException.ThrowIfNull(page);

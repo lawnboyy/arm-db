@@ -119,6 +119,11 @@ internal sealed class BTreeInternalNode : BTreeNode
   /// <returns>The midpoint separator key, removed from the current node, to promote to the parent.</returns>
   internal Key SplitAndInsert(Key newSeparatorKey, PageId childPageId, BTreeInternalNode newSiblingNode)
   {
+    if (newSiblingNode.ItemCount != 0)
+    {
+      throw new ArgumentException("The new sibling must be an empty, initialized page", nameof(newSiblingNode));
+    }
+
     var thisNodeHeader = new PageHeader(_page);
 
     // Create a record for the new entry to insert.
