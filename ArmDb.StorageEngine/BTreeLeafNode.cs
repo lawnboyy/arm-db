@@ -92,6 +92,16 @@ internal sealed class BTreeLeafNode : BTreeNode
     );
   }
 
+  /// <summary>
+  /// Merges this leaf node's data into the left sibling node and reformats itself. The B*Tree
+  /// orchestrator will call this if it determines the data for 2 sibling leaf nodes can fit
+  /// into a single node. This would occur after a delete operation.
+  /// </summary>
+  /// <param name="leftSibling">The sibling to merge the data into.</param>
+  /// <param name="rightSibling">The right most sibling. Needed to update linked list pointer to left node.</param>
+  /// <exception cref="ArgumentNullException">Left sibling cannot be null.</exception>
+  /// <exception cref="BTreeNodeFullException">Critical error in which merging this node's data into the left
+  /// sibling causes it to overflow.</exception>
   internal void MergeLeft(BTreeLeafNode leftSibling, BTreeLeafNode? rightSibling = null)
   {
     if (leftSibling == null)
