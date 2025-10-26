@@ -94,6 +94,11 @@ internal sealed class BTreeLeafNode : BTreeNode
 
   internal void MergeLeft(BTreeLeafNode leftSibling, BTreeLeafNode? rightSibling = null)
   {
+    if (leftSibling == null)
+    {
+      throw new ArgumentNullException(nameof(leftSibling));
+    }
+
     // Write all the records in this node to the left sibling.
     // Loop through this leaf node's slots, look up the data rows and write them to the left sibling leaf node.
     for (var slotIndex = 0; slotIndex < ItemCount; slotIndex++)

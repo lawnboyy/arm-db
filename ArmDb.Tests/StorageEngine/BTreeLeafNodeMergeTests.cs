@@ -118,4 +118,21 @@ public partial class BTreeLeafNodeTests // Using partial to extend the existing 
     // rightNode (12) should now point back to leftNode (10)
     Assert.Equal(leftPage.Id.PageIndex, headerRight_after.PrevPageIndex);
   }
+
+  [Fact]
+  public void MergeInto_WithNullLeftSibling_ThrowsArgumentNullException()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage(11);
+    SlottedPage.Initialize(page, PageType.LeafNode);
+    var nodeToMerge = new BTreeLeafNode(page, tableDef);
+    BTreeLeafNode? leftSibling = null;
+
+    // Act & Assert
+    Assert.Throws<ArgumentNullException>("leftSibling", () =>
+        nodeToMerge.MergeLeft(leftSibling!) // Pass null for farRightSibling
+    );
+  }
+
 }
