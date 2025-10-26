@@ -100,7 +100,7 @@ internal sealed class BTreeLeafNode : BTreeNode
     }
 
     // Write all the records in this node to the left sibling.
-    // Loop through this leaf node's slots, look up the data rows and write them to the left sibling leaf node.
+    // Loop through this leaf node's slots, pull the raw record and append it to the left sibling's records.
     for (var slotIndex = 0; slotIndex < ItemCount; slotIndex++)
     {
       // Fetch the record using the slot offset...
