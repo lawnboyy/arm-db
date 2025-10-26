@@ -1,6 +1,7 @@
 using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
 using ArmDb.StorageEngine;
+using Record = ArmDb.DataModel.Record;
 
 namespace ArmDb.UnitTests.StorageEngine;
 
@@ -213,6 +214,106 @@ public partial class BTreeLeafNodeTests
     // Assert
     Assert.NotNull(result);
     Assert.Equal(row30, result);
+  }
+
+  [Fact]
+  public void GetAllRawRecords_ReturnsAllRawDataInOrder() // Renamed test
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.LeafNode);
+    var leafNode = new BTreeLeafNode(page, tableDef);
+
+    var row10 = new Record(DataValue.CreateInteger(10), DataValue.CreateString("Data 10"));
+    var row20 = new Record(DataValue.CreateInteger(20), DataValue.CreateString("Data 20"));
+    var row30 = new Record(DataValue.CreateInteger(30), DataValue.CreateString("Data 30"));
+
+    var row10Bytes = RecordSerializer.Serialize(tableDef.Columns, row10);
+    var row20Bytes = RecordSerializer.Serialize(tableDef.Columns, row20);
+    var row30Bytes = RecordSerializer.Serialize(tableDef.Columns, row30);
+
+    SlottedPage.TryAddRecord(page, row10Bytes, 0);
+    SlottedPage.TryAddRecord(page, row20Bytes, 1);
+    SlottedPage.TryAddRecord(page, row30Bytes, 2);
+
+    // Act
+    var rawRecords = leafNode.GetAllRawRecords(); // Renamed method call
+
+    // Assert
+    Assert.NotNull(rawRecords);
+    Assert.Equal(3, rawRecords.Count);
+
+    // Check raw data for each entry
+    Assert.True(row10Bytes.AsSpan().SequenceEqual(rawRecords[0]));
+    Assert.True(row20Bytes.AsSpan().SequenceEqual(rawRecords[1]));
+    Assert.True(row30Bytes.AsSpan().SequenceEqual(rawRecords[2]));
+  }
+
+  [Fact]
+  public void GetAllRawRecords_OnEmptyPage_ReturnsEmptyList()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.LeafNode);
+    var leafNode = new BTreeLeafNode(page, tableDef);
+
+    // Act
+    var rawRecords = leafNode.GetAllRawRecords(); // Renamed method call
+
+    // Assert
+    Assert.NotNull(rawRecords);
+    Assert.Empty(rawRecords);
+  }
+
+  [Fact]
+  public void Repopulate_WithValidData_CorrectlyWipesAndReloadsPage()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.LeafNode);
+    var leafNode = new BTreeLeafNode(page, tableDef);
+
+    // 1. Add some "original" data to the page that must be wiped
+    var originalRow = new Record(DataValue.CreateInteger(10), DataValue.CreateString("Original Data"));
+    leafNode.TryInsert(originalRow);
+
+    // 2. Prepare the new, sorted list of records to be loaded
+    var newRow100 = new Record(DataValue.CreateInteger(100), DataValue.CreateString("New A"));
+    var newRow200 = new Record(DataValue.CreateInteger(200), DataValue.CreateString("New B"));
+
+    var newRecords = new List<Record> { newRow100, newRow200 };
+
+    // The orchestrator would serialize the records to pass to Repopulate
+    var newRawRecords = newRecords
+        .Select(r => RecordSerializer.Serialize(tableDef.Columns, r))
+        .ToList();
+
+    // Act
+    // Call the Repopulate method (which you will implement)
+    leafNode.Repopulate(newRawRecords);
+
+    // Assert
+    // 1. Verify the item count is correct
+    Assert.Equal(2, leafNode.ItemCount);
+
+    // 2. Verify the old data is gone
+    var oldKey = new Key([DataValue.CreateInteger(10)]);
+    Assert.Null(leafNode.Search(oldKey));
+
+    // 3. Verify the new data is present and in the correct order
+    var newKey100 = new Key([DataValue.CreateInteger(100)]);
+    var newKey200 = new Key([DataValue.CreateInteger(200)]);
+
+    Assert.Equal(newRow100, leafNode.Search(newKey100));
+    Assert.Equal(newRow200, leafNode.Search(newKey200));
+
+    // 4. Verify the slots are in the correct order by checking the raw data
+    var entries = leafNode.GetAllRawRecords(); // Renamed method call
+    Assert.True(newRawRecords[0].AsSpan().SequenceEqual(entries[0]));
+    Assert.True(newRawRecords[1].AsSpan().SequenceEqual(entries[1]));
   }
 
   private static TableDefinition CreateTestTable()

@@ -41,6 +41,39 @@ internal abstract class BTreeNode
   }
 
   /// <summary>
+  /// Returns all the raw records stored in this node. This is a performant way to pull all the records
+  /// when deserialization is not needed. The B*Tree orchestrator will use this method to pull all the
+  /// records when a redistribution is necessary to balance records between sibling nodes. It can pull
+  /// the records for a left node and a right node, combine them, then write the first half of the records
+  /// to the left node and the second half of the records to the right node. The records are guaranteed
+  /// to be returned in sorted order so a simple concatenation will guaranteed that the redistribution
+  /// list will be sorted without the need to deserialize primary keys.
+  /// </summary>
+  /// <returns>Read-only list of byte arrays representing the raw records. The list is guaranteed
+  /// to be in sorted order.</returns>
+  internal IReadOnlyList<byte[]> GetAllRawRecords()
+  {
+    var rawRecords = new List<byte[]>();
+    for (var slotIndex = 0; slotIndex < ItemCount; slotIndex++)
+    {
+      var rawRecord = SlottedPage.GetRawRecord(_page, slotIndex).ToArray();
+
+      rawRecords.Add(rawRecord);
+    }
+
+    return rawRecords;
+  }
+
+  /// <summary>
+  /// Calculates the number of data in bytes currently stored on this page.
+  /// </summary>
+  /// <returns>The number of bytes stored on the page.</returns>
+  internal int GetBytesUsed()
+  {
+    return Page.Size - SlottedPage.GetFreeSpace(_page);
+  }
+
+  /// <summary>
   /// Attempts to insert a new record in the page. If the key is a duplicate, an exception is
   /// thrown. If the page is full, the method returns false indicating the node must be split. 
   /// If the key is not a duplicate and there is sufficient space, the row is inserted into the
@@ -79,15 +112,6 @@ internal abstract class BTreeNode
   }
 
   /// <summary>
-  /// Calculates the number of data in bytes currently stored on this page.
-  /// </summary>
-  /// <returns>The number of bytes stored on the page.</returns>
-  internal int GetBytesUsed()
-  {
-    return Page.Size - SlottedPage.GetFreeSpace(_page);
-  }
-
-  /// <summary>
   /// Performs a binary search on the node page for the given search key.
   /// </summary>
   /// <param name="searchKey"></param>
@@ -122,5 +146,17 @@ internal abstract class BTreeNode
     // value contains the insertion point. We return the bitwise complement
     // of the insertion index.
     return ~low;
+  }
+
+  protected void Repopulate(List<byte[]> rawRecords, PageType pageType)
+  {
+    // Wipe the page...
+    SlottedPage.Initialize(_page, pageType);
+
+    // Write the given records to the page.
+    for (var slotIndex = 0; slotIndex < rawRecords.Count; slotIndex++)
+    {
+      SlottedPage.TryAddRecord(_page, rawRecords[slotIndex], slotIndex);
+    }
   }
 }

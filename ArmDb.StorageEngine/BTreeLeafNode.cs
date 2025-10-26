@@ -127,6 +127,15 @@ internal sealed class BTreeLeafNode : BTreeNode
   }
 
   /// <summary>
+  /// Wipes and rewrites the given records to the node.
+  /// </summary>
+  /// <param name="rawRecords"></param>
+  internal void Repopulate(List<byte[]> rawRecords)
+  {
+    Repopulate(rawRecords, PageType.LeafNode);
+  }
+
+  /// <summary>
   /// Searches the leaf node page for a record with the given key. The data row is returned, if
   /// found, otherwise, null is returned.
   /// </summary>
