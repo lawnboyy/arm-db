@@ -161,7 +161,7 @@ internal static class SlottedPage
   /// <param name="page">The page to read from.</param>
   /// <param name="slotIndex">The slot index to jump to.</param>
   /// <returns></returns>
-  internal static ReadOnlySpan<byte> GetRecord(Page page, int slotIndex)
+  internal static ReadOnlySpan<byte> GetRawRecord(Page page, int slotIndex)
   {
     ArgumentNullException.ThrowIfNull(page, nameof(page));
 

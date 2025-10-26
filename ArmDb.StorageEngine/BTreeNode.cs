@@ -28,6 +28,19 @@ internal abstract class BTreeNode
   }
 
   /// <summary>
+  /// Appends a raw record to the page. This method is meant to be used for performance when merging
+  /// 2 nodes together. If we are merging the right node's records into the left node, then we know
+  /// the data is already correctly ordered without needing to deserialize the key and check for the
+  /// insertion point.
+  /// </summary>
+  /// <param name="rawRecord">The raw record to write to the next slot in this node.</param>
+  /// <returns>True if the record is successfully appended.</returns>
+  internal bool Append(ReadOnlySpan<byte> rawRecord)
+  {
+    return SlottedPage.TryAddRecord(_page, rawRecord, ItemCount);
+  }
+
+  /// <summary>
   /// Attempts to insert a new record in the page. If the key is a duplicate, an exception is
   /// thrown. If the page is full, the method returns false indicating the node must be split. 
   /// If the key is not a duplicate and there is sufficient space, the row is inserted into the
@@ -66,6 +79,15 @@ internal abstract class BTreeNode
   }
 
   /// <summary>
+  /// Calculates the number of data in bytes currently stored on this page.
+  /// </summary>
+  /// <returns>The number of bytes stored on the page.</returns>
+  internal int GetBytesUsed()
+  {
+    return Page.Size - SlottedPage.GetFreeSpace(_page);
+  }
+
+  /// <summary>
   /// Performs a binary search on the node page for the given search key.
   /// </summary>
   /// <param name="searchKey"></param>
@@ -84,7 +106,7 @@ internal abstract class BTreeNode
     while (low <= high)
     {
       var mid = low + (high - low) / 2;
-      var midPointKeyBytes = SlottedPage.GetRecord(_page, mid);
+      var midPointKeyBytes = SlottedPage.GetRawRecord(_page, mid);
       var midPointKey = deserializeKey(midPointKeyBytes);
       var compareResult = _keyComparer.Compare(searchKey, midPointKey);
 

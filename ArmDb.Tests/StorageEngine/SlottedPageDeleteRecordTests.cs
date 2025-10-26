@@ -126,17 +126,17 @@ public partial class SlottedPageTests
     Assert.Equal(slot3Before, slot2After);
 
     // 3. Verify the data for the shifted slots is still correct and accessible at their new slot indices
-    var recordAtSlot1After = SlottedPage.GetRecord(page, 1);
+    var recordAtSlot1After = SlottedPage.GetRawRecord(page, 1);
     Assert.True(item3.AsSpan().SequenceEqual(recordAtSlot1After));
-    var recordAtSlot2After = SlottedPage.GetRecord(page, 2);
+    var recordAtSlot2After = SlottedPage.GetRawRecord(page, 2);
     Assert.True(item4.AsSpan().SequenceEqual(recordAtSlot2After));
 
 
     // 4. Verify the original first record is untouched
-    var recordAtSlot0After = SlottedPage.GetRecord(page, 0);
+    var recordAtSlot0After = SlottedPage.GetRawRecord(page, 0);
     Assert.True(item1.AsSpan().SequenceEqual(recordAtSlot0After));
 
     // 5. Verify that accessing the old, now out-of-bounds slot index throws an exception
-    Assert.Throws<ArgumentOutOfRangeException>("slotIndex", () => SlottedPage.GetRecord(page, 3));
+    Assert.Throws<ArgumentOutOfRangeException>("slotIndex", () => SlottedPage.GetRawRecord(page, 3));
   }
 }

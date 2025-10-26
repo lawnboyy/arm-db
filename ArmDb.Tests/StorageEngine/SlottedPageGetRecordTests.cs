@@ -21,9 +21,9 @@ public partial class SlottedPageTests
     SlottedPage.TryAddRecord(page, item3, 2);
 
     // Act
-    ReadOnlySpan<byte> record1Span = SlottedPage.GetRecord(page, 0);
-    ReadOnlySpan<byte> record2Span = SlottedPage.GetRecord(page, 1);
-    ReadOnlySpan<byte> record3Span = SlottedPage.GetRecord(page, 2);
+    ReadOnlySpan<byte> record1Span = SlottedPage.GetRawRecord(page, 0);
+    ReadOnlySpan<byte> record2Span = SlottedPage.GetRawRecord(page, 1);
+    ReadOnlySpan<byte> record3Span = SlottedPage.GetRawRecord(page, 2);
 
     // Assert
     Assert.True(item1.AsSpan().SequenceEqual(record1Span));
@@ -52,8 +52,8 @@ public partial class SlottedPageTests
     page.WriteInt32(slot0_physical_offset + sizeof(int), 0); // Set length to 0
 
     // Act
-    ReadOnlySpan<byte> deletedRecordSpan = SlottedPage.GetRecord(page, 0);
-    ReadOnlySpan<byte> existingRecordSpan = SlottedPage.GetRecord(page, 1);
+    ReadOnlySpan<byte> deletedRecordSpan = SlottedPage.GetRawRecord(page, 0);
+    ReadOnlySpan<byte> existingRecordSpan = SlottedPage.GetRawRecord(page, 1);
 
     // Assert
     Assert.True(deletedRecordSpan.IsEmpty);
@@ -75,7 +75,7 @@ public partial class SlottedPageTests
 
     // Act & Assert
     var ex = Assert.Throws<ArgumentOutOfRangeException>("slotIndex", () =>
-        SlottedPage.GetRecord(page, invalidIndex)
+        SlottedPage.GetRawRecord(page, invalidIndex)
     );
     // Verify the exception message is helpful
     Assert.Contains($"Slot index {invalidIndex} is out of range.", ex.Message);
@@ -90,7 +90,7 @@ public partial class SlottedPageTests
 
     // Act & Assert
     var ex = Assert.Throws<ArgumentOutOfRangeException>("slotIndex", () =>
-        SlottedPage.GetRecord(page, 0)
+        SlottedPage.GetRawRecord(page, 0)
     );
     // Verify the specific message for an empty page
     Assert.Contains("The page is empty.", ex.Message);
@@ -105,7 +105,7 @@ public partial class SlottedPageTests
     // Act & Assert
     Assert.Throws<ArgumentNullException>("page", () =>
         // Use null-forgiving operator (!) as we are intentionally testing the null case
-        SlottedPage.GetRecord(nullPage!, 0)
+        SlottedPage.GetRawRecord(nullPage!, 0)
     );
   }
 }

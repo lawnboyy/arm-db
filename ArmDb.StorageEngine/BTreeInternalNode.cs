@@ -67,7 +67,7 @@ internal sealed class BTreeInternalNode : BTreeNode
       else // Return the separator key node's child pointer.
       {
         // Return the page ID associated with the record at the given slot.
-        var recordData = SlottedPage.GetRecord(_page, convertedIndex);
+        var recordData = SlottedPage.GetRawRecord(_page, convertedIndex);
         var (key, childPageId) = DeserializeRecord(_tableDefinition, recordData);
         return childPageId;
       }
@@ -87,7 +87,7 @@ internal sealed class BTreeInternalNode : BTreeNode
       else // Otherwise, we need to return the child page ID of the separator key node to the right of the slot index.
       {
         // Return the page ID associated with the record at the given slot.
-        var recordData = SlottedPage.GetRecord(_page, adjustedSlotIndex);
+        var recordData = SlottedPage.GetRawRecord(_page, adjustedSlotIndex);
         var (key, childPageId) = DeserializeRecord(_tableDefinition, recordData);
         return childPageId;
       }
@@ -144,7 +144,7 @@ internal sealed class BTreeInternalNode : BTreeNode
     for (int slotIndex = 0; slotIndex < thisNodeHeader.ItemCount; slotIndex++)
     {
       // Fetch the record at the slot offset and deserialize it...
-      var currentRawRecord = SlottedPage.GetRecord(_page, slotIndex);
+      var currentRawRecord = SlottedPage.GetRawRecord(_page, slotIndex);
       var internalNodeRecord = RecordSerializer.Deserialize(GetInternalNodeColumnDefinitions(keyColumns), currentRawRecord);
       // The slot array is ordered, but we need to determine where to insert the new record...
       var currentRecordKey = internalNodeRecord.GetPrimaryKey(_tableDefinition);
@@ -323,7 +323,7 @@ internal sealed class BTreeInternalNode : BTreeNode
   // Helper for test verification
   internal (Key key, PageId childPageId) GetEntryForTest(int slotIndex)
   {
-    var recordBytes = SlottedPage.GetRecord(_page, slotIndex);
+    var recordBytes = SlottedPage.GetRawRecord(_page, slotIndex);
     return DeserializeRecord(_tableDefinition, recordBytes);
   }
 #endif

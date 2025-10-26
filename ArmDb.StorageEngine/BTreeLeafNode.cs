@@ -7,7 +7,7 @@ namespace ArmDb.StorageEngine;
 
 /// <summary>
 /// Represents a leaf node of a B+Tree structure. Leaf nodes are slotted pages that store
-/// the actual table records.
+/// the actual table rows.
 /// </summary>
 internal sealed class BTreeLeafNode : BTreeNode
 {
@@ -92,6 +92,35 @@ internal sealed class BTreeLeafNode : BTreeNode
     );
   }
 
+  internal void MergeLeft(BTreeLeafNode leftSibling, BTreeLeafNode? rightSibling = null)
+  {
+    // Write all the records in this node to the left sibling.
+    // Loop through this leaf node's slots, look up the data rows and write them to the left sibling leaf node.
+    for (var slotIndex = 0; slotIndex < ItemCount; slotIndex++)
+    {
+      // Fetch the record using the slot offset...
+      var rawRecord = SlottedPage.GetRawRecord(_page, slotIndex);
+      // Write this record to the left sibling...
+      if (!leftSibling.Append(rawRecord))
+      {
+        // If we were unable to append the record, then there was not enough space. The caller (B*Tree orchestrator) is responsible
+        // for determining when a merge is possible, so this is an error condition that we cannot handle.
+        throw new BTreeNodeFullException("Could not merge due to a left sibling overflow!");
+      }
+    }
+    // Update the pointer to the right sibling node.
+    leftSibling.NextPageIndex = NextPageIndex;
+
+    // If there is a right sibling, point it back to the left node.
+    if (rightSibling != null)
+    {
+      rightSibling.PrevPageIndex = leftSibling.PageIndex;
+    }
+
+    // Wipe this page...
+    SlottedPage.Initialize(_page, PageType.LeafNode);
+  }
+
   /// <summary>
   /// Searches the leaf node page for a record with the given key. The data row is returned, if
   /// found, otherwise, null is returned.
@@ -104,7 +133,7 @@ internal sealed class BTreeLeafNode : BTreeNode
     var slotIndex = FindPrimaryKeySlotIndex(key);
     if (slotIndex >= 0)
     {
-      var recordData = SlottedPage.GetRecord(_page, slotIndex);
+      var recordData = SlottedPage.GetRawRecord(_page, slotIndex);
       return RecordSerializer.Deserialize(_tableDefinition.Columns, recordData);
     }
 
@@ -145,7 +174,7 @@ internal sealed class BTreeLeafNode : BTreeNode
     for (int slotIndex = 0; slotIndex < ItemCount; slotIndex++)
     {
       // Get the record...
-      var rawRecord = SlottedPage.GetRecord(_page, slotIndex);
+      var rawRecord = SlottedPage.GetRawRecord(_page, slotIndex);
       var dataRow = RecordSerializer.Deserialize(_tableDefinition.Columns, rawRecord);
       // The slot array is ordered, but we need to determine where to insert the new record...
       var currentDataRowKey = dataRow.GetPrimaryKey(_tableDefinition);

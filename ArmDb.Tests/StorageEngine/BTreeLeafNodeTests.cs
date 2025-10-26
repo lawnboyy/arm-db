@@ -231,6 +231,14 @@ public partial class BTreeLeafNodeTests
     return new Page(newPageId, buffer.AsMemory());
   }
 
+  private static Page CreateTestPage(int pageIndex)
+  {
+    var buffer = new byte[Page.Size];
+    PageId newPageId = new PageId(1, pageIndex);
+
+    return new Page(newPageId, buffer.AsMemory());
+  }
+
   private static TableDefinition CreateIntPKTable()
   {
     var tableDef = new TableDefinition("IntPKTable");
