@@ -435,6 +435,23 @@ public partial class BTreeLeafNodeTests
     Assert.NotNull(leafNode.Search(originalRowKey));
   }
 
+  [Fact]
+  public void Repopulate_WithNullList_ThrowsArgumentNullException()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.LeafNode);
+    var leafNode = new BTreeLeafNode(page, tableDef);
+    List<byte[]>? nullRawRecords = null;
+
+    // Act & Assert
+    // Verify the method throws an ArgumentNullException when the list is null
+    Assert.Throws<ArgumentNullException>("sortedRawRecords", () =>
+        leafNode.Repopulate(nullRawRecords!)
+    );
+  }
+
   private static TableDefinition CreateTestTable()
   {
     var tableDef = new TableDefinition("TestUsers");

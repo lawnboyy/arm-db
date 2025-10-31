@@ -150,6 +150,11 @@ internal abstract class BTreeNode
 
   protected void Repopulate(List<byte[]> rawRecords, PageType pageType)
   {
+    if (rawRecords == null)
+    {
+      throw new ArgumentNullException("sortedRawRecords");
+    }
+
     // First check the available space to make sure it's enough for the incoming records...
     var freeSpaceInBytes = SlottedPage.EMPTY_PAGE_FREE_SPACE;
 
