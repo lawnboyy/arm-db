@@ -150,13 +150,37 @@ internal abstract class BTreeNode
 
   protected void Repopulate(List<byte[]> rawRecords, PageType pageType)
   {
+    // First check the available space to make sure it's enough for the incoming records...
+    var freeSpaceInBytes = SlottedPage.EMPTY_PAGE_FREE_SPACE;
+
+    // We'll need enough space for the records themselves, as well as their corresponding
+    // slots, one per record.
+    var totalSizeOfRecords = rawRecords.Aggregate(0, (total, bytes) =>
+    {
+      total += bytes.Length;
+      return total;
+    });
+    var spaceNeededInBytes = totalSizeOfRecords + rawRecords.Count * Slot.Size;
+
+    // If we don't have enough space, it's an error condition, so throw an exception.
+    if (spaceNeededInBytes > freeSpaceInBytes)
+    {
+      throw new InvalidOperationException("Data for repopulating is too large to fit on a single page.");
+    }
+
     // Wipe the page...
     SlottedPage.Initialize(_page, pageType);
 
     // Write the given records to the page.
     for (var slotIndex = 0; slotIndex < rawRecords.Count; slotIndex++)
     {
-      SlottedPage.TryAddRecord(_page, rawRecords[slotIndex], slotIndex);
+      if (!SlottedPage.TryAddRecord(_page, rawRecords[slotIndex], slotIndex))
+      {
+        // If there is not enough space, then we need to throw...
+        // This should not ever happen because we've already verified there
+        // is enough space to write the given records.
+        throw new InvalidOperationException("Detected an overflow after verifying the required space to re-populate. Something has gone terribly wrong!");
+      }
     }
   }
 }

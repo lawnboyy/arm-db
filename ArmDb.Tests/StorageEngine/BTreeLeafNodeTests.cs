@@ -316,6 +316,125 @@ public partial class BTreeLeafNodeTests
     Assert.True(newRawRecords[1].AsSpan().SequenceEqual(entries[1]));
   }
 
+  [Fact]
+  public void Repopulate_WithEmptyList_CorrectlyWipesPageAndSetsItemCountToZero()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.LeafNode);
+    var leafNode = new BTreeLeafNode(page, tableDef);
+
+    // 1. Add some "original" data to the page that must be wiped
+    var originalRow = new Record(DataValue.CreateInteger(10), DataValue.CreateString("Original Data"));
+    leafNode.TryInsert(originalRow);
+    Assert.Equal(1, leafNode.ItemCount); // Verify setup
+
+    // 2. Prepare an empty list of records
+    var emptyRawRecords = new List<byte[]>();
+    var oldKey = new Key([DataValue.CreateInteger(10)]);
+
+    // Act
+    leafNode.Repopulate(emptyRawRecords);
+
+    // Assert
+    // 1. Verify the item count is now zero
+    Assert.Equal(0, leafNode.ItemCount);
+
+    // 2. Verify the old data is gone
+    Assert.Null(leafNode.Search(oldKey));
+
+    // 3. Verify GetAllRawRecords returns an empty list
+    Assert.Empty(leafNode.GetAllRawRecords());
+
+    // 4. Verify the header is correctly reset
+    var header = new PageHeader(page);
+    Assert.Equal(0, header.ItemCount);
+    Assert.Equal(Page.Size, header.DataStartOffset); // Data offset reset to end of page
+  }
+
+  [Fact]
+  public void Repopulate_WhenDataIsTooLargeForPage_ThrowsInvalidOperationException()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable(); // Schema: (ID INT, Data VARCHAR)
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.LeafNode);
+    var leafNode = new BTreeLeafNode(page, tableDef);
+
+    // 1. Create a list of records that will not fit on a single page
+    // Use a string size that is definitely too large when repeated
+    var largeString = new string('A', 3000);
+    var newRawRecords = new List<byte[]>();
+
+    // Create 3 large records. 3 * (~3000 bytes + overhead) will not fit in 8KB.
+    for (int i = 0; i < 3; i++)
+    {
+      var row = new Record(DataValue.CreateInteger(i), DataValue.CreateString(largeString));
+      newRawRecords.Add(RecordSerializer.Serialize(tableDef.Columns, row));
+    }
+
+    // Act & Assert
+    // The Repopulate method should throw an exception when SlottedPage.TryAddRecord fails
+    // due to lack of space.
+    var ex = Assert.Throws<InvalidOperationException>(() =>
+        leafNode.Repopulate(newRawRecords)
+    );
+
+    Assert.Contains("not enough free space", ex.Message, StringComparison.OrdinalIgnoreCase);
+
+    // 3. Verify the page was reset but remains empty
+    // The Repopulate method should leave the page in a clean, initialized state
+    // even after the failed bulk load.
+    Assert.Equal(0, leafNode.ItemCount);
+    var header = new PageHeader(page);
+    Assert.Equal(0, header.ItemCount);
+    Assert.Equal(Page.Size, header.DataStartOffset);
+  }
+
+  [Fact]
+  public void Repopulate_WhenDataIsTooLarge_FailsUpFrontAndDoesNotModifyPage()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable(); // Schema: (ID INT, Data VARCHAR)
+    var page = CreateTestPage();
+    SlottedPage.Initialize(page, PageType.LeafNode);
+    var leafNode = new BTreeLeafNode(page, tableDef);
+
+    // 1. Add some "original" data to the page
+    var originalRow = new Record(DataValue.CreateInteger(10), DataValue.CreateString("Original Data"));
+    var originalRowKey = originalRow.GetPrimaryKey(tableDef);
+    leafNode.TryInsert(originalRow);
+
+    // 2. Create a list of new records that is too large to fit on an empty page
+    var largeString = new string('A', 3000);
+    var newRawRecords = new List<byte[]>();
+    for (int i = 0; i < 3; i++) // 3 * ~3000 bytes + overhead > 8KB
+    {
+      var row = new Record(DataValue.CreateInteger(i), DataValue.CreateString(largeString));
+      newRawRecords.Add(RecordSerializer.Serialize(tableDef.Columns, row));
+    }
+
+    // 3. Snapshot the original page state
+    var pageStateBefore = page.Data.ToArray();
+
+    // Act & Assert
+    // 4. Verify the method throws an exception
+    var ex = Assert.Throws<InvalidOperationException>(() =>
+        leafNode.Repopulate(newRawRecords)
+    );
+
+    Assert.Contains("Data for repopulating is too large to fit on a single page.", ex.Message, StringComparison.OrdinalIgnoreCase);
+
+    // 5. CRUCIAL: Verify the page was not modified
+    var pageStateAfter = page.Data.ToArray();
+    Assert.True(pageStateBefore.SequenceEqual(pageStateAfter), "Page was modified despite data being too large.");
+
+    // 6. Verify the original data is still present
+    Assert.Equal(1, leafNode.ItemCount);
+    Assert.NotNull(leafNode.Search(originalRowKey));
+  }
+
   private static TableDefinition CreateTestTable()
   {
     var tableDef = new TableDefinition("TestUsers");

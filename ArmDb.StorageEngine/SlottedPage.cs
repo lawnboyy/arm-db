@@ -7,6 +7,8 @@ namespace ArmDb.StorageEngine;
 /// </summary>
 internal static class SlottedPage
 {
+  public const int EMPTY_PAGE_FREE_SPACE = Page.Size - PageHeader.HEADER_SIZE;
+
   /// <summary>
   /// Initializes a new, empty page with a clean Slotted Page header for a specific PageType.
   /// This method should be called on a newly allocated page before any other operations.
