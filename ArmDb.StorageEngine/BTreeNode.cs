@@ -173,8 +173,9 @@ internal abstract class BTreeNode
       throw new InvalidOperationException("Data for repopulating is too large to fit on a single page.");
     }
 
-    // Wipe the page...
-    SlottedPage.Initialize(_page, pageType);
+    // Wipe the page, but maintain the parent page index.
+    var parentPageIndex = new PageHeader(_page).ParentPageIndex;
+    SlottedPage.Initialize(_page, pageType, parentPageIndex);
 
     // Write the given records to the page.
     for (var slotIndex = 0; slotIndex < rawRecords.Count; slotIndex++)

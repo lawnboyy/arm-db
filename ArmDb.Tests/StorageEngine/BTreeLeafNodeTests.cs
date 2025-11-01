@@ -381,7 +381,7 @@ public partial class BTreeLeafNodeTests
         leafNode.Repopulate(newRawRecords)
     );
 
-    Assert.Contains("not enough free space", ex.Message, StringComparison.OrdinalIgnoreCase);
+    Assert.Contains("Data for repopulating is too large to fit on a single page.", ex.Message, StringComparison.OrdinalIgnoreCase);
 
     // 3. Verify the page was reset but remains empty
     // The Repopulate method should leave the page in a clean, initialized state
@@ -450,6 +450,47 @@ public partial class BTreeLeafNodeTests
     Assert.Throws<ArgumentNullException>("sortedRawRecords", () =>
         leafNode.Repopulate(nullRawRecords!)
     );
+  }
+
+  [Fact]
+  public void Repopulate_WhenCalled_PreservesParentPageIndex()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var page = CreateTestPage();
+    int expectedParentIndex = 50; // A non-default parent index
+
+    // Initialize the page with the specific parent index
+    SlottedPage.Initialize(page, PageType.LeafNode, expectedParentIndex);
+    var leafNode = new BTreeLeafNode(page, tableDef);
+
+    // 1. Add some "original" data
+    var originalRow = new Record(DataValue.CreateInteger(10), DataValue.CreateString("Original Data"));
+    leafNode.TryInsert(originalRow);
+
+    // 2. Prepare a new, valid list of records for repopulation
+    var newRow = new Record(DataValue.CreateInteger(100), DataValue.CreateString("New A"));
+    var newRawRecords = new List<byte[]>
+    {
+      RecordSerializer.Serialize(tableDef.Columns, newRow)
+    };
+
+    // 3. Verify the parent index before acting
+    var headerBefore = new PageHeader(page);
+    Assert.Equal(expectedParentIndex, headerBefore.ParentPageIndex);
+
+    // Act
+    leafNode.Repopulate(newRawRecords);
+
+    // Assert
+    // 1. Verify the data was repopulated
+    Assert.Equal(1, leafNode.ItemCount);
+    Assert.NotNull(leafNode.Search(newRow.GetPrimaryKey(tableDef)));
+    Assert.Null(leafNode.Search(originalRow.GetPrimaryKey(tableDef)));
+
+    // 2. CRUCIAL: Verify the parent page index was preserved
+    var headerAfter = new PageHeader(page);
+    Assert.Equal(expectedParentIndex, headerAfter.ParentPageIndex);
   }
 
   private static TableDefinition CreateTestTable()
