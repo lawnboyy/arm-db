@@ -171,7 +171,7 @@ public partial class BTreeLeafNodeTests // Using partial to extend the existing 
     // The attempt to merge (which calls leftNode.AppendRawRecord) should fail
     // because leftNode does not have enough space for the new record.
     // This is a violation of the MergeLeft contract, which assumes space was pre-checked.
-    Assert.Throws<BTreeNodeFullException>(() =>
+    Assert.Throws<InvalidOperationException>(() =>
         rightNode.MergeLeft(leftNode, null)
     );
   }

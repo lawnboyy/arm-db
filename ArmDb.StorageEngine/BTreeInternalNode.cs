@@ -1,5 +1,6 @@
 using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
+using ArmDb.StorageEngine.Exceptions;
 
 namespace ArmDb.StorageEngine;
 
@@ -109,7 +110,36 @@ internal sealed class BTreeInternalNode : BTreeNode
       throw new ArgumentNullException(nameof(leftSibling));
     }
 
+    if (!HasSufficientSpace(GetAllRawRecords(), leftSibling.FreeSpace))
+    {
+      throw new InvalidOperationException("Cannot merge into left node due to insufficient space.");
+    }
 
+    // First append the separator key...
+    var serializedRecord = SerializeRecord(demotedSeparatorKey, demotedSeparatorKeyChildPage, _tableDefinition);
+    leftSibling.Append(serializedRecord);
+
+    // Write all the records in this node to the left sibling.
+    // Loop through this leaf node's slots, pull the raw record and append it to the left sibling's records.
+    for (var slotIndex = 0; slotIndex < ItemCount; slotIndex++)
+    {
+      // Fetch the record using the slot offset...
+      var rawRecord = SlottedPage.GetRawRecord(_page, slotIndex);
+      // Write this record to the left sibling...
+      if (!leftSibling.Append(rawRecord))
+      {
+        // If we were unable to append the record, then there was not enough space. The caller (B*Tree orchestrator) is responsible
+        // for determining when a merge is possible, so this is an error condition that we cannot handle.
+        throw new BTreeNodeFullException("Could not merge due to a left sibling overflow!");
+      }
+    }
+
+    // Set the right-most pointer of the left sibling to this node's right-most pointer...
+    var header = new PageHeader(_page);
+    leftSibling.SetRightmostChildId(header.RightmostChildPageIndex);
+
+    // Wipe this internal page...
+    SlottedPage.Initialize(_page, PageType.InternalNode);
   }
 
   /// <summary>

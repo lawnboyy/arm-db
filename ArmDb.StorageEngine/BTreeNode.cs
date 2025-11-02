@@ -12,6 +12,8 @@ internal abstract class BTreeNode
 
   internal int ItemCount => new PageHeader(_page).ItemCount;
 
+  internal int FreeSpace => SlottedPage.GetFreeSpace(_page);
+
   internal BTreeNode(Page page, TableDefinition tableDefinition)
   {
     ArgumentNullException.ThrowIfNull(page);
@@ -224,7 +226,7 @@ internal abstract class BTreeNode
     }
   }
 
-  protected bool HasSufficientSpace(List<byte[]> rawRecords, int spaceAvailable)
+  protected bool HasSufficientSpace(IReadOnlyList<byte[]> rawRecords, int spaceAvailable)
   {
     // We'll need enough space for the records themselves, as well as their corresponding
     // slots, one per record.

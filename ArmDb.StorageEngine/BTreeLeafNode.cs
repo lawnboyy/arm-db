@@ -65,6 +65,11 @@ internal sealed class BTreeLeafNode : BTreeNode
       throw new ArgumentNullException(nameof(leftSibling));
     }
 
+    if (!HasSufficientSpace(GetAllRawRecords(), leftSibling.FreeSpace))
+    {
+      throw new InvalidOperationException("Cannot merge into left node due to insufficient space.");
+    }
+
     // Write all the records in this node to the left sibling.
     // Loop through this leaf node's slots, pull the raw record and append it to the left sibling's records.
     for (var slotIndex = 0; slotIndex < ItemCount; slotIndex++)
