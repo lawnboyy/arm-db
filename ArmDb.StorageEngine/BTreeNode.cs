@@ -41,6 +41,33 @@ internal abstract class BTreeNode
   }
 
   /// <summary>
+  /// Searches the page for a record with a matching key value. If none is
+  /// found, false is returned. If a match is found, the record is deleted
+  /// by removing the corresponding slot index and compacting the slot
+  /// array.
+  /// </summary>
+  /// <param name="keyToDelete">The key of the record to delete.</param>
+  /// <returns>True if the delete is successful, otherwise, false.</returns>
+  /// <exception cref="ArgumentNullException">Throws if the given key is null.</exception>
+  internal bool Delete(Key keyToDelete)
+  {
+    if (keyToDelete == null)
+    {
+      throw new ArgumentNullException("keyToDelete", "Given key to delete is null!");
+    }
+
+    var slotIndex = FindPrimaryKeySlotIndex(keyToDelete);
+
+    if (slotIndex >= 0)
+    { // If the slot index is greater or equal to zero, then we found a match and can delete it.
+      SlottedPage.DeleteRecord(_page, slotIndex);
+      return true;
+    }
+
+    return false;
+  }
+
+  /// <summary>
   /// Returns all the raw records stored in this node. This is a performant way to pull all the records
   /// when deserialization is not needed. The B*Tree orchestrator will use this method to pull all the
   /// records when a redistribution is necessary to balance records between sibling nodes. It can pull
@@ -109,6 +136,23 @@ internal abstract class BTreeNode
     SlottedPage.TryAddRecord(_page, serializedRecord, convertedIndex);
 
     return true;
+  }
+
+  /// <summary>
+  /// Searches the clustered index for the given search key. If an exact match is found, the slot index
+  /// is returned as a positive value. If an exact match is not found, the insertion point is returned
+  /// as the bitwise complement (i.e. a negative value).
+  /// </summary>
+  /// <param name="searchKey"></param>
+  /// <returns>Positive integer value if exact match is found. Negative integer value representing
+  /// the insertion point index if no exact match is found.</returns>
+  internal int FindPrimaryKeySlotIndex(Key searchKey)
+  {
+    // It provides the specific key deserialization logic as a lambda
+    // to the generic internal helper.
+    return FindSlotIndex(searchKey, recordBytes =>
+        RecordSerializer.DeserializePrimaryKey(_tableDefinition, recordBytes)
+    );
   }
 
   /// <summary>

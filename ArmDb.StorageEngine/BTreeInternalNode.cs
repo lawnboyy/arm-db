@@ -22,8 +22,6 @@ internal sealed class BTreeInternalNode : BTreeNode
     }
   }
 
-  internal void SetRightmostChildId(int pageIndex) => new PageHeader(_page).RightmostChildPageIndex = pageIndex;
-
   /// <summary>
   /// Use the given key to find the corresponding child pointer. We need to do a binary
   /// search across the interal node's records and find the smallest separator key that
@@ -95,18 +93,33 @@ internal sealed class BTreeInternalNode : BTreeNode
   }
 
   /// <summary>
-  /// Attempts to insert a new record, a (key, child pointer) pair, into sorted order in the internal node. If 
-  /// the insert is successful it returns true, false if the node is full and needs to be split.
+  /// Wipes and rewrites the given records to the node.
   /// </summary>
-  /// <param name="separatorKey">The separator key of the record to insert</param>
-  /// <param name="childPageId">The child pointer of the record to insert</param>
-  /// <returns>True, if the new internal node record is inserted successfully</returns>
-  internal bool TryInsert(Key separatorKey, PageId childPageId)
+  /// <param name="rawRecords"></param>
+  internal void Repopulate(List<byte[]> rawRecords)
   {
-    // Construct the record we want to insert into the internal node. This is a (separator key, child pointer) pair.
-    var recordToInsert = GetRecord(separatorKey, childPageId);
-    return TryInsert(recordToInsert);
+    Repopulate(rawRecords, PageType.InternalNode);
   }
+
+  internal static byte[] SerializeRecord(Key key, PageId childPageId, TableDefinition tableDef)
+  {
+    // First, construct a column list that represents the internal node record. This will be the primary key
+    // columns, followed by the columns that make up the child pointer columns, the table ID and the page index.
+    var keyColumns = tableDef.GetPrimaryKeyColumnDefinitions();
+    var recordColumns = new List<ColumnDefinition>();
+    recordColumns.AddRange(keyColumns);
+    recordColumns.Add(_tableIdColumnDefinition);
+    recordColumns.Add(_pageIndexColumnDefinition);
+
+    // Construct our record for the internal node.
+    var record = GetRecord(key, childPageId);
+
+    var bytes = RecordSerializer.Serialize(recordColumns, record);
+
+    return bytes;
+  }
+
+  internal void SetRightmostChildId(int pageIndex) => new PageHeader(_page).RightmostChildPageIndex = pageIndex;
 
   /// <summary>
   /// This method splits this internal node, adds the new separator key entry that points to the given child page ID,
@@ -205,25 +218,21 @@ internal sealed class BTreeInternalNode : BTreeNode
     return keyToPromote;
   }
 
-  internal static byte[] SerializeRecord(Key key, PageId childPageId, TableDefinition tableDef)
+  /// <summary>
+  /// Attempts to insert a new record, a (key, child pointer) pair, into sorted order in the internal node. If 
+  /// the insert is successful it returns true, false if the node is full and needs to be split.
+  /// </summary>
+  /// <param name="separatorKey">The separator key of the record to insert</param>
+  /// <param name="childPageId">The child pointer of the record to insert</param>
+  /// <returns>True, if the new internal node record is inserted successfully</returns>
+  internal bool TryInsert(Key separatorKey, PageId childPageId)
   {
-    // First, construct a column list that represents the internal node record. This will be the primary key
-    // columns, followed by the columns that make up the child pointer columns, the table ID and the page index.
-    var keyColumns = tableDef.GetPrimaryKeyColumnDefinitions();
-    var recordColumns = new List<ColumnDefinition>();
-    recordColumns.AddRange(keyColumns);
-    recordColumns.Add(_tableIdColumnDefinition);
-    recordColumns.Add(_pageIndexColumnDefinition);
-
-    // Construct our record for the internal node.
-    var record = GetRecord(key, childPageId);
-
-    var bytes = RecordSerializer.Serialize(recordColumns, record);
-
-    return bytes;
+    // Construct the record we want to insert into the internal node. This is a (separator key, child pointer) pair.
+    var recordToInsert = GetRecord(separatorKey, childPageId);
+    return TryInsert(recordToInsert);
   }
 
-  internal static (Key key, PageId childPageId) DeserializeRecord(TableDefinition tableDef, ReadOnlySpan<byte> recordData)
+  private static (Key key, PageId childPageId) DeserializeRecord(TableDefinition tableDef, ReadOnlySpan<byte> recordData)
   {
     // First, construct a column list that represents the internal node record. This will be the primary key
     // columns, followed by the columns that make up the child pointer columns, the table ID and the page index.
@@ -325,6 +334,20 @@ internal sealed class BTreeInternalNode : BTreeNode
   {
     var recordBytes = SlottedPage.GetRawRecord(_page, slotIndex);
     return DeserializeRecord(_tableDefinition, recordBytes);
+  }
+#endif
+
+#if DEBUG
+  // Helper for test verification, similar to BTreeLeafNode's
+  internal List<(Key Key, PageId PageId)> GetAllRawEntriesForTest()
+  {
+    var list = new List<(Key, PageId)>(ItemCount);
+    for (int i = 0; i < ItemCount; i++)
+    {
+      ReadOnlySpan<byte> rawBytesSpan = SlottedPage.GetRawRecord(_page, i);
+      list.Add(DeserializeRecord(_tableDefinition, rawBytesSpan));
+    }
+    return list;
   }
 #endif
 }
