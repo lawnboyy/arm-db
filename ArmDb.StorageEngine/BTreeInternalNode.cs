@@ -105,10 +105,8 @@ internal sealed class BTreeInternalNode : BTreeNode
   /// <param name="demotedSeparatorKeyChildPage"></param>
   internal void MergeLeft(BTreeInternalNode leftSibling, Key demotedSeparatorKey, PageId demotedSeparatorKeyChildPage)
   {
-    if (leftSibling == null)
-    {
-      throw new ArgumentNullException(nameof(leftSibling));
-    }
+    ArgumentNullException.ThrowIfNull(leftSibling);
+    ArgumentNullException.ThrowIfNull(demotedSeparatorKey);
 
     if (!HasSufficientSpace(GetAllRawRecords(), leftSibling.FreeSpace))
     {

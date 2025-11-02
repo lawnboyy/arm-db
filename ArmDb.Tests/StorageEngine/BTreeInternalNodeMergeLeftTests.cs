@@ -106,4 +106,194 @@ public partial class BTreeInternalNodeTests
 
     Assert.Contains("Cannot merge into left node due to insufficient space.", ex.Message, StringComparison.OrdinalIgnoreCase);
   }
+
+  [Fact]
+  public void MergeLeft_WithNullLeftSibling_ThrowsArgumentNullException()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var rightPage = CreateTestPage(11);
+    SlottedPage.Initialize(rightPage, PageType.InternalNode);
+
+    var rightNode = new BTreeInternalNode(rightPage, tableDef);
+    BTreeInternalNode? leftSibling = null;
+
+    var demotedKey = new Key([DataValue.CreateInteger(200)]);
+    var demotedPageId = new PageId(1, 20);
+
+    // Act & Assert
+    Assert.Throws<ArgumentNullException>("leftSibling", () =>
+        rightNode.MergeLeft(leftSibling!, demotedKey, demotedPageId)
+    );
+  }
+
+  [Fact]
+  public void MergeLeft_WithNullDemotedKey_ThrowsArgumentNullException()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var leftPage = CreateTestPage(10);
+    var rightPage = CreateTestPage(11);
+    SlottedPage.Initialize(leftPage, PageType.InternalNode);
+    SlottedPage.Initialize(rightPage, PageType.InternalNode);
+
+    var leftNode = new BTreeInternalNode(leftPage, tableDef);
+    var rightNode = new BTreeInternalNode(rightPage, tableDef);
+
+    Key? demotedKey = null;
+    var demotedPageId = new PageId(1, 20);
+
+    // Act & Assert
+    Assert.Throws<ArgumentNullException>("demotedSeparatorKey", () =>
+        rightNode.MergeLeft(leftNode, demotedKey!, demotedPageId)
+    );
+  }
+
+  [Fact]
+  public void MergeLeft_WhenRightSiblingIsEmpty_CorrectlyMergesAndUpdates()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var leftPage = CreateTestPage(10);
+    var rightPage = CreateTestPage(11); // 'this' node (empty)
+    SlottedPage.Initialize(leftPage, PageType.InternalNode);
+    SlottedPage.Initialize(rightPage, PageType.InternalNode);
+
+    var leftNode = new BTreeInternalNode(leftPage, tableDef);
+    var rightNode = new BTreeInternalNode(rightPage, tableDef);
+
+    // 1. Populate leftNode
+    leftNode.InsertEntryForTest(new Key([DataValue.CreateInteger(100)]), new PageId(1, 10));
+    var leftHeader = new PageHeader(leftPage);
+    leftHeader.RightmostChildPageIndex = 20;
+
+    // 2. rightNode is empty (ItemCount is 0)
+    var rightHeader = new PageHeader(rightPage);
+    rightHeader.RightmostChildPageIndex = 40; // It has a rightmost pointer
+
+    Assert.Equal(0, rightNode.ItemCount); // Verify setup
+
+    // 3. Define the demoted key and its associated pointer
+    var demotedSeparatorKey = new Key([DataValue.CreateInteger(200)]);
+    var demotedSeparatorKeyChildPage = new PageId(1, 20); // leftNode's original rightmost pointer
+
+    // Act
+    // Merge the empty rightNode into the leftNode
+    rightNode.MergeLeft(leftNode, demotedSeparatorKey, demotedSeparatorKeyChildPage);
+
+    // Assert
+    // 1. Verify leftNode has its original entry + the demoted key entry
+    var leftEntries = leftNode.GetAllRawEntriesForTest();
+    Assert.Equal(2, leftEntries.Count);
+    Assert.Equal(new Key([DataValue.CreateInteger(100)]), leftEntries[0].Key);
+    Assert.Equal(demotedSeparatorKey, leftEntries[1].Key);
+    Assert.Equal(demotedSeparatorKeyChildPage, leftEntries[1].PageId);
+
+    // 2. Verify leftNode's RightmostChildPageIndex is updated
+    // It should now be the RightmostChildPageIndex from the (empty) rightNode
+    var leftHeaderAfter = new PageHeader(leftPage);
+    Assert.Equal(40, leftHeaderAfter.RightmostChildPageIndex);
+
+    // 3. Verify rightNode has been wiped
+    Assert.Equal(0, rightNode.ItemCount);
+  }
+
+  [Fact]
+  public void MergeLeft_WhenLeftSiblingIsEmpty_CorrectlyMergesAndUpdates()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable();
+    var leftPage = CreateTestPage(10); // 'target' node (empty)
+    var rightPage = CreateTestPage(11); // 'this' node
+    SlottedPage.Initialize(leftPage, PageType.InternalNode);
+    SlottedPage.Initialize(rightPage, PageType.InternalNode);
+
+    var leftNode = new BTreeInternalNode(leftPage, tableDef);
+    var rightNode = new BTreeInternalNode(rightPage, tableDef);
+
+    // 1. leftNode is empty (ItemCount is 0)
+    var leftHeader = new PageHeader(leftPage);
+    leftHeader.RightmostChildPageIndex = 20; // It has a rightmost pointer
+    Assert.Equal(0, leftNode.ItemCount); // Verify setup
+
+    // 2. Populate rightNode
+    rightNode.InsertEntryForTest(new Key([DataValue.CreateInteger(300)]), new PageId(1, 30));
+    var rightHeader = new PageHeader(rightPage);
+    rightHeader.RightmostChildPageIndex = 40;
+
+    // 3. Define the demoted key and its associated pointer
+    var demotedSeparatorKey = new Key([DataValue.CreateInteger(200)]);
+    var demotedSeparatorKeyChildPage = new PageId(1, 20); // leftNode's original rightmost pointer
+
+    // Act
+    // Merge the rightNode into the empty leftNode
+    rightNode.MergeLeft(leftNode, demotedSeparatorKey, demotedSeparatorKeyChildPage);
+
+    // Assert
+    // 1. Verify leftNode now contains the demoted key + rightNode's entries
+    var leftEntries = leftNode.GetAllRawEntriesForTest();
+    Assert.Equal(2, leftEntries.Count);
+    Assert.Equal(demotedSeparatorKey, leftEntries[0].Key);
+    Assert.Equal(demotedSeparatorKeyChildPage, leftEntries[0].PageId);
+    Assert.Equal(new Key([DataValue.CreateInteger(300)]), leftEntries[1].Key);
+    Assert.Equal(new PageId(1, 30), leftEntries[1].PageId);
+
+    // 2. Verify leftNode's RightmostChildPageIndex is updated
+    var leftHeaderAfter = new PageHeader(leftPage);
+    Assert.Equal(40, leftHeaderAfter.RightmostChildPageIndex);
+
+    // 3. Verify rightNode has been wiped
+    Assert.Equal(0, rightNode.ItemCount);
+  }
+
+  [Fact]
+  public void MergeLeft_WithCompositeKey_CorrectlyMergesAndUpdates()
+  {
+    // Arrange
+    var tableDef = CreateCompositePKTable();
+    var leftPage = CreateTestPage(10);
+    var rightPage = CreateTestPage(11); // 'this' node
+    SlottedPage.Initialize(leftPage, PageType.InternalNode);
+    SlottedPage.Initialize(rightPage, PageType.InternalNode);
+
+    var leftNode = new BTreeInternalNode(leftPage, tableDef);
+    var rightNode = new BTreeInternalNode(rightPage, tableDef);
+
+    // 1. Populate leftNode
+    var keyA = new Key([DataValue.CreateString("ABC"), DataValue.CreateInteger(10)]);
+    var pageIdA = new PageId(1, 10);
+    leftNode.InsertEntryForTest(keyA, pageIdA);
+    var leftHeader = new PageHeader(leftPage);
+    leftHeader.RightmostChildPageIndex = 20;
+
+    // 2. Populate rightNode
+    var keyC = new Key([DataValue.CreateString("CDEF"), DataValue.CreateInteger(10)]);
+    var pageIdC = new PageId(1, 30);
+    rightNode.InsertEntryForTest(keyC, pageIdC);
+    var rightHeader = new PageHeader(rightPage);
+    rightHeader.RightmostChildPageIndex = 40;
+
+    // 3. Define the demoted key and its associated pointer
+    var demotedSeparatorKey = new Key([DataValue.CreateString("BAB"), DataValue.CreateInteger(10)]);
+    var demotedSeparatorKeyChildPage = new PageId(1, 20); // leftNode's original rightmost pointer
+
+    // Act
+    rightNode.MergeLeft(leftNode, demotedSeparatorKey, demotedSeparatorKeyChildPage);
+
+    // Assert
+    // 1. Verify leftNode now contains all entries
+    var leftEntries = leftNode.GetAllRawEntriesForTest();
+    Assert.Equal(3, leftEntries.Count);
+    Assert.Equal(keyA, leftEntries[0].Key);
+    Assert.Equal(demotedSeparatorKey, leftEntries[1].Key);
+    Assert.Equal(demotedSeparatorKeyChildPage, leftEntries[1].PageId);
+    Assert.Equal(keyC, leftEntries[2].Key);
+
+    // 2. Verify leftNode's RightmostChildPageIndex is updated
+    var leftHeaderAfter = new PageHeader(leftPage);
+    Assert.Equal(40, leftHeaderAfter.RightmostChildPageIndex);
+
+    // 3. Verify rightNode has been wiped
+    Assert.Equal(0, rightNode.ItemCount);
+  }
 }
