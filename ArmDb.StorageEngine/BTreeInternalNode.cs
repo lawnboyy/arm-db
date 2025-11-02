@@ -93,6 +93,26 @@ internal sealed class BTreeInternalNode : BTreeNode
   }
 
   /// <summary>
+  /// Merges this node with its left sibling. Firt the demoted separator key record is appended
+  /// to the left node, then this node's records are appended. The left node now contains all
+  /// the data from both nodes plus the separator key that was demoted from the parent node.
+  /// The left node's right-most pointer is set to this node's right-most pointer, Lastly, this
+  /// node is wiped.
+  /// </summary>
+  /// <param name="leftSibling"></param>
+  /// <param name="demotedSeparatorKey"></param>
+  /// <param name="demotedSeparatorKeyChildPage"></param>
+  internal void MergeLeft(BTreeInternalNode leftSibling, Key demotedSeparatorKey, PageId demotedSeparatorKeyChildPage)
+  {
+    if (leftSibling == null)
+    {
+      throw new ArgumentNullException(nameof(leftSibling));
+    }
+
+
+  }
+
+  /// <summary>
   /// Wipes and rewrites the given records to the node.
   /// </summary>
   /// <param name="rawRecords"></param>

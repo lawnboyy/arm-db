@@ -202,17 +202,7 @@ internal abstract class BTreeNode
     // First check the available space to make sure it's enough for the incoming records...
     var freeSpaceInBytes = SlottedPage.EMPTY_PAGE_FREE_SPACE;
 
-    // We'll need enough space for the records themselves, as well as their corresponding
-    // slots, one per record.
-    var totalSizeOfRecords = rawRecords.Aggregate(0, (total, bytes) =>
-    {
-      total += bytes.Length;
-      return total;
-    });
-    var spaceNeededInBytes = totalSizeOfRecords + rawRecords.Count * Slot.Size;
-
-    // If we don't have enough space, it's an error condition, so throw an exception.
-    if (spaceNeededInBytes > freeSpaceInBytes)
+    if (!HasSufficientSpace(rawRecords, freeSpaceInBytes))
     {
       throw new InvalidOperationException("Data for repopulating is too large to fit on a single page.");
     }
@@ -232,5 +222,19 @@ internal abstract class BTreeNode
         throw new InvalidOperationException("Detected an overflow after verifying the required space to re-populate. Something has gone terribly wrong!");
       }
     }
+  }
+
+  protected bool HasSufficientSpace(List<byte[]> rawRecords, int spaceAvailable)
+  {
+    // We'll need enough space for the records themselves, as well as their corresponding
+    // slots, one per record.
+    var totalSizeOfRecords = rawRecords.Aggregate(0, (total, bytes) =>
+    {
+      total += bytes.Length;
+      return total;
+    });
+    var spaceNeededInBytes = totalSizeOfRecords + rawRecords.Count * Slot.Size;
+
+    return spaceNeededInBytes <= spaceAvailable;
   }
 }
