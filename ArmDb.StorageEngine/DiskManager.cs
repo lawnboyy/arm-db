@@ -203,7 +203,8 @@ internal sealed class DiskManager
 
   /// <summary>
   /// Allocates space for a new page for the given table, extending the file if necessary,
-  /// and returns the PageId for the newly allocated page.
+  /// and returns the PageId for the newly allocated page. If no table file associated with
+  /// the table ID exists, a table file is created.
   /// </summary>
   /// <param name="tableId">The ID of the table to allocate a page for.</param>
   /// <returns>The PageId of the newly allocated page.</returns>

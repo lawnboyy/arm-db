@@ -129,6 +129,23 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     _logger.LogInformation("Buffer Pool Manager initialized with {FrameCount} frames.", _frames.Length);
   }
 
+  internal async Task<Page> CreatePageAsync(int tableId)
+  {
+    throw new NotImplementedException();
+    // // Allocate a new page on disk. This will create a new table file if it doesn't exist
+    // // already.
+    // var pageId = await _diskManager.AllocateNewDiskPageAsync(tableId);
+
+    // // Find a frame to load the new page into.
+    // int freeFrameIndex = -1;
+    // if (!_freeFrameIndices.TryDequeue(out freeFrameIndex))
+    // {
+    //   // Evict a frame...
+
+    // }
+
+  }
+
   /// <summary>
   /// Fetches a page. First checks the buffer pool to see if it's cached, and, if so, the page
   /// is pinned and returned. If the page is not found in the buffer pool, it checks for a
@@ -139,8 +156,6 @@ internal sealed class BufferPoolManager : IAsyncDisposable
   /// </summary>
   /// <param name="pagedId">The Id of the page to return.</param>
   /// <returns>The Page if it's found; null if the page was not found or could not be loaded.</returns>
-  // Method within BufferPoolManager class
-
   internal async Task<Page> FetchPageAsync(PageId pageId)
   {
     // For trace logging/debugging purposes, we capture the thread ID.
@@ -223,68 +238,71 @@ internal sealed class BufferPoolManager : IAsyncDisposable
   {
     _logger.LogTrace("Attempting to unpin page {PageId}. IsDirty: {IsDirtyFlag}", pageId, isDirty);
 
-    // Step 1: Try to find the page in the page table.
-    // _pageTable is a ConcurrentDictionary<PageId, int>
-    if (!_pageTable.TryGetValue(pageId, out int frameIndex))
+    lock (_replacerLock)
     {
-      // Page not found in the page table. This is an invalid state for unpinning,
-      // as a page must be fetched (and thus in the page table) to be pinned.
-      _logger.LogError("Cannot unpin page {PageId} because it was not found in the buffer pool's page table. This likely indicates a bug in the caller or BPM.", pageId);
-      throw new InvalidOperationException($"Page {pageId} cannot be unpinned because it could not be found in the buffer pool's page table.");
-    }
+      // Step 1: Try to find the page in the page table.
+      // _pageTable is a ConcurrentDictionary<PageId, int>
+      if (!_pageTable.TryGetValue(pageId, out int frameIndex))
+      {
+        // Page not found in the page table. This is an invalid state for unpinning,
+        // as a page must be fetched (and thus in the page table) to be pinned.
+        _logger.LogError("Cannot unpin page {PageId} because it was not found in the buffer pool's page table. This likely indicates a bug in the caller or BPM.", pageId);
+        throw new InvalidOperationException($"Page {pageId} cannot be unpinned because it could not be found in the buffer pool's page table.");
+      }
 
-    // If we reach here, the pageId was found in the _pageTable, and frameIndex is valid.
-    _logger.LogTrace("Page {PageId} found in frame {FrameIndex} for unpinning process.", pageId, frameIndex);
+      // If we reach here, the pageId was found in the _pageTable, and frameIndex is valid.
+      _logger.LogTrace("Page {PageId} found in frame {FrameIndex} for unpinning process.", pageId, frameIndex);
 
-    // Step 2: Get the Frame object
-    Frame frame = _frames[frameIndex];
+      // Step 2: Get the Frame object
+      Frame frame = _frames[frameIndex];
 
-    // Step 3: Check current PinCount
-    // It is an error to unpin a page that is not currently pinned (i.e., PinCount <= 0).
-    // We check frame.PinCount directly here. The atomicity of the decrement will be handled by Interlocked.
-    if (frame.PinCount <= 0)
-    {
-      _logger.LogError("Cannot unpin page {PageId} in frame {FrameIndex}: Pin count is already {PinCountValue} (expected > 0). This may indicate a double unpin or a bug.",
-          pageId, frameIndex, frame.PinCount);
-      throw new InvalidOperationException($"Page {pageId} in frame {frameIndex} cannot be unpinned. Its pin count is {frame.PinCount} (must be > 0).");
-    }
+      // Step 3: Check current PinCount
+      // It is an error to unpin a page that is not currently pinned (i.e., PinCount <= 0).
+      // We check frame.PinCount directly here. The atomicity of the decrement will be handled by Interlocked.
+      if (frame.PinCount <= 0)
+      {
+        _logger.LogError("Cannot unpin page {PageId} in frame {FrameIndex}: Pin count is already {PinCountValue} (expected > 0). This may indicate a double unpin or a bug.",
+            pageId, frameIndex, frame.PinCount);
+        throw new InvalidOperationException($"Page {pageId} in frame {frameIndex} cannot be unpinned. Its pin count is {frame.PinCount} (must be > 0).");
+      }
 
-    // Step 4: Atomically decrement the PinCount atomically.
-    // Using Interlocked.Decrement ensures that the operation is atomic and thread-safe.
-    int newPinCount = Interlocked.Decrement(ref frame.PinCount);
+      // Step 4: Atomically decrement the PinCount atomically.
+      // Using Interlocked.Decrement ensures that the operation is atomic and thread-safe.
+      int newPinCount = Interlocked.Decrement(ref frame.PinCount);
 
-    // Defensive check: Pin count should ideally not go below zero with correct usage.
-    // If it does, it's a bug (more unpins than pins).
-    if (newPinCount < 0)
-    {
-      // This state indicates a severe logic error.
-      _logger.LogCritical("Pin count for page {PageId} in frame {FrameIndex} dropped below zero to {NewPinCount} after decrement. Attempting to restore to 0. This indicates a critical bug in pin/unpin logic.",
-          pageId, frameIndex, newPinCount);
-      // Attempt to correct the PinCount to a sane state (0), though the system is likely inconsistent.
-      Interlocked.Exchange(ref frame.PinCount, 0);
-      // Still throw, because this is a symptom of a larger issue.
-      throw new InvalidOperationException($"Pin count for page {pageId} became negative ({newPinCount}), indicating a critical error in pin/unpin logic.");
-    }
 
-    // No interlock is necessary for isDirty because boolean writes are atomic, and we only set it to true if the caller
-    // is marking the page as dirty.
-    if (isDirty)
-    {
-      // If this unpin operation dirtied the page, mark the frame dirty.
-      // If it was already dirty, it remains dirty.
-      frame.IsDirty = true;
-    }
+      // Defensive check: Pin count should ideally not go below zero with correct usage.
+      // If it does, it's a bug (more unpins than pins).
+      if (newPinCount < 0)
+      {
+        // This state indicates a severe logic error.
+        _logger.LogCritical("Pin count for page {PageId} in frame {FrameIndex} dropped below zero to {NewPinCount} after decrement. Attempting to restore to 0. This indicates a critical bug in pin/unpin logic.",
+            pageId, frameIndex, newPinCount);
+        // Attempt to correct the PinCount to a sane state (0), though the system is likely inconsistent.
+        frame.PinCount = 0;         // Still throw, because this is a symptom of a larger issue.
+        throw new InvalidOperationException($"Pin count for page {pageId} became negative ({newPinCount}), indicating a critical error in pin/unpin logic.");
+      }
 
-    _logger.LogDebug("Page {PageId} in frame {FrameIndex} unpinned. New PinCount: {NewPinCount}, Frame IsDirty: {FrameIsDirtyStatus}",
-        pageId, frameIndex, newPinCount, frame.IsDirty);
+      // No interlock is necessary for isDirty because boolean writes are atomic, and we only set it to true if the caller
+      // is marking the page as dirty.
+      if (isDirty)
+      {
+        // If this unpin operation dirtied the page, mark the frame dirty.
+        // If it was already dirty, it remains dirty.
+        frame.IsDirty = true;
+      }
 
-    if (newPinCount == 0)
-    {
-      _logger.LogInformation("Page {PageId} in frame {FrameIndex} now has PinCount 0 and is a candidate for eviction by replacer.",
-          pageId, frameIndex);
-      // No explicit action on LRU list here.
-      // MoveToMostRecentlyUsed was called when the page was fetched/pinned.
-      // Now that PinCount is 0, the LRU replacer's victim selection logic will be able to consider it.
+      _logger.LogDebug("Page {PageId} in frame {FrameIndex} unpinned. New PinCount: {NewPinCount}, Frame IsDirty: {FrameIsDirtyStatus}",
+          pageId, frameIndex, newPinCount, frame.IsDirty);
+
+      if (newPinCount == 0)
+      {
+        _logger.LogInformation("Page {PageId} in frame {FrameIndex} now has PinCount 0 and is a candidate for eviction by replacer.",
+            pageId, frameIndex);
+        // No explicit action on LRU list here.
+        // MoveToMostRecentlyUsed was called when the page was fetched/pinned.
+        // Now that PinCount is 0, the LRU replacer's victim selection logic will be able to consider it.
+      }
     }
 
     // Placeholder to make the method async if no other await is present in subsequent steps.
@@ -306,27 +324,30 @@ internal sealed class BufferPoolManager : IAsyncDisposable
   private bool TryGetCachedPageAndPin(PageId pageId, [MaybeNullWhen(false)] out Page page)
   {
     _logger.LogTrace("Checking cache for page {PageId}.", pageId);
+
     // Check if the page is in the page table
-    if (_pageTable.TryGetValue(pageId, out int frameIndex))
+    lock (_replacerLock)
     {
-      _logger.LogTrace("Page {PageId} found in frame {FrameIndex} (cache hit).", pageId, frameIndex);
-      Frame frame = _frames[frameIndex];
+      if (_pageTable.TryGetValue(pageId, out int frameIndex))
+      {
+        _logger.LogTrace("Page {PageId} found in frame {FrameIndex} (cache hit).", pageId, frameIndex);
+        Frame frame = _frames[frameIndex];
 
-      // Page is cached:
-      // 1. Increment pin count atomically.
-      Interlocked.Increment(ref frame.PinCount);
+        // Increment the pin count...
+        frame.PinCount++;
 
-      // 2. Update its position in the page replacement policy (e.g., LRU).
-      MoveToMostRecentlyUsed(frameIndex); // This method handles its own locking for LRU structures
+        // 2. Update its position in the page replacement policy (e.g., LRU).
+        MoveToMostRecentlyUsed_NoLock(frameIndex); // This method handles its own locking for LRU structures
 
-      _logger.LogDebug("Page {PageId} (cached) pinned in frame {FrameIndex}. Pin count now: {PinCount}",
-                       frame.CurrentPageId, // Should match input pageId
-                       frameIndex,
-                       frame.PinCount);
+        _logger.LogDebug("Page {PageId} (cached) pinned in frame {FrameIndex}. Pin count now: {PinCount}",
+                         frame.CurrentPageId, // Should match input pageId
+                         frameIndex,
+                         frame.PinCount);
 
-      // 3. Create the Page object for the caller.
-      page = new Page(frame.CurrentPageId, frame.PageData);
-      return true; // Indicate success
+        // 3. Create the Page object for the caller.
+        page = new Page(frame.CurrentPageId, frame.PageData);
+        return true; // Indicate success
+      }
     }
 
     _logger.LogTrace("Page {PageId} not found in cache by TryGetCachedPageAndPin.", pageId);
@@ -345,24 +366,22 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     // However, interaction with LRU (_lruNodeLookup, _lruList) requires synchronization. Multiple
     // threads may attempt to update the LRU state concurrently if they are working with different
     // pages.
-    lock (_replacerLock)
-    {
-      if (_freeFrameIndices.TryDequeue(out int dequeuedFrameIndex))
-      {
-        frameIndex = dequeuedFrameIndex;
-        targetFrame = _frames[frameIndex]; // targetFrame is now assigned
-        _logger.LogTrace("Found free frame {FrameIndex} for page {PageIdToLoad}.", frameIndex, pageIdToLoad);
 
-        // Safeguard: Ensure this frame is not lingering in LRU tracking.
-        // A frame from the free list should ideally already be out of LRU.
-        if (_lruNodeLookup.TryGetValue(frameIndex, out LinkedListNode<int>? node))
-        {
-          _lruList.Remove(node);
-          _lruNodeLookup.Remove(frameIndex);
-          _logger.LogTrace("Removed frame {FrameIndex} from LRU tracking as it was taken from free list.", frameIndex);
-        }
+    if (_freeFrameIndices.TryDequeue(out int dequeuedFrameIndex))
+    {
+      frameIndex = dequeuedFrameIndex;
+      targetFrame = _frames[frameIndex]; // targetFrame is now assigned
+      _logger.LogTrace("Found free frame {FrameIndex} for page {PageIdToLoad}.", frameIndex, pageIdToLoad);
+
+      // Safeguard: Ensure this frame is not lingering in LRU tracking.
+      // A frame from the free list should ideally already be out of LRU.
+      if (_lruNodeLookup.TryGetValue(frameIndex, out LinkedListNode<int>? node))
+      {
+        _lruList.Remove(node);
+        _lruNodeLookup.Remove(frameIndex);
+        _logger.LogTrace("Removed frame {FrameIndex} from LRU tracking as it was taken from free list.", frameIndex);
       }
-    } // Release _replacerLock
+    }
 
     if (targetFrame != null) // A free frame was successfully dequeued
     {
@@ -436,7 +455,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     _logger.LogTrace("HandleCacheMissAsync: Page {PageIdToLoad} added to page table for frame {FrameIndex}.", pageIdToLoad, frameIndex);
 
     Interlocked.Increment(ref targetFrame.PinCount); // PinCount becomes 1
-    MoveToMostRecentlyUsed(frameIndex); // This locks _replacerLock internally
+    MoveToMostRecentlyUsed_Lock(frameIndex); // This locks _replacerLock internally
 
     _logger.LogDebug("HandleCacheMissAsync: Page {PageIdToLoad} loaded into frame {FrameIndex} and pinned. Pin count: {PinCount}",
                      targetFrame.CurrentPageId, frameIndex, targetFrame.PinCount);
@@ -549,18 +568,23 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     }
   }
 
-  private void MoveToMostRecentlyUsed(int frameIndex)
+  private void MoveToMostRecentlyUsed_Lock(int frameIndex)
   {
     lock (_replacerLock)
     {
-      if (_lruNodeLookup.TryGetValue(frameIndex, out LinkedListNode<int>? node))
-      {
-        _lruList.Remove(node);
-      }
-      // Add the frame index to the end of the LRU list (MRU)
-      var lastNode = _lruList.AddLast(frameIndex);
-      _lruNodeLookup[frameIndex] = lastNode;
+      MoveToMostRecentlyUsed_NoLock(frameIndex);
     }
+  }
+
+  private void MoveToMostRecentlyUsed_NoLock(int frameIndex)
+  {
+    if (_lruNodeLookup.TryGetValue(frameIndex, out LinkedListNode<int>? node))
+    {
+      _lruList.Remove(node);
+    }
+    // Add the frame index to the end of the LRU list (MRU)
+    var lastNode = _lruList.AddLast(frameIndex);
+    _lruNodeLookup[frameIndex] = lastNode;
   }
 
   /// <summary>
