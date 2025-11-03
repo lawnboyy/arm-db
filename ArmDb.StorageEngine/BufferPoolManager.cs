@@ -355,6 +355,8 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     return false; // Indicate failure (cache miss)
   }
 
+  // TODO: This will have to be refactored to properly fix the locking.
+  // We should lock pin count, dirty, and LRU operations together.
   private async Task<Page> HandleCacheMissAsync(PageId pageIdToLoad)
   {
     _logger.LogTrace("HandleCacheMissAsync started for page {PageIdToLoad}.", pageIdToLoad);
