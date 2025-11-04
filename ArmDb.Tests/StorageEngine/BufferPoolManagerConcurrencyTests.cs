@@ -330,8 +330,8 @@ public partial class BufferPoolManagerTests
     // --- Prepare concurrent tasks to fetch new pages ---
     var fetchTasks = new List<Task<Page>>
     {
-        Task.Run(() => bpm.FetchPageAsync(pageId2)),
-        Task.Run(() => bpm.FetchPageAsync(pageId3))
+      Task.Run(() => bpm.FetchPageAsync(pageId2)),
+      Task.Run(() => bpm.FetchPageAsync(pageId3))
     };
 
     // Act
