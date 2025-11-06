@@ -237,8 +237,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
                   _logger.LogWarning("During eviction of frame {FrameIndexToEvict}, its PageId {OldPageId} was not found in the page table. Possible inconsistency.", frameIndex, oldPageId);
                 }
 
-                // TODO: We have to flush, but can't run an asynchronous operation inside a lock. But we need to reset the target frame and set the pin count before
-                // we release the lock. If we reset before we flush to disk, then we'll lose the evicted frame's data. How do we handle this asynchronously?
+                // TODO: Copy the data to flush so that we can perform this asynchronous operation outside of the lock.
                 if (targetFrame.IsDirty)
                 {
                   _logger.LogInformation("Flushing dirty page {OldPageId} from frame {FrameIndexToEvict}.", oldPageId, frameIndex);
