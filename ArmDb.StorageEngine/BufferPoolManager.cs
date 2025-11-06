@@ -146,6 +146,147 @@ internal sealed class BufferPoolManager : IAsyncDisposable
 
   }
 
+  internal async Task<Page> FetchPageAsync(PageId pageId)
+  {
+    // Capture the thread ID for debugging.
+    int threadId = Thread.CurrentThread.ManagedThreadId;
+    _logger.LogTrace($"Thread: {threadId} FetchPageAsync: Fetching page {pageId}.");
+
+    if (_pageTable.TryGetValue(pageId, out int frameIndex))
+    {
+      // Case 1: The page is cached, so pull it and return it.
+      // The page is now in the cache, so we can just increment the pin, update the position in the LRU, and return it.
+      lock (_replacerLock)
+      {
+        // Pull the frame...
+        Frame frame = _frames[frameIndex];
+        // Increment the cached page's pin count...
+        frame.PinCount++;
+        // Update the LRU list...
+        MoveToMostRecentlyUsed_NoLock(frameIndex);
+        // Return the page.
+        return new Page(frame.CurrentPageId, frame.PageData);
+      }
+    }
+    else
+    {
+      // Case 2: Cache miss; load the page from disk.
+      _logger.LogTrace($"Thread {threadId} FetchPageAsync: Page {pageId} not in cache. Page must be read and loaded into a free frame...");
+
+      // Lock access to the page to avoid multiple threads attempting to load the same page from disk.
+      SemaphoreSlim? pageLoadLock = _pageLoadingLocks.GetOrAdd(pageId, _ => new SemaphoreSlim(1, 1));
+
+      // Asynchronously wait to acquire the lock to enter the critical section for this page
+      _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: Cache miss for PageId {PageId}. Attempting to acquire loading lock.", threadId, pageId);
+      await pageLoadLock.WaitAsync();
+      _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: Loading lock ACQUIRED for PageId {PageId}.", threadId, pageId);
+
+      try
+      {
+        // If the lock was previously held, then the page may have been loaded from disk, in which case we must check the cache again...
+        if (_pageTable.TryGetValue(pageId, out frameIndex))
+        {
+          // The page is now in the cache, so we can just increment the pin, update the position in the LRU, and return it.
+          lock (_replacerLock)
+          {
+            Frame frame = _frames[frameIndex];
+            // Increment the cached page's pin count...
+            frame.PinCount++;
+            MoveToMostRecentlyUsed_NoLock(frameIndex);
+
+            return new Page(frame.CurrentPageId, frame.PageData);
+          }
+        }
+        else
+        {
+          Frame? targetFrame = null;
+          // The page is still not found, so we must load it from disk.
+          // Lock access to critical section where we find a frame to load the page into.
+          lock (_replacerLock)
+          {
+            // First find an available frame either from the free frame queue or if there are no free frames, we evict
+            // the least recently used...
+            // TODO: We don't really need to use a concurrent queue for free frame indices since it has to be locked with other operations...
+            if (_freeFrameIndices.TryDequeue(out frameIndex))
+            {
+              // Once the frame is found, update the pin count...
+              targetFrame = _frames[frameIndex];
+              // ...and the LRU list.
+              MoveToMostRecentlyUsed_NoLock(frameIndex);
+              // Now we can release the lock because we have acquired a frame and pinned it.
+            }
+            else // No free frames available, so we must evict...
+            {
+              // TODO: Implement frame eviction...
+              frameIndex = FindVictimFrame();
+
+              _logger.LogTrace("Victim frame {VictimFrameIndex} selected for page {PageIdToLoad}.", frameIndex, pageId);
+              targetFrame = _frames[frameIndex];
+
+              _logger.LogTrace("Processing frame {FrameIndexToEvict} for eviction. Current PageId: {PageId}, IsDirty: {IsDirty}",
+                               frameIndex,
+                               targetFrame.CurrentPageId == default ? "None" : targetFrame.CurrentPageId.ToString(),
+                               targetFrame.IsDirty);
+
+              if (targetFrame.CurrentPageId != default) // Frame holds a valid page
+              {
+                PageId oldPageId = targetFrame.CurrentPageId;
+
+                if (!_pageTable.TryRemove(oldPageId, out _))
+                {
+                  _logger.LogWarning("During eviction of frame {FrameIndexToEvict}, its PageId {OldPageId} was not found in the page table. Possible inconsistency.", frameIndex, oldPageId);
+                }
+
+                // TODO: We have to flush, but can't run an asynchronous operation inside a lock. But we need to reset the target frame and set the pin count before
+                // we release the lock. If we reset before we flush to disk, then we'll lose the evicted frame's data. How do we handle this asynchronously?
+                if (targetFrame.IsDirty)
+                {
+                  _logger.LogInformation("Flushing dirty page {OldPageId} from frame {FrameIndexToEvict}.", oldPageId, frameIndex);
+                  try
+                  {
+                    _diskManager.WriteDiskPageAsync(oldPageId, targetFrame.PageData).Wait();
+                  }
+                  catch (Exception ex)
+                  {
+                    _logger.LogCritical(ex, "CRITICAL: Failed to flush dirty page {OldPageId} from frame {FrameIndexToEvict}. Data for may be lost.", oldPageId, frameIndex);
+                    // Propagate a specific exception so HandleCacheMissAsync knows the flush failed.
+                    throw new CouldNotFlushToDiskException($"Failed to flush dirty page {oldPageId} from frame {frameIndex}. Data may be lost.", ex);
+                  }
+                }
+              }
+
+              _logger.LogDebug("Frame {FrameIndexToEvict} successfully processed for eviction and is now clean and ready for reuse.", frameIndex);
+            }
+
+            targetFrame.Reset(); // Ensures PinCount=0, IsDirty=false, CurrentPageId=default
+            targetFrame.PageData.Span.Clear(); // CRUCIAL: Zero out buffer from ArrayPool to prevent stale data
+            targetFrame.CurrentPageId = pageId; // Load the page from disk into the frame.
+            targetFrame.PinCount++;
+          } // Release the page lock.
+
+          try
+          {
+            await _diskManager.ReadDiskPageAsync(pageId, targetFrame.PageData);
+          }
+          catch (Exception ex)
+          {
+            _logger.LogError(ex, "HandleCacheMissAsync: Failed to read page {PageIdToLoad} from disk into frame {FrameIndex}.", pageId, frameIndex);
+            CleanupFailedFrameLoadAndFree(frameIndex, targetFrame); // Helper to reset & free frame
+            throw new CouldNotLoadPageFromDiskException($"Failed to read page {pageId} from disk.", ex);
+          }
+          // Update the page table lookup.
+          _pageTable.TryAdd(pageId, frameIndex);
+          // Return the new page.
+          return new Page(targetFrame.CurrentPageId, targetFrame.PageData);
+        }
+      }
+      finally
+      {
+        pageLoadLock.Release();
+      }
+    }
+  }
+
   /// <summary>
   /// Fetches a page. First checks the buffer pool to see if it's cached, and, if so, the page
   /// is pinned and returned. If the page is not found in the buffer pool, it checks for a
@@ -156,7 +297,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
   /// </summary>
   /// <param name="pagedId">The Id of the page to return.</param>
   /// <returns>The Page if it's found; null if the page was not found or could not be loaded.</returns>
-  internal async Task<Page> FetchPageAsync(PageId pageId)
+  internal async Task<Page> FetchPageAsync_Old(PageId pageId)
   {
     // For trace logging/debugging purposes, we capture the thread ID.
     int threadId = Thread.CurrentThread.ManagedThreadId;
