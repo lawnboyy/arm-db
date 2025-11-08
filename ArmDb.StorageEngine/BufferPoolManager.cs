@@ -163,7 +163,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
         // Increment the cached page's pin count...
         frame.PinCount++;
         // Update the LRU list...
-        MoveToMostRecentlyUsed_NoLock(frameIndex);
+        MoveToMostRecentlyUsed(frameIndex);
         // Return the page.
         return new Page(frame.CurrentPageId, frame.PageData);
       }
@@ -183,6 +183,10 @@ internal sealed class BufferPoolManager : IAsyncDisposable
 
       try
       {
+        // If we evict a frame that contains a dirty page, we'll need to flush it to disk.
+        PageId? evictedPageId = null;
+        byte[] evictedDirtyPageData = [];
+
         // If the lock was previously held, then the page may have been loaded from disk, in which case we must check the cache again...
         if (_pageTable.TryGetValue(pageId, out frameIndex))
         {
@@ -192,7 +196,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
             Frame frame = _frames[frameIndex];
             // Increment the cached page's pin count...
             frame.PinCount++;
-            MoveToMostRecentlyUsed_NoLock(frameIndex);
+            MoveToMostRecentlyUsed(frameIndex);
 
             return new Page(frame.CurrentPageId, frame.PageData);
           }
@@ -212,13 +216,15 @@ internal sealed class BufferPoolManager : IAsyncDisposable
               // Once the frame is found, update the pin count...
               targetFrame = _frames[frameIndex];
               // ...and the LRU list.
-              MoveToMostRecentlyUsed_NoLock(frameIndex);
+              MoveToMostRecentlyUsed(frameIndex);
               // Now we can release the lock because we have acquired a frame and pinned it.
             }
             else // No free frames available, so we must evict...
             {
               // Find a frame to evict...
               frameIndex = FindVictimFrame();
+              // Add right back to the LRU list?
+              MoveToMostRecentlyUsed(frameIndex);
 
               _logger.LogTrace("Victim frame {VictimFrameIndex} selected for page {PageIdToLoad}.", frameIndex, pageId);
               targetFrame = _frames[frameIndex];
@@ -230,27 +236,17 @@ internal sealed class BufferPoolManager : IAsyncDisposable
 
               if (targetFrame.CurrentPageId != default) // Frame holds a valid page
               {
-                PageId oldPageId = targetFrame.CurrentPageId;
+                evictedPageId = targetFrame.CurrentPageId;
 
-                if (!_pageTable.TryRemove(oldPageId, out _))
+                if (!_pageTable.TryRemove(evictedPageId.Value, out _))
                 {
-                  _logger.LogWarning("During eviction of frame {FrameIndexToEvict}, its PageId {OldPageId} was not found in the page table. Possible inconsistency.", frameIndex, oldPageId);
+                  _logger.LogWarning("During eviction of frame {FrameIndexToEvict}, its PageId {OldPageId} was not found in the page table. Possible inconsistency.", frameIndex, evictedPageId);
                 }
 
-                // TODO: Copy the data to flush so that we can perform this asynchronous operation outside of the lock.
+                // Copy the data to flush so that we can perform this asynchronous operation outside of the lock.
                 if (targetFrame.IsDirty)
                 {
-                  _logger.LogInformation("Flushing dirty page {OldPageId} from frame {FrameIndexToEvict}.", oldPageId, frameIndex);
-                  try
-                  {
-                    _diskManager.WriteDiskPageAsync(oldPageId, targetFrame.PageData).Wait();
-                  }
-                  catch (Exception ex)
-                  {
-                    _logger.LogCritical(ex, "CRITICAL: Failed to flush dirty page {OldPageId} from frame {FrameIndexToEvict}. Data for may be lost.", oldPageId, frameIndex);
-                    // Propagate a specific exception so HandleCacheMissAsync knows the flush failed.
-                    throw new CouldNotFlushToDiskException($"Failed to flush dirty page {oldPageId} from frame {frameIndex}. Data may be lost.", ex);
-                  }
+                  evictedDirtyPageData = targetFrame.PageData.ToArray();
                 }
               }
 
@@ -263,6 +259,23 @@ internal sealed class BufferPoolManager : IAsyncDisposable
             targetFrame.PinCount++;
           } // Release the page lock.
 
+          // If we evicted a dirty page, now we need to flush its captured content to disk outside the lock.
+          if (evictedPageId != null && evictedDirtyPageData.Length > 0)
+          {
+            _logger.LogInformation("Flushing dirty page {OldPageId} from frame {FrameIndexToEvict}.", evictedPageId, frameIndex);
+            try
+            {
+              await _diskManager.WriteDiskPageAsync(evictedPageId.Value, evictedDirtyPageData);
+            }
+            catch (Exception ex)
+            {
+              _logger.LogCritical(ex, "CRITICAL: Failed to flush dirty page {OldPageId} from frame {FrameIndexToEvict}. Data for may be lost.", evictedPageId, frameIndex);
+              // Propagate a specific exception so HandleCacheMissAsync knows the flush failed.
+              throw new CouldNotFlushToDiskException($"Failed to flush dirty page {evictedPageId} from frame {frameIndex}. Data may be lost.", ex);
+            }
+          }
+
+          // Finally, read the new page from disk and return it.
           try
           {
             await _diskManager.ReadDiskPageAsync(pageId, targetFrame.PageData);
@@ -296,71 +309,71 @@ internal sealed class BufferPoolManager : IAsyncDisposable
   /// </summary>
   /// <param name="pagedId">The Id of the page to return.</param>
   /// <returns>The Page if it's found; null if the page was not found or could not be loaded.</returns>
-  internal async Task<Page> FetchPageAsync_Old(PageId pageId)
-  {
-    // For trace logging/debugging purposes, we capture the thread ID.
-    int threadId = Thread.CurrentThread.ManagedThreadId;
-    _logger.LogTrace("Fetching page {PageId}.", pageId);
+  // internal async Task<Page> FetchPageAsync_Old(PageId pageId)
+  // {
+  //   // For trace logging/debugging purposes, we capture the thread ID.
+  //   int threadId = Thread.CurrentThread.ManagedThreadId;
+  //   _logger.LogTrace("Fetching page {PageId}.", pageId);
 
-    // Initial optimistic cache check...
-    if (TryGetCachedPageAndPin(pageId, out Page? cachedPage))
-    {
-      // Cache Hit! All necessary actions for hit path are done.
-      _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: END (Cache Hit - Initial Check) for PageId {PageId}. Returning page.", threadId, pageId);
-      // Null-forgiving operator used because bool return true guarantees page is not null.
-      return cachedPage!;
-    }
+  //   // Initial optimistic cache check...
+  //   if (TryGetCachedPageAndPin(pageId, out Page? cachedPage))
+  //   {
+  //     // Cache Hit! All necessary actions for hit path are done.
+  //     _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: END (Cache Hit - Initial Check) for PageId {PageId}. Returning page.", threadId, pageId);
+  //     // Null-forgiving operator used because bool return true guarantees page is not null.
+  //     return cachedPage!;
+  //   }
 
-    // Cache miss: Page not found in the buffer pool.
-    _logger.LogTrace("Page {PageId} not in cache. Page must be read and loaded into a free frame...", pageId);
+  //   // Cache miss: Page not found in the buffer pool.
+  //   _logger.LogTrace("Page {PageId} not in cache. Page must be read and loaded into a free frame...", pageId);
 
-    // If our optimistic cache check failed, we need to handle a cache miss, but we must lock access on a per
-    // page basis to avoid multiple attempts to read the page from disk.
-    SemaphoreSlim? pageLoadLock = _pageLoadingLocks.GetOrAdd(pageId, _ => new SemaphoreSlim(1, 1));
+  //   // If our optimistic cache check failed, we need to handle a cache miss, but we must lock access on a per
+  //   // page basis to avoid multiple attempts to read the page from disk.
+  //   SemaphoreSlim? pageLoadLock = _pageLoadingLocks.GetOrAdd(pageId, _ => new SemaphoreSlim(1, 1));
 
-    // Asynchronously wait to enter the critical section for this pageId
-    _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: Cache miss for PageId {PageId}. Attempting to acquire loading lock.", threadId, pageId);
-    await pageLoadLock.WaitAsync();
-    _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: Loading lock ACQUIRED for PageId {PageId}.", threadId, pageId);
+  //   // Asynchronously wait to enter the critical section for this pageId
+  //   _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: Cache miss for PageId {PageId}. Attempting to acquire loading lock.", threadId, pageId);
+  //   await pageLoadLock.WaitAsync();
+  //   _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: Loading lock ACQUIRED for PageId {PageId}.", threadId, pageId);
 
-    try
-    {
-      // Re-check the cache after acquiring the lock as it is likely another thread may have loaded the page while we were waiting for the lock.      
-      if (TryGetCachedPageAndPin(pageId, out Page? pageAfterLock))
-      {
-        _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: END (Cache Hit - After Lock) for PageId {PageId}. Returning page.", threadId, pageId);
-        return pageAfterLock!;
-      }
+  //   try
+  //   {
+  //     // Re-check the cache after acquiring the lock as it is likely another thread may have loaded the page while we were waiting for the lock.      
+  //     if (TryGetCachedPageAndPin(pageId, out Page? pageAfterLock))
+  //     {
+  //       _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: END (Cache Hit - After Lock) for PageId {PageId}. Returning page.", threadId, pageId);
+  //       return pageAfterLock!;
+  //     }
 
-      // Still a miss - This thread is now responsible for loading the page.
-      _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: Still a miss for PageId {PageId} after lock. Proceeding to load via HandleCacheMissAsync.", threadId, pageId);
+  //     // Still a miss - This thread is now responsible for loading the page.
+  //     _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: Still a miss for PageId {PageId} after lock. Proceeding to load via HandleCacheMissAsync.", threadId, pageId);
 
-      // HandleCacheMissAsync will find/prepare a frame, load data from disk,
-      // add to page table, pin the page, and update its LRU status.
-      Page loadedPage = await HandleCacheMissAsync(pageId);
+  //     // HandleCacheMissAsync will find/prepare a frame, load data from disk,
+  //     // add to page table, pin the page, and update its LRU status.
+  //     Page loadedPage = await HandleCacheMissAsync(pageId);
 
-      _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: END (Cache Miss - Loaded by this thread) for PageId {PageId}. Returning page.", threadId, pageId);
-      return loadedPage;
-    }
-    finally
-    {
-      pageLoadLock.Release();
-      _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: Loading lock RELEASED for PageId {PageId}.", threadId, pageId);
+  //     _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: END (Cache Miss - Loaded by this thread) for PageId {PageId}. Returning page.", threadId, pageId);
+  //     return loadedPage;
+  //   }
+  //   finally
+  //   {
+  //     pageLoadLock.Release();
+  //     _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: Loading lock RELEASED for PageId {PageId}.", threadId, pageId);
 
-      // Optional: Consider removing the semaphore from _pageLoadingLocks if the page
-      // is now successfully cached and the semaphore is unlikely to be needed again soon
-      // for this PageId. This prevents the dictionary from growing indefinitely.
-      // However, removal needs to be done carefully to avoid race conditions if another
-      // thread is just about to GetOrAdd it. A common strategy is to keep them,
-      // or use a more complex mechanism with weak references or timed eviction for the semaphores.
-      // For now, keeping them is simpler.
-      // Example (needs careful thought on concurrency if implemented):
-      // if (_pageTable.ContainsKey(pageId)) // If page is now successfully cached
-      // {
-      //     _pageLoadingLocks.TryRemove(pageId, out _);
-      // }
-    }
-  }
+  //     // Optional: Consider removing the semaphore from _pageLoadingLocks if the page
+  //     // is now successfully cached and the semaphore is unlikely to be needed again soon
+  //     // for this PageId. This prevents the dictionary from growing indefinitely.
+  //     // However, removal needs to be done carefully to avoid race conditions if another
+  //     // thread is just about to GetOrAdd it. A common strategy is to keep them,
+  //     // or use a more complex mechanism with weak references or timed eviction for the semaphores.
+  //     // For now, keeping them is simpler.
+  //     // Example (needs careful thought on concurrency if implemented):
+  //     // if (_pageTable.ContainsKey(pageId)) // If page is now successfully cached
+  //     // {
+  //     //     _pageLoadingLocks.TryRemove(pageId, out _);
+  //     // }
+  //   }
+  // }
 
   /// <summary>
   /// Decrements the pin count of a page. If the page was marked as dirty by the caller,
@@ -477,7 +490,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
         frame.PinCount++;
 
         // 2. Update its position in the page replacement policy (e.g., LRU).
-        MoveToMostRecentlyUsed_NoLock(frameIndex); // This method handles its own locking for LRU structures
+        MoveToMostRecentlyUsed(frameIndex); // This method handles its own locking for LRU structures
 
         _logger.LogDebug("Page {PageId} (cached) pinned in frame {FrameIndex}. Pin count now: {PinCount}",
                          frame.CurrentPageId, // Should match input pageId
@@ -497,112 +510,112 @@ internal sealed class BufferPoolManager : IAsyncDisposable
 
   // TODO: This will have to be refactored to properly fix the locking.
   // We should lock pin count, dirty, and LRU operations together.
-  private async Task<Page> HandleCacheMissAsync(PageId pageIdToLoad)
-  {
-    _logger.LogTrace("HandleCacheMissAsync started for page {PageIdToLoad}.", pageIdToLoad);
-    int frameIndex = -1;
-    Frame? targetFrame = null;
+  // private async Task<Page> HandleCacheMissAsync(PageId pageIdToLoad)
+  // {
+  //   _logger.LogTrace("HandleCacheMissAsync started for page {PageIdToLoad}.", pageIdToLoad);
+  //   int frameIndex = -1;
+  //   Frame? targetFrame = null;
 
-    // Check if there is a free frame available. If so, set the free frame as the target frame.
-    // The _freeFrameIndices queue itself is thread-safe for Enqueue/Dequeue.
-    // However, interaction with LRU (_lruNodeLookup, _lruList) requires synchronization. Multiple
-    // threads may attempt to update the LRU state concurrently if they are working with different
-    // pages.
+  //   // Check if there is a free frame available. If so, set the free frame as the target frame.
+  //   // The _freeFrameIndices queue itself is thread-safe for Enqueue/Dequeue.
+  //   // However, interaction with LRU (_lruNodeLookup, _lruList) requires synchronization. Multiple
+  //   // threads may attempt to update the LRU state concurrently if they are working with different
+  //   // pages.
 
-    if (_freeFrameIndices.TryDequeue(out int dequeuedFrameIndex))
-    {
-      frameIndex = dequeuedFrameIndex;
-      targetFrame = _frames[frameIndex]; // targetFrame is now assigned
-      _logger.LogTrace("Found free frame {FrameIndex} for page {PageIdToLoad}.", frameIndex, pageIdToLoad);
+  //   if (_freeFrameIndices.TryDequeue(out int dequeuedFrameIndex))
+  //   {
+  //     frameIndex = dequeuedFrameIndex;
+  //     targetFrame = _frames[frameIndex]; // targetFrame is now assigned
+  //     _logger.LogTrace("Found free frame {FrameIndex} for page {PageIdToLoad}.", frameIndex, pageIdToLoad);
 
-      // Safeguard: Ensure this frame is not lingering in LRU tracking.
-      // A frame from the free list should ideally already be out of LRU.
-      if (_lruNodeLookup.TryGetValue(frameIndex, out LinkedListNode<int>? node))
-      {
-        _lruList.Remove(node);
-        _lruNodeLookup.Remove(frameIndex);
-        _logger.LogTrace("Removed frame {FrameIndex} from LRU tracking as it was taken from free list.", frameIndex);
-      }
-    }
+  //     // Safeguard: Ensure this frame is not lingering in LRU tracking.
+  //     // A frame from the free list should ideally already be out of LRU.
+  //     if (_lruNodeLookup.TryGetValue(frameIndex, out LinkedListNode<int>? node))
+  //     {
+  //       _lruList.Remove(node);
+  //       _lruNodeLookup.Remove(frameIndex);
+  //       _logger.LogTrace("Removed frame {FrameIndex} from LRU tracking as it was taken from free list.", frameIndex);
+  //     }
+  //   }
 
-    if (targetFrame != null) // A free frame was successfully dequeued
-    {
-      // The frame from the free list is considered "empty".
-      // It should have been Reset() before being added to the free list.
-      // We'll Reset() again for safety and clear the buffer.
-      _logger.LogTrace("Preparing free frame {FrameIndex} for page {PageIdToLoad}.", frameIndex, pageIdToLoad);
+  //   if (targetFrame != null) // A free frame was successfully dequeued
+  //   {
+  //     // The frame from the free list is considered "empty".
+  //     // It should have been Reset() before being added to the free list.
+  //     // We'll Reset() again for safety and clear the buffer.
+  //     _logger.LogTrace("Preparing free frame {FrameIndex} for page {PageIdToLoad}.", frameIndex, pageIdToLoad);
 
-      targetFrame.Reset(); // Ensures PinCount=0, IsDirty=false, CurrentPageId=default
-      targetFrame.PageData.Span.Clear(); // CRUCIAL: Zero out buffer from ArrayPool to prevent stale data
-    }
-    else // No free frame was found so we must select a victim frame and evict it.
-    {
-      _logger.LogTrace("No free frame found for page {PageIdToLoad}. Victim selection logic is next.", pageIdToLoad);
+  //     targetFrame.Reset(); // Ensures PinCount=0, IsDirty=false, CurrentPageId=default
+  //     targetFrame.PageData.Span.Clear(); // CRUCIAL: Zero out buffer from ArrayPool to prevent stale data
+  //   }
+  //   else // No free frame was found so we must select a victim frame and evict it.
+  //   {
+  //     _logger.LogTrace("No free frame found for page {PageIdToLoad}. Victim selection logic is next.", pageIdToLoad);
 
-      int victimFrameIndex;
-      lock (_replacerLock) // Acquire lock to select a victim atomically from LRU
-      {
-        victimFrameIndex = FindVictimFrame(); // This will throw BufferPoolFullException if no unpinned victim is found
-      } // _replacerLock released. victimFrameIndex is now "reserved" for us.
+  //     int victimFrameIndex;
+  //     lock (_replacerLock) // Acquire lock to select a victim atomically from LRU
+  //     {
+  //       victimFrameIndex = FindVictimFrame(); // This will throw BufferPoolFullException if no unpinned victim is found
+  //     } // _replacerLock released. victimFrameIndex is now "reserved" for us.
 
-      _logger.LogTrace("HandleCacheMissAsync: Victim frame {VictimFrameIndex} selected for page {PageIdToLoad}.", victimFrameIndex, pageIdToLoad);
-      frameIndex = victimFrameIndex;    // Use this frame index
-      targetFrame = _frames[frameIndex]; // Get the frame
+  //     _logger.LogTrace("HandleCacheMissAsync: Victim frame {VictimFrameIndex} selected for page {PageIdToLoad}.", victimFrameIndex, pageIdToLoad);
+  //     frameIndex = victimFrameIndex;    // Use this frame index
+  //     targetFrame = _frames[frameIndex]; // Get the frame
 
-      // Now, evict the content of this victim frame (flushes if dirty, resets frame, clears buffer)
-      // This is an async operation and happens *after* _replacerLock for victim selection is released.
-      try
-      {
-        await EvictPageFromFrameAsync(frameIndex); // Throws PageFlushException on failure
-      }
-      catch (CouldNotFlushToDiskException pex)
-      {
-        _logger.LogCritical(pex, "HandleCacheMissAsync: Failed to flush dirty page from victim frame {FrameIndex} for page {PageIdToLoad}. Aborting page fetch.", frameIndex, pageIdToLoad);
-        // If flush failed, this frame is problematic and has been reset by EvictPageFromFrameAsync.
-        // The original caller (FetchPageAsync) will catch this PageFlushException.
-        throw;
-      }
-      // --- End of New Eviction Logic ---
-    }
+  //     // Now, evict the content of this victim frame (flushes if dirty, resets frame, clears buffer)
+  //     // This is an async operation and happens *after* _replacerLock for victim selection is released.
+  //     try
+  //     {
+  //       await EvictPageFromFrameAsync(frameIndex); // Throws PageFlushException on failure
+  //     }
+  //     catch (CouldNotFlushToDiskException pex)
+  //     {
+  //       _logger.LogCritical(pex, "HandleCacheMissAsync: Failed to flush dirty page from victim frame {FrameIndex} for page {PageIdToLoad}. Aborting page fetch.", frameIndex, pageIdToLoad);
+  //       // If flush failed, this frame is problematic and has been reset by EvictPageFromFrameAsync.
+  //       // The original caller (FetchPageAsync) will catch this PageFlushException.
+  //       throw;
+  //     }
+  //     // --- End of New Eviction Logic ---
+  //   }
 
-    // --- Common logic for a successfully prepared frame (either free or victim) ---
-    // At this point, 'targetFrame' and 'frameIndex' point to a frame that is:
-    // 1. Reserved for our use (removed from free list OR removed from LRU by victim selection).
-    // 2. Its previous content (if any) has been handled (flushed if dirty, page table updated).
-    // 3. The frame itself has been Reset() and its PageData.Span.Clear()'d by EvictPageFromFrameAsync.
+  //   // --- Common logic for a successfully prepared frame (either free or victim) ---
+  //   // At this point, 'targetFrame' and 'frameIndex' point to a frame that is:
+  //   // 1. Reserved for our use (removed from free list OR removed from LRU by victim selection).
+  //   // 2. Its previous content (if any) has been handled (flushed if dirty, page table updated).
+  //   // 3. The frame itself has been Reset() and its PageData.Span.Clear()'d by EvictPageFromFrameAsync.
 
-    _logger.LogTrace("HandleCacheMissAsync: Frame {FrameIndex} is prepared. Loading page {PageIdToLoad} from disk.", frameIndex, pageIdToLoad);
+  //   _logger.LogTrace("HandleCacheMissAsync: Frame {FrameIndex} is prepared. Loading page {PageIdToLoad} from disk.", frameIndex, pageIdToLoad);
 
-    targetFrame.CurrentPageId = pageIdToLoad;
-    // targetFrame.IsDirty = false; // Done by Reset() in EvictPageFromFrameAsync
-    // targetFrame.PinCount = 0;    // Done by Reset() in EvictPageFromFrameAsync
+  //   targetFrame.CurrentPageId = pageIdToLoad;
+  //   // targetFrame.IsDirty = false; // Done by Reset() in EvictPageFromFrameAsync
+  //   // targetFrame.PinCount = 0;    // Done by Reset() in EvictPageFromFrameAsync
 
-    try
-    {
-      await _diskManager.ReadDiskPageAsync(pageIdToLoad, targetFrame.PageData);
-    }
-    catch (Exception ex)
-    {
-      _logger.LogError(ex, "HandleCacheMissAsync: Failed to read page {PageIdToLoad} from disk into frame {FrameIndex}.", pageIdToLoad, frameIndex);
-      CleanupFailedFrameLoadAndFree(frameIndex, targetFrame); // Helper to reset & free frame
-      throw new CouldNotLoadPageFromDiskException($"Failed to read page {pageIdToLoad} from disk.", ex);
-    }
+  //   try
+  //   {
+  //     await _diskManager.ReadDiskPageAsync(pageIdToLoad, targetFrame.PageData);
+  //   }
+  //   catch (Exception ex)
+  //   {
+  //     _logger.LogError(ex, "HandleCacheMissAsync: Failed to read page {PageIdToLoad} from disk into frame {FrameIndex}.", pageIdToLoad, frameIndex);
+  //     CleanupFailedFrameLoadAndFree(frameIndex, targetFrame); // Helper to reset & free frame
+  //     throw new CouldNotLoadPageFromDiskException($"Failed to read page {pageIdToLoad} from disk.", ex);
+  //   }
 
-    if (!_pageTable.TryAdd(pageIdToLoad, frameIndex))
-    {
-      _logger.LogCritical("HandleCacheMissAsync: CRITICAL RACE: Page {PageIdToLoad} added to page table by another thread for frame {FrameIndex} while this thread was loading it.", pageIdToLoad, frameIndex);
-      CleanupFailedFrameLoadAndFree(frameIndex, targetFrame);
-      throw new InvalidOperationException($"Race condition: Failed to add page {pageIdToLoad} to page table for frame {frameIndex}.");
-    }
-    _logger.LogTrace("HandleCacheMissAsync: Page {PageIdToLoad} added to page table for frame {FrameIndex}.", pageIdToLoad, frameIndex);
+  //   if (!_pageTable.TryAdd(pageIdToLoad, frameIndex))
+  //   {
+  //     _logger.LogCritical("HandleCacheMissAsync: CRITICAL RACE: Page {PageIdToLoad} added to page table by another thread for frame {FrameIndex} while this thread was loading it.", pageIdToLoad, frameIndex);
+  //     CleanupFailedFrameLoadAndFree(frameIndex, targetFrame);
+  //     throw new InvalidOperationException($"Race condition: Failed to add page {pageIdToLoad} to page table for frame {frameIndex}.");
+  //   }
+  //   _logger.LogTrace("HandleCacheMissAsync: Page {PageIdToLoad} added to page table for frame {FrameIndex}.", pageIdToLoad, frameIndex);
 
-    Interlocked.Increment(ref targetFrame.PinCount); // PinCount becomes 1
-    MoveToMostRecentlyUsed_Lock(frameIndex); // This locks _replacerLock internally
+  //   Interlocked.Increment(ref targetFrame.PinCount); // PinCount becomes 1
+  //   MoveToMostRecentlyUsed_Lock(frameIndex); // This locks _replacerLock internally
 
-    _logger.LogDebug("HandleCacheMissAsync: Page {PageIdToLoad} loaded into frame {FrameIndex} and pinned. Pin count: {PinCount}",
-                     targetFrame.CurrentPageId, frameIndex, targetFrame.PinCount);
-    return new Page(targetFrame.CurrentPageId, targetFrame.PageData);
-  }
+  //   _logger.LogDebug("HandleCacheMissAsync: Page {PageIdToLoad} loaded into frame {FrameIndex} and pinned. Pin count: {PinCount}",
+  //                    targetFrame.CurrentPageId, frameIndex, targetFrame.PinCount);
+  //   return new Page(targetFrame.CurrentPageId, targetFrame.PageData);
+  // }
 
   /// <summary>
   /// Finds an unpinned frame to evict based on the LRU policy and removes it
@@ -627,12 +640,12 @@ internal sealed class BufferPoolManager : IAsyncDisposable
       if (candidateFrame.PinCount == 0)
       {
         // Found an unpinned victim.
-        _lruList.Remove(currentNode);           // Remove from the LRU list
-        _lruNodeLookup.Remove(candidateFrameIndex); // Remove from the lookup map
+        // _lruList.Remove(currentNode);           // Remove from the LRU list
+        // _lruNodeLookup.Remove(candidateFrameIndex); // Remove from the lookup map
 
-        _logger.LogDebug("FindVictimFrame: LRU victim selected: Frame {FrameIndex}, previously holding PageId {PageId}.",
-                         candidateFrameIndex,
-                         candidateFrame.CurrentPageId == default ? "None/Empty" : candidateFrame.CurrentPageId.ToString());
+        // _logger.LogDebug("FindVictimFrame: LRU victim selected: Frame {FrameIndex}, previously holding PageId {PageId}.",
+        //                  candidateFrameIndex,
+        //                  candidateFrame.CurrentPageId == default ? "None/Empty" : candidateFrame.CurrentPageId.ToString());
         return candidateFrameIndex; // Return the frame index directly
       }
       else
@@ -710,15 +723,15 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     }
   }
 
-  private void MoveToMostRecentlyUsed_Lock(int frameIndex)
-  {
-    lock (_replacerLock)
-    {
-      MoveToMostRecentlyUsed_NoLock(frameIndex);
-    }
-  }
+  // private void MoveToMostRecentlyUsed_Lock(int frameIndex)
+  // {
+  //   lock (_replacerLock)
+  //   {
+  //     MoveToMostRecentlyUsed(frameIndex);
+  //   }
+  // }
 
-  private void MoveToMostRecentlyUsed_NoLock(int frameIndex)
+  private void MoveToMostRecentlyUsed(int frameIndex)
   {
     if (_lruNodeLookup.TryGetValue(frameIndex, out LinkedListNode<int>? node))
     {
