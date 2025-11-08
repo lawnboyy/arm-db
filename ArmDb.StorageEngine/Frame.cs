@@ -70,6 +70,7 @@ internal class Frame
     CurrentPageId = default;
     IsDirty = false;
     PinCount = 0;
+    PageData.Span.Clear(); // CRUCIAL: Zero out buffer from ArrayPool to prevent stale data
 
     // Reset any replacer-specific state here, e.g.:
     // ReplacerStateHandle = null;

@@ -57,7 +57,12 @@ internal sealed class BufferPoolManager : IAsyncDisposable
   // For an LRU (Least Recently Used) policy, we might have:
   private readonly LinkedList<int> _lruList; // Stores frame indices. LRU at the head, MRU at the tail.
   private readonly Dictionary<int, LinkedListNode<int>> _lruNodeLookup; // Maps frame index to its node in _lruList for O(1) move/remove.
-  private readonly object _replacerLock = new object(); // Lock to protect _lruList and _lruNodeLookup as they are not thread-safe.
+
+  /// <summary>
+  /// Lock to protect frame access, including any related state such as pin count and place in the page replacement
+  /// policy (LRU).
+  /// </summary>
+  private readonly object _replacerLock = new object();
 
   /// <summary>
   /// Initializes a new instance of the <see cref="BufferPoolManager"/> class.
@@ -131,19 +136,33 @@ internal sealed class BufferPoolManager : IAsyncDisposable
 
   internal async Task<Page> CreatePageAsync(int tableId)
   {
-    throw new NotImplementedException();
-    // // Allocate a new page on disk. This will create a new table file if it doesn't exist
-    // // already.
-    // var pageId = await _diskManager.AllocateNewDiskPageAsync(tableId);
+    // Allocate a new page on disk. This will create a new table file if it doesn't exist
+    // already.
+    var pageId = await _diskManager.AllocateNewDiskPageAsync(tableId);
 
-    // // Find a frame to load the new page into.
-    // int freeFrameIndex = -1;
-    // if (!_freeFrameIndices.TryDequeue(out freeFrameIndex))
-    // {
-    //   // Evict a frame...
+    // Find a frame to load the new page into.
+    if (_freeFrameIndices.TryDequeue(out var frameIndex))
+    {
+      // Protect access to the free frame's state...
+      lock (_replacerLock)
+      {
+        // We found a free frame, so      
+        // Pull the frame...
+        Frame frame = _frames[frameIndex];
+        // Even though this frame should be clean as it came from the free frame queue, clear the frame's state just for good measure...
+        frame.Reset();
+        // Increment the cached page's pin count...
+        frame.PinCount++;
+        frame.IsDirty = true;
+        _pageTable.TryAdd(pageId, frameIndex);
+        // Update the LRU list...
+        MoveToMostRecentlyUsed(frameIndex);
+        // Return the page.
+        return new Page(pageId, frame.PageData);
+      }
+    }
 
-    // }
-
+    throw new InvalidOperationException("Unable to create new page!");
   }
 
   /// <summary>
@@ -276,7 +295,6 @@ internal sealed class BufferPoolManager : IAsyncDisposable
             }
 
             targetFrame.Reset(); // Ensures PinCount=0, IsDirty=false, CurrentPageId=default
-            targetFrame.PageData.Span.Clear(); // CRUCIAL: Zero out buffer from ArrayPool to prevent stale data
             targetFrame.CurrentPageId = pageId; // Load the page from disk into the frame.
             targetFrame.PinCount++;
           } // Release the page lock.

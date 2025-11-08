@@ -115,4 +115,79 @@ public partial class BufferPoolManagerTests
 #endif
     await localBpm.DisposeAsync();
   }
+
+  [Fact]
+  public async Task FetchPageAsync_ConcurrentCacheHits_MaintainsLruIntegrity()
+  {
+    // Purpose: Stress test the LRU list's internal locking by having many threads
+    // concurrently fetch (hit) pages, forcing constant re-ordering of the list.
+    // If locking is broken, the linked list will get corrupted (loops, broken links).
+
+    // Arrange
+    int poolSize = 10;
+    var options = new BufferPoolManagerOptions { PoolSizeInPages = poolSize };
+    var localBpm = new BufferPoolManager(Options.Create(options), _diskManager, NullLogger<BufferPoolManager>.Instance);
+
+    int tableId = 803;
+    var pageIds = new PageId[poolSize];
+
+    // 1. Create and pre-load 'poolSize' pages. The pool will be full.
+    for (int i = 0; i < poolSize; i++)
+    {
+      pageIds[i] = new PageId(tableId, i);
+      await CreateTestPageFileWithDataAsync(tableId, i, CreateTestBuffer((byte)i));
+      await localBpm.FetchPageAsync(pageIds[i]);
+      // Unpin immediately so they are all valid eviction candidates
+      await localBpm.UnpinPageAsync(pageIds[i], false);
+    }
+
+    // Act
+    // 2. Launch many concurrent tasks that randomly fetch these cached pages.
+    // This will furiously update the LRU list.
+    int numTasks = 100;
+    int fetchesPerTask = 50;
+    var tasks = new Task[numTasks];
+    var random = new Random();
+
+    for (int i = 0; i < numTasks; i++)
+    {
+      tasks[i] = Task.Run(async () =>
+      {
+        var rnd = new Random(random.Next()); // Local random for each task
+        for (int j = 0; j < fetchesPerTask; j++)
+        {
+          // Pick a random page from the pool
+          var pageId = pageIds[rnd.Next(0, poolSize)];
+          // Fetch it (Cache Hit -> moves to MRU)
+          var page = await localBpm.FetchPageAsync(pageId);
+          Assert.NotNull(page);
+          // Unpin it immediately to keep it evictable for later steps
+          await localBpm.UnpinPageAsync(pageId, false);
+        }
+      });
+    }
+
+    await Task.WhenAll(tasks);
+
+    // Assert
+    // The pool should still contain all original pages (no evictions happened yet).
+    // More importantly, the internal LRU structure must not be corrupted.
+    // We verify this by forcing evictions for EVERY page in the pool.
+    // If the linked list is broken, this loop will likely hang or throw an exception.
+
+    for (int i = 0; i < poolSize; i++)
+    {
+      // Fetch a NEW page that is not in the pool.
+      var newPageId = new PageId(tableId, poolSize + i);
+      await CreateTestPageFileWithDataAsync(tableId, poolSize + i, CreateTestBuffer(0xFF));
+
+      // This MUST succeed by evicting one of the original pages.
+      // If LRU is corrupted, this might fail.
+      var newPage = await localBpm.FetchPageAsync(newPageId);
+      Assert.NotNull(newPage);
+      Assert.Equal(newPageId, newPage.Id);
+    }
+
+    await localBpm.DisposeAsync();
+  }
 }
