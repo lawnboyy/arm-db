@@ -140,6 +140,9 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     // already.
     var pageId = await _diskManager.AllocateNewDiskPageAsync(tableId);
 
+    // Frame to load the page into...
+    Frame frame;
+
     // Find a frame to load the new page into.
     if (_freeFrameIndices.TryDequeue(out var frameIndex))
     {
@@ -148,7 +151,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
       {
         // We found a free frame, so      
         // Pull the frame...
-        Frame frame = _frames[frameIndex];
+        frame = _frames[frameIndex];
         // Even though this frame should be clean as it came from the free frame queue, clear the frame's state just for good measure...
         frame.Reset();
         // Increment the cached page's pin count...
@@ -157,9 +160,10 @@ internal sealed class BufferPoolManager : IAsyncDisposable
         _pageTable.TryAdd(pageId, frameIndex);
         // Update the LRU list...
         MoveToMostRecentlyUsed(frameIndex);
-        // Return the page.
-        return new Page(pageId, frame.PageData);
       }
+
+      // Return the page.
+      return new Page(pageId, frame.PageData);
     }
 
     throw new InvalidOperationException("Unable to create new page!");
