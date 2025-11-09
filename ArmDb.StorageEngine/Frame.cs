@@ -71,7 +71,7 @@ internal class Frame
     // default(PageId) will have TableId = 0 and PageIndex = 0.
     // We might need a globally recognized PageId.Invalid static field/property if (0,0) is a valid PageId
     // for a system table. For now, default behavior is usually sufficient if 0 TableId is unused or special.
-    CurrentPageId = new PageId(-1, 0);
+    CurrentPageId = default;
     IsDirty = false;
     PinCount = 0;
     PageData.Span.Clear(); // CRUCIAL: Zero out buffer from ArrayPool to prevent stale data

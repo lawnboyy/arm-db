@@ -160,18 +160,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
         // We found a free frame, so      
         // Pull the frame...
         frame = _frames[frameIndex];
-        // Even though this frame should be clean as it came from the free frame queue, clear the frame's state just for good measure...
-        frame.Reset();
-        // TODO: This is hacky... the reset sets the page ID to a table ID of -1 so we know it no longer contains a valid page.
-        // Setting the PageId also doesn't work because it sets the table and page index to 0 which could be a valid table and page.
-        // Figure out a better way to determine if the frame contains valid data.
-        frame.CurrentPageId = pageId;
-        // Increment the cached page's pin count...
-        frame.PinCount++;
-        frame.IsDirty = true;
-        _pageTable.TryAdd(pageId, frameIndex);
-        // Update the LRU list...
-        MoveToMostRecentlyUsed(frameIndex);
+        ReserveFrame(frame, pageId, frameIndex, true);
       }
 
       // Return the page.
@@ -186,13 +175,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
         // TODO: Should we catch the buffer pool full exception here?
         // Evict a frame
         frame = EvictFrame(pageId, out frameIndex, ref evictedPageId, ref evictedDirtyPageData);
-        // Prep the evicted frame...
-        frame.Reset(); // Ensures PinCount=0, IsDirty=false, CurrentPageId=default, data is cleared...
-        frame.CurrentPageId = pageId; // Load the page from disk into the frame.
-        frame.PinCount++;
-        _pageTable.TryAdd(pageId, frameIndex);
-        // Update the LRU list...
-        MoveToMostRecentlyUsed(frameIndex);
+        ReserveFrame(frame, pageId, frameIndex, true);
       }
 
       // If we evicted a dirty page, now we need to flush its captured content to disk outside the lock.
@@ -485,25 +468,43 @@ internal sealed class BufferPoolManager : IAsyncDisposable
                      targetFrame.CurrentPageId == default ? "None" : targetFrame.CurrentPageId.ToString(),
                      targetFrame.IsDirty);
 
-    if (targetFrame.ContainsValidPage) // Frame holds a valid page
+    // Remove the page from the cache look up...
+    if (!_pageTable.TryRemove(targetFrame.CurrentPageId, out _))
+    {
+      _logger.LogWarning("During eviction of frame {FrameIndexToEvict}, its PageId {OldPageId} was not found in the page table. Possible inconsistency.", frameIndex, evictedPageId);
+    }
+
+    // Capture the information about the evicted frame if the frame is dirty and needs to be flushed to disk.
+    if (targetFrame.IsDirty)
     {
       evictedPageId = targetFrame.CurrentPageId;
-
-      if (!_pageTable.TryRemove(evictedPageId.Value, out _))
-      {
-        _logger.LogWarning("During eviction of frame {FrameIndexToEvict}, its PageId {OldPageId} was not found in the page table. Possible inconsistency.", frameIndex, evictedPageId);
-      }
-
       // Copy the data to flush so that we can perform this asynchronous operation outside of the lock.
-      if (targetFrame.IsDirty)
-      {
-        evictedDirtyPageData = targetFrame.PageData.ToArray();
-      }
+      evictedDirtyPageData = targetFrame.PageData.ToArray();
     }
 
     _logger.LogDebug("Frame {FrameIndexToEvict} successfully processed for eviction and is now clean and ready for reuse.", frameIndex);
 
     return targetFrame;
+  }
+
+  /// <summary>
+  /// Reserves a frame by resetting it and setting it's state to the new page ID. This
+  /// method must be called in a lock or with a semaphore to protect access to to the
+  /// frame's state.
+  /// </summary>
+  /// <param name="frame"></param>
+  /// <param name="pageId"></param>
+  /// <param name="frameIndex"></param>
+  /// <param name="isDirty"></param>
+  private void ReserveFrame(Frame frame, PageId pageId, int frameIndex, bool? isDirty = null)
+  {
+    frame.Reset(); // Ensures PinCount=0, IsDirty=false, CurrentPageId=default, data is cleared...
+    frame.CurrentPageId = pageId; // Set the new page ID
+    frame.PinCount++;
+    frame.IsDirty = isDirty.HasValue ? isDirty.Value : false;
+    _pageTable.TryAdd(pageId, frameIndex);
+    // Update the LRU list...
+    MoveToMostRecentlyUsed(frameIndex);
   }
 
   /// <summary>
