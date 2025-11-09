@@ -4,6 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using ArmDb.StorageEngine.Exceptions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.VisualBasic;
 
 namespace ArmDb.StorageEngine;
 
@@ -52,14 +53,16 @@ internal sealed class BufferPoolManager : IAsyncDisposable
   /// </summary>
   private readonly ConcurrentQueue<int> _freeFrameIndices;
 
-  // --- Page Replacement Policy State ---
-  // We'll need data structures to implement our chosen page replacement policy (e.g., LRU, Clock).
-  // For an LRU (Least Recently Used) policy, we might have:
+  /// <summary>
+  /// Data structures to implement the page replacement policy, which for now is Least Recently Used (LRU). When
+  /// the buffer is full and we need to evict an old page to pull in a new page, we'll remove the least recently
+  /// used frame. There are probably better algorithms that we can explore later, but this will get us started.
+  /// </summary>
   private readonly LinkedList<int> _lruList; // Stores frame indices. LRU at the head, MRU at the tail.
   private readonly Dictionary<int, LinkedListNode<int>> _lruNodeLookup; // Maps frame index to its node in _lruList for O(1) move/remove.
 
   /// <summary>
-  /// Lock to protect frame access, including any related state such as pin count and place in the page replacement
+  /// Lock to protect frame access, including any related state such as pin count and the position in the page replacement
   /// policy (LRU).
   /// </summary>
   private readonly object _replacerLock = new object();
@@ -138,13 +141,18 @@ internal sealed class BufferPoolManager : IAsyncDisposable
   {
     // Allocate a new page on disk. This will create a new table file if it doesn't exist
     // already.
+    // TODO: Do we need to protect access to the table in this case?
     var pageId = await _diskManager.AllocateNewDiskPageAsync(tableId);
 
     // Frame to load the page into...
     Frame frame;
+    int frameIndex;
+    PageId? evictedPageId = null;
+    byte[] evictedDirtyPageData = [];
 
+    // Case 1: There are free frames available.
     // Find a frame to load the new page into.
-    if (_freeFrameIndices.TryDequeue(out var frameIndex))
+    if (_freeFrameIndices.TryDequeue(out frameIndex))
     {
       // Protect access to the free frame's state...
       lock (_replacerLock)
@@ -154,12 +162,53 @@ internal sealed class BufferPoolManager : IAsyncDisposable
         frame = _frames[frameIndex];
         // Even though this frame should be clean as it came from the free frame queue, clear the frame's state just for good measure...
         frame.Reset();
+        // TODO: This is hacky... the reset sets the page ID to a table ID of -1 so we know it no longer contains a valid page.
+        // Setting the PageId also doesn't work because it sets the table and page index to 0 which could be a valid table and page.
+        // Figure out a better way to determine if the frame contains valid data.
+        frame.CurrentPageId = pageId;
         // Increment the cached page's pin count...
         frame.PinCount++;
         frame.IsDirty = true;
         _pageTable.TryAdd(pageId, frameIndex);
         // Update the LRU list...
         MoveToMostRecentlyUsed(frameIndex);
+      }
+
+      // Return the page.
+      return new Page(pageId, frame.PageData);
+    }
+    else // There are no free frames available, so we must evict a cached page.
+    {
+      // Case 2: There are no free frames available, so we must evict a page, and there is an unpinned page to evict.
+      // Protect access to this section as we select a frame to evict and evict it.
+      lock (_replacerLock)
+      {
+        // TODO: Should we catch the buffer pool full exception here?
+        // Evict a frame
+        frame = EvictFrame(pageId, out frameIndex, ref evictedPageId, ref evictedDirtyPageData);
+        // Prep the evicted frame...
+        frame.Reset(); // Ensures PinCount=0, IsDirty=false, CurrentPageId=default, data is cleared...
+        frame.CurrentPageId = pageId; // Load the page from disk into the frame.
+        frame.PinCount++;
+        _pageTable.TryAdd(pageId, frameIndex);
+        // Update the LRU list...
+        MoveToMostRecentlyUsed(frameIndex);
+      }
+
+      // If we evicted a dirty page, now we need to flush its captured content to disk outside the lock.
+      if (evictedPageId != null && evictedDirtyPageData.Length > 0)
+      {
+        _logger.LogInformation("Flushing dirty page {OldPageId} from frame {FrameIndexToEvict}.", evictedPageId, frameIndex);
+        try
+        {
+          await _diskManager.WriteDiskPageAsync(evictedPageId.Value, evictedDirtyPageData);
+        }
+        catch (Exception ex)
+        {
+          _logger.LogCritical(ex, "CRITICAL: Failed to flush dirty page {OldPageId} from frame {FrameIndexToEvict}. Data for may be lost.", evictedPageId, frameIndex);
+          // Propagate a specific exception so HandleCacheMissAsync knows the flush failed.
+          throw new CouldNotFlushToDiskException($"Failed to flush dirty page {evictedPageId} from frame {frameIndex}. Data may be lost.", ex);
+        }
       }
 
       // Return the page.
@@ -267,35 +316,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
             else // No free frames available, so we must evict...
             {
               // Find a frame to evict...
-              frameIndex = FindVictimFrame();
-              // Add right back to the LRU list?
-              MoveToMostRecentlyUsed(frameIndex);
-
-              _logger.LogTrace("Victim frame {VictimFrameIndex} selected for page {PageIdToLoad}.", frameIndex, pageId);
-              targetFrame = _frames[frameIndex];
-
-              _logger.LogTrace("Processing frame {FrameIndexToEvict} for eviction. Current PageId: {PageId}, IsDirty: {IsDirty}",
-                               frameIndex,
-                               targetFrame.CurrentPageId == default ? "None" : targetFrame.CurrentPageId.ToString(),
-                               targetFrame.IsDirty);
-
-              if (targetFrame.CurrentPageId != default) // Frame holds a valid page
-              {
-                evictedPageId = targetFrame.CurrentPageId;
-
-                if (!_pageTable.TryRemove(evictedPageId.Value, out _))
-                {
-                  _logger.LogWarning("During eviction of frame {FrameIndexToEvict}, its PageId {OldPageId} was not found in the page table. Possible inconsistency.", frameIndex, evictedPageId);
-                }
-
-                // Copy the data to flush so that we can perform this asynchronous operation outside of the lock.
-                if (targetFrame.IsDirty)
-                {
-                  evictedDirtyPageData = targetFrame.PageData.ToArray();
-                }
-              }
-
-              _logger.LogDebug("Frame {FrameIndexToEvict} successfully processed for eviction and is now clean and ready for reuse.", frameIndex);
+              targetFrame = EvictFrame(pageId, out frameIndex, ref evictedPageId, ref evictedDirtyPageData);
             }
 
             targetFrame.Reset(); // Ensures PinCount=0, IsDirty=false, CurrentPageId=default
@@ -432,6 +453,60 @@ internal sealed class BufferPoolManager : IAsyncDisposable
   }
 
   /// <summary>
+  /// Finds and evicts a page from the LRU frame. This method must be called inside a lock or protected with
+  /// a semaphore as it accesses and updates the frame's state.
+  /// </summary>
+  /// <param name="pageId"></param>
+  /// <param name="frameIndex"></param>
+  /// <param name="evictedPageId"></param>
+  /// <param name="evictedDirtyPageData"></param>
+  /// <returns></returns>
+  /// <exception cref="BufferPoolFullException"></exception>
+  private Frame EvictFrame(PageId pageId, out int frameIndex, ref PageId? evictedPageId, ref byte[] evictedDirtyPageData)
+  {
+    // Find a frame to evict...
+    frameIndex = FindVictimFrame();
+
+    if (frameIndex < 0)
+    {
+      // If we didn't get a valid index, then no frame was unpinned, so we could not evict.
+      _logger.LogWarning("FindVictimFrame: No unpinned victim found (all pages in LRU list are pinned, or list is empty).");
+      throw new BufferPoolFullException("No unpinned victim frame could be found in the buffer pool. All pages may be pinned or the LRU list is empty.");
+    }
+
+    // Add right back to the LRU list?
+    MoveToMostRecentlyUsed(frameIndex);
+
+    _logger.LogTrace("Victim frame {VictimFrameIndex} selected for page {PageIdToLoad}.", frameIndex, pageId);
+    var targetFrame = _frames[frameIndex];
+
+    _logger.LogTrace("Processing frame {FrameIndexToEvict} for eviction. Current PageId: {PageId}, IsDirty: {IsDirty}",
+                     frameIndex,
+                     targetFrame.CurrentPageId == default ? "None" : targetFrame.CurrentPageId.ToString(),
+                     targetFrame.IsDirty);
+
+    if (targetFrame.ContainsValidPage) // Frame holds a valid page
+    {
+      evictedPageId = targetFrame.CurrentPageId;
+
+      if (!_pageTable.TryRemove(evictedPageId.Value, out _))
+      {
+        _logger.LogWarning("During eviction of frame {FrameIndexToEvict}, its PageId {OldPageId} was not found in the page table. Possible inconsistency.", frameIndex, evictedPageId);
+      }
+
+      // Copy the data to flush so that we can perform this asynchronous operation outside of the lock.
+      if (targetFrame.IsDirty)
+      {
+        evictedDirtyPageData = targetFrame.PageData.ToArray();
+      }
+    }
+
+    _logger.LogDebug("Frame {FrameIndexToEvict} successfully processed for eviction and is now clean and ready for reuse.", frameIndex);
+
+    return targetFrame;
+  }
+
+  /// <summary>
   /// Finds an unpinned frame to evict based on the LRU policy and removes it
   /// from LRU tracking.
   /// This method MUST be called while holding the _replacerLock.
@@ -454,12 +529,9 @@ internal sealed class BufferPoolManager : IAsyncDisposable
       if (candidateFrame.PinCount == 0)
       {
         // Found an unpinned victim.
-        // _lruList.Remove(currentNode);           // Remove from the LRU list
-        // _lruNodeLookup.Remove(candidateFrameIndex); // Remove from the lookup map
-
-        // _logger.LogDebug("FindVictimFrame: LRU victim selected: Frame {FrameIndex}, previously holding PageId {PageId}.",
-        //                  candidateFrameIndex,
-        //                  candidateFrame.CurrentPageId == default ? "None/Empty" : candidateFrame.CurrentPageId.ToString());
+        // We don't remove from the LRU because we are evicting the page frame so that frame can
+        // be used by another page. So we expect the caller to always update this evicted frame
+        // to be the MRU.
         return candidateFrameIndex; // Return the frame index directly
       }
       else
@@ -473,8 +545,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     }
 
     // If the loop completes, no unpinned page was found in the LRU list.
-    _logger.LogWarning("FindVictimFrame: No unpinned victim found (all pages in LRU list are pinned, or list is empty).");
-    throw new BufferPoolFullException("No unpinned victim frame could be found in the buffer pool. All pages may be pinned or the LRU list is empty.");
+    return -1;
   }
 
   private void CleanupFailedFrameLoadAndFree(int frameIndex, Frame frame)

@@ -1,4 +1,6 @@
 using System;
+using System.Reflection.Metadata.Ecma335;
+using System.Runtime.CompilerServices;
 
 namespace ArmDb.StorageEngine;
 
@@ -36,6 +38,8 @@ internal class Frame
   /// </summary>
   public int PinCount;
 
+  public bool ContainsValidPage => CurrentPageId.TableId >= 0;
+
   // --- Fields/Properties for Page Replacement Algorithm State ---
   // Example for LRU (actual LinkedListNode might be managed by the replacer component itself):
   // public object? ReplacerStateHandle { get; set; }
@@ -67,7 +71,7 @@ internal class Frame
     // default(PageId) will have TableId = 0 and PageIndex = 0.
     // We might need a globally recognized PageId.Invalid static field/property if (0,0) is a valid PageId
     // for a system table. For now, default behavior is usually sufficient if 0 TableId is unused or special.
-    CurrentPageId = default;
+    CurrentPageId = new PageId(-1, 0);
     IsDirty = false;
     PinCount = 0;
     PageData.Span.Clear(); // CRUCIAL: Zero out buffer from ArrayPool to prevent stale data
