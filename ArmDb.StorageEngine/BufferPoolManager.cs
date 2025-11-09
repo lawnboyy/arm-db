@@ -141,7 +141,8 @@ internal sealed class BufferPoolManager : IAsyncDisposable
   {
     // Allocate a new page on disk. This will create a new table file if it doesn't exist
     // already.
-    // TODO: Do we need to protect access to the table in this case?
+    // Allocating the page on disk protects access to the table, so no locking is needed
+    // here.
     var pageId = await _diskManager.AllocateNewDiskPageAsync(tableId);
 
     // Frame to load the page into...
