@@ -1,4 +1,7 @@
 using ArmDb.StorageEngine;
+using ArmDb.StorageEngine.Exceptions;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace ArmDb.UnitTests.StorageEngine;
 
@@ -47,5 +50,43 @@ public partial class BTreeTests : IDisposable
     Assert.Equal(PageHeader.INVALID_PAGE_INDEX, header.NextPageIndex);
     Assert.Equal(PageHeader.INVALID_PAGE_INDEX, header.ParentPageIndex);
 #endif
+  }
+
+  [Fact]
+  public async Task CreateAsync_WhenPoolFullOfPinnedPages_ThrowsBufferPoolFullException()
+  {
+    // Arrange
+    // 1. Create a *local* BPM with a very small pool size
+    var smallPoolOptions = new BufferPoolManagerOptions { PoolSizeInPages = 2 };
+    var localBpm = new BufferPoolManager(Options.Create(smallPoolOptions), _diskManager, NullLogger<BufferPoolManager>.Instance);
+
+    // 2. Fill the pool with pinned pages
+    //    We must use a different tableId for each so CreateAsync can succeed
+    var tableDef1 = CreateIntPKTable(101);
+    var tableDef2 = CreateIntPKTable(102);
+
+    await BTree.CreateAsync(localBpm, tableDef1); // Creates page, leaves it unpinned
+    await BTree.CreateAsync(localBpm, tableDef2); // Creates page, leaves it unpinned
+
+    // Now, manually fetch and *pin* the pages to fill the pool
+    var page0 = await localBpm.FetchPageAsync(new PageId(tableDef1.TableId, 0));
+    var page1 = await localBpm.FetchPageAsync(new PageId(tableDef2.TableId, 0));
+    Assert.NotNull(page0); // Ensure they were fetched
+    Assert.NotNull(page1);
+
+    // At this point, the pool of size 2 is full of pinned pages (p0 and p1)
+
+    // 3. Define the table for the creation attempt that should fail
+    var tableDef3 = CreateIntPKTable(103);
+
+    // Act & Assert
+    // 4. The call to CreateAsync should fail because its internal call to
+    //    _bpm.CreatePageAsync() will find no evictable frames.
+    await Assert.ThrowsAsync<BufferPoolFullException>(() =>
+        BTree.CreateAsync(localBpm, tableDef3)
+    );
+
+    // Cleanup
+    await localBpm.DisposeAsync();
   }
 }
