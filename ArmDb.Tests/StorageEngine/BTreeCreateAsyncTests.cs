@@ -1,5 +1,6 @@
 using ArmDb.StorageEngine;
 using ArmDb.StorageEngine.Exceptions;
+using ArmDb.UnitTests.Server;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -88,5 +89,33 @@ public partial class BTreeTests : IDisposable
 
     // Cleanup
     await localBpm.DisposeAsync();
+  }
+
+  [Fact]
+  public async Task CreateAsync_WhenDiskAllocationFails_ThrowsIOException()
+  {
+    var bpmOptions = new BufferPoolManagerOptions { PoolSizeInPages = 100 };
+    // Arrange
+    // 1. Setup a ControllableFileSystem that will fail on SetFileLength
+    var controllableFs = new MockFileSystem();
+    controllableFs.EnsureDirectoryExists(_baseTestDir);
+    var diskManager = new DiskManager(controllableFs, NullLogger<DiskManager>.Instance, _baseTestDir);
+    var bpm = new BufferPoolManager(Options.Create(bpmOptions), diskManager, NullLogger<BufferPoolManager>.Instance);
+
+    var tableDef = CreateIntPKTable(201);
+    string expectedFilePath = Path.Combine(_baseTestDir, $"{tableDef.TableId}{DiskManager.TableFileExtension}");
+
+    // 2. Configure the mock FS to fail when SetFileLengthAsync is called
+    //    (This is triggered by DiskManager.AllocateNewDiskPageAsync)
+    controllableFs.SetupOperationToFail(expectedFilePath, FileOperationType.SetLength, shouldFail: true);
+
+    // Act & Assert
+    // 3. BTree.CreateAsync -> bpm.CreatePageAsync -> diskManager.AllocateNewDiskPageAsync -> fs.SetFileLengthAsync -> throws IOException
+    await Assert.ThrowsAsync<IOException>(() =>
+        BTree.CreateAsync(bpm, tableDef)
+    );
+
+    // Cleanup
+    await bpm.DisposeAsync();
   }
 }
