@@ -1,3 +1,4 @@
+using ArmDb.SchemaDefinition;
 using ArmDb.StorageEngine;
 using ArmDb.StorageEngine.Exceptions;
 using ArmDb.UnitTests.Server;
@@ -117,5 +118,22 @@ public partial class BTreeTests : IDisposable
 
     // Cleanup
     await bpm.DisposeAsync();
+  }
+
+  [Fact]
+  public async Task CreateAsync_WithNullInputs_ThrowsArgumentNullException()
+  {
+    // Arrange
+    BufferPoolManager? nullBpm = null;
+    TableDefinition? nullTableDef = null;
+
+    // Act & Assert
+    await Assert.ThrowsAsync<ArgumentNullException>("bpm", () =>
+        BTree.CreateAsync(nullBpm!, _tableDef)
+    );
+
+    await Assert.ThrowsAsync<ArgumentNullException>("tableDef", () =>
+        BTree.CreateAsync(_bpm, nullTableDef!)
+    );
   }
 }

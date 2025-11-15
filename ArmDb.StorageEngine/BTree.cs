@@ -20,6 +20,9 @@ internal sealed class BTree
 
   internal static async Task<BTree> CreateAsync(BufferPoolManager bpm, TableDefinition tableDef)
   {
+    ArgumentNullException.ThrowIfNull(bpm, nameof(bpm));
+    ArgumentNullException.ThrowIfNull(tableDef, nameof(tableDef));
+
     // Use the buffer pool manager to allocate a new page for this table.
     var rootPage = await bpm.CreatePageAsync(tableDef.TableId);
 
