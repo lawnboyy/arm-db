@@ -29,12 +29,19 @@ public sealed class TableDefinition
   public string Name { get; init; } // Can be init as it's set once at construction
 
   /// <summary>
+  /// Unique identifier for this table definition.
+  /// </summary>
+  public int TableId { get; init; }
+
+  /// <summary>
   /// Initializes a new instance of the <see cref="TableDefinition"/> class.
   /// </summary>
   /// <param name="name">The name of the table. Cannot be null or whitespace.</param>
   /// <exception cref="ArgumentException">Thrown if name is null or whitespace.</exception>
-  public TableDefinition(string name)
+  public TableDefinition(string name, int tableId = 0)
   {
+    TableId = tableId;
+
     if (string.IsNullOrWhiteSpace(name))
     {
       throw new ArgumentException("Table name cannot be null or whitespace.", nameof(name));

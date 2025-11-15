@@ -49,4 +49,12 @@ public partial class BTreeTests : IDisposable
       Console.WriteLine($"Error cleaning up test directory '{_baseTestDir}': {ex.Message}");
     }
   }
+
+  private static TableDefinition CreateIntPKTable(int tableId = 1)
+  {
+    var tableDef = new TableDefinition("IntPKTable", tableId); // Pass ID
+    tableDef.AddColumn(new ColumnDefinition("Id", new DataTypeInfo(PrimitiveDataType.Int), isNullable: false));
+    tableDef.AddConstraint(new PrimaryKeyConstraint("IntPKTable", new[] { "Id" }));
+    return tableDef;
+  }
 }
