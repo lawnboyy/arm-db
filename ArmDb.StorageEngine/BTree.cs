@@ -40,10 +40,10 @@ internal sealed class BTree
   /// <summary>
   /// Searches the B-Tree by traversing internal nodes to find the leaf node that would contain the
   /// given key value. If the record is found in the leaf node, it is returned. Otherwise, a null
-  /// value is returned.
+  /// value is returned. The bulk of the work is delegated to the private recursive method.
   /// </summary>
-  /// <param name="key"></param>
-  /// <returns></returns>
+  /// <param name="key">Key of the record to search for</param>
+  /// <returns>The record if found, null otherwise.</returns>
   internal async Task<Record?> SearchAsync(Key key)
   {
     ArgumentNullException.ThrowIfNull(key, nameof(key));

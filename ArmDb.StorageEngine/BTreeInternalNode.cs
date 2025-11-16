@@ -71,7 +71,7 @@ internal sealed class BTreeInternalNode : BTreeNode
         return childPageId;
       }
     }
-    else // We got a separate key match. The separator keys are the exclusive upper bound, so we need to return the pointer to the right of the separator key.
+    else // We got a separator key match. The separator keys are the exclusive upper bound, so we need to return the pointer to the right of the separator key.
     {
       // Since the key is a match for a separator key which is an upper bounds, we want to return the slot to the right of the found key.
       var adjustedSlotIndex = slotIndex + 1;
