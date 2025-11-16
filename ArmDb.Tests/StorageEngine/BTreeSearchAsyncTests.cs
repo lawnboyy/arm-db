@@ -1,4 +1,5 @@
 using ArmDb.DataModel;
+using ArmDb.SchemaDefinition;
 using ArmDb.StorageEngine;
 
 namespace ArmDb.UnitTests.StorageEngine;

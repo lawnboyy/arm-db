@@ -1,5 +1,4 @@
 using ArmDb.DataModel;
-using ArmDb.DataModel.Exceptions;
 using ArmDb.SchemaDefinition;
 using ArmDb.StorageEngine.Exceptions;
 
