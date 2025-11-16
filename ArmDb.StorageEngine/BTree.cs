@@ -1,3 +1,4 @@
+using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
 
 namespace ArmDb.StorageEngine;
@@ -34,6 +35,56 @@ internal sealed class BTree
 
     // Return a new BTree instance...
     return new BTree(bpm, tableDef, rootPage.Id);
+  }
+
+  /// <summary>
+  /// Searches the B-Tree by traversing internal nodes to find the leaf node that would contain the
+  /// given key value. If the record is found in the leaf node, it is returned. Otherwise, a null
+  /// value is returned.
+  /// </summary>
+  /// <param name="key"></param>
+  /// <returns></returns>
+  internal async Task<Record?> SearchAsync(Key key)
+  {
+    ArgumentNullException.ThrowIfNull(key, nameof(key));
+    return await SearchRecursiveAsync(_rootPageId, key);
+  }
+
+  private async Task<Record?> SearchRecursiveAsync(PageId pageId, Key key)
+  {
+    // Fetch the page (this will pin the page)...
+    var page = await _bpm.FetchPageAsync(pageId);
+
+    // Pull the page header and check the type...
+    var header = new PageHeader(page);
+
+    // Base Case
+    // If this is a leaf node, then search for the record and return
+    if (header.PageType == PageType.LeafNode)
+    {
+      var leafNode = new BTreeLeafNode(page, _tableDefinition);
+      var record = leafNode.Search(key);
+
+      // Unpin the page now that we are done with it.
+      await _bpm.UnpinPageAsync(pageId, false);
+
+      return record;
+    }
+    // Otherwise, it's an internal node and we need to recurse further...
+    else if (header.PageType == PageType.InternalNode)
+    {
+      // Find the child node associated with this key...
+      var internalNode = new BTreeInternalNode(page, _tableDefinition);
+      var childPageId = internalNode.LookupChildPage(key);
+
+      // Unpin the page now that we are done with it...
+      await _bpm.UnpinPageAsync(pageId, false);
+
+      // Recursively call this search method...
+      return await SearchRecursiveAsync(childPageId, key);
+    }
+
+    throw new InvalidDataException("B-Tree Node type was invalid!");
   }
 
 #if DEBUG
