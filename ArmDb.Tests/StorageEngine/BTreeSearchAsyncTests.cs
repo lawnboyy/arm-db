@@ -100,4 +100,35 @@ public partial class BTreeTests
     // 5. Verify the result is null
     Assert.Null(result);
   }
+
+  [Fact]
+  public async Task SearchAsync_OnInvalidPageType_ThrowsInvalidDataException()
+  {
+    // Arrange
+    // 1. Create a new BTree, which creates a valid LeafNode root page
+    var btree = await BTree.CreateAsync(_bpm, _tableDef);
+    var searchKey = new Key([DataValue.CreateInteger(100)]);
+
+#if DEBUG
+    // 2. Manually fetch the root page and corrupt its type
+    var rootPageId = btree.GetRootPageIdForTest();
+    var rootPage = await _bpm.FetchPageAsync(rootPageId);
+    Assert.NotNull(rootPage);
+
+    // 3. Corrupt the header to be an invalid type
+    var header = new PageHeader(rootPage);
+    header.PageType = PageType.Invalid; // Set to 0
+
+    // 4. Unpin the corrupted page, marking it dirty
+    await _bpm.UnpinPageAsync(rootPageId, isDirty: true);
+#else
+        Assert.True(false, "This test requires DEBUG build with test hooks.");
+#endif
+
+    // Act & Assert
+    // 5. SearchAsync should now fail when it reads the corrupted header
+    await Assert.ThrowsAsync<InvalidDataException>(() =>
+        btree.SearchAsync(searchKey)
+    );
+  }
 }
