@@ -269,6 +269,133 @@ public partial class BTreeTests
     Assert.Null(result4);
   }
 
+  [Fact]
+  public async Task SearchAsync_OnFourLevelTree_FindsRecordInDeepLeaf()
+  {
+    // --- Construct a 4-Level Tree Bottom-Up ---
+
+    // 1. Level 3: Leaf Nodes (8 Pages)
+    // We create leaves covering ranges: [10..19], [20..29], ... [80..89]
+    var leafIds = new PageId[8];
+    for (int i = 0; i < 8; i++)
+    {
+      int startKey = (i + 1) * 10;
+      // Example: Leaf 0 has keys 10, 15. Leaf 6 has keys 70, 75.
+      leafIds[i] = await CreateAndPopulateLeafPageAsync(_tableDef, new[] { startKey, startKey + 5 });
+    }
+
+    // 2. Level 2: Internal Nodes (4 Pages)
+    // Each L2 node points to 2 leaves.
+    // L2_0: Covers < 30. (Sep 20 -> Leaf 0). Rightmost -> Leaf 1 (>= 20).
+    var l2_0 = await CreateInternalPageAsync(_tableDef, new[] { (20, leafIds[0]) }, leafIds[1]);
+
+    // L2_1: Covers >= 30, < 50. (Sep 40 -> Leaf 2). Rightmost -> Leaf 3 (>= 40).
+    var l2_1 = await CreateInternalPageAsync(_tableDef, new[] { (40, leafIds[2]) }, leafIds[3]);
+
+    // L2_2: Covers >= 50, < 70. (Sep 60 -> Leaf 4). Rightmost -> Leaf 5 (>= 60).
+    var l2_2 = await CreateInternalPageAsync(_tableDef, new[] { (60, leafIds[4]) }, leafIds[5]);
+
+    // L2_3: Covers >= 70. (Sep 80 -> Leaf 6). Rightmost -> Leaf 7 (>= 80).
+    var l2_3 = await CreateInternalPageAsync(_tableDef, new[] { (80, leafIds[6]) }, leafIds[7]);
+
+    // 3. Level 1: Internal Nodes (2 Pages)
+    // Each L1 node points to 2 L2 nodes.
+    // L1_0: Covers < 50. (Sep 30 -> L2_0). Rightmost -> L2_1 (>= 30).
+    // Note: Separator 30 is chosen because L2_0 handles <30, L2_1 starts at 30.
+    var l1_0 = await CreateInternalPageAsync(_tableDef, new[] { (30, l2_0) }, l2_1);
+
+    // L1_1: Covers >= 50. (Sep 70 -> L2_2). Rightmost -> L2_3 (>= 70).
+    var l1_1 = await CreateInternalPageAsync(_tableDef, new[] { (70, l2_2) }, l2_3);
+
+    // 4. Level 0: Root Node (1 Page)
+    // Root points to 2 L1 nodes.
+    // Root: (Sep 50 -> L1_0). Rightmost -> L1_1 (>= 50).
+    var rootPageId = await CreateInternalPageAsync(_tableDef, new[] { (50, l1_0) }, l1_1);
+
+    // --- Instantiate BTree ---
+    // Use the constructor that takes an existing root page
+    // (Assuming you added `internal BTree(BufferPoolManager bpm, TableDefinition tableDef, PageId rootPageId)` constructor)
+    var btree = await BTree.CreateAsync(_bpm, _tableDef, rootPageId);
+
+    // --- Search Target ---
+    // We want to find key 75.
+    // Path should be:
+    // Root (75 >= 50) -> Rightmost (L1_1)
+    // L1_1 (75 >= 70) -> Rightmost (L2_3)
+    // L2_3 (75 < 80)  -> Left Ptr (Leaf 6)
+    // Leaf 6 contains 70, 75. Match!
+    var searchKey = new Key([DataValue.CreateInteger(75)]);
+    var expectedRecord = new Record(DataValue.CreateInteger(75), DataValue.CreateString("Data_75"));
+
+    // Act
+    var result = await btree.SearchAsync(searchKey);
+
+    // Assert
+    Assert.NotNull(result);
+    Assert.Equal(expectedRecord, result);
+  }
+
+  [Fact]
+  public async Task SearchAsync_OnMultiLevelTree_BoundaryAndMissingKeys_ReturnsNull()
+  {
+    // Arrange
+    // --- Construct a 4-Level Tree Bottom-Up ---
+
+    // 1. Level 3: Leaf Nodes (8 Pages)
+    // We create leaves covering ranges: [10..19], [20..29], ... [80..89]
+    var leafIds = new PageId[8];
+    for (int i = 0; i < 8; i++)
+    {
+      int startKey = (i + 1) * 10;
+      // Example: Leaf 0 has keys 10, 15. Leaf 6 has keys 70, 75.
+      leafIds[i] = await CreateAndPopulateLeafPageAsync(_tableDef, new[] { startKey, startKey + 5 });
+    }
+
+    // 2. Level 2: Internal Nodes (4 Pages)
+    // Each L2 node points to 2 leaves.
+    // L2_0: Covers < 30. (Sep 20 -> Leaf 0). Rightmost -> Leaf 1 (>= 20).
+    var l2_0 = await CreateInternalPageAsync(_tableDef, new[] { (20, leafIds[0]) }, leafIds[1]);
+
+    // L2_1: Covers >= 30, < 50. (Sep 40 -> Leaf 2). Rightmost -> Leaf 3 (>= 40).
+    var l2_1 = await CreateInternalPageAsync(_tableDef, new[] { (40, leafIds[2]) }, leafIds[3]);
+
+    // L2_2: Covers >= 50, < 70. (Sep 60 -> Leaf 4). Rightmost -> Leaf 5 (>= 60).
+    var l2_2 = await CreateInternalPageAsync(_tableDef, new[] { (60, leafIds[4]) }, leafIds[5]);
+
+    // L2_3: Covers >= 70. (Sep 80 -> Leaf 6). Rightmost -> Leaf 7 (>= 80).
+    var l2_3 = await CreateInternalPageAsync(_tableDef, new[] { (80, leafIds[6]) }, leafIds[7]);
+
+    // 3. Level 1: Internal Nodes (2 Pages)
+    // Each L1 node points to 2 L2 nodes.
+    // L1_0: Covers < 50. (Sep 30 -> L2_0). Rightmost -> L2_1 (>= 30).
+    // Note: Separator 30 is chosen because L2_0 handles <30, L2_1 starts at 30.
+    var l1_0 = await CreateInternalPageAsync(_tableDef, new[] { (30, l2_0) }, l2_1);
+
+    // L1_1: Covers >= 50. (Sep 70 -> L2_2). Rightmost -> L2_3 (>= 70).
+    var l1_1 = await CreateInternalPageAsync(_tableDef, new[] { (70, l2_2) }, l2_3);
+
+    // 4. Level 0: Root Node (1 Page)
+    // Root points to 2 L1 nodes.
+    // Root: (Sep 50 -> L1_0). Rightmost -> L1_1 (>= 50).
+    var rootPageId = await CreateInternalPageAsync(_tableDef, new[] { (50, l1_0) }, l1_1);
+
+    var btree = await BTree.CreateAsync(_bpm, _tableDef, rootPageId);
+
+    // Act & Assert
+
+    // 1. Left-most boundary (Key < 10)
+    var resultLow = await btree.SearchAsync(new Key([DataValue.CreateInteger(0)]));
+    Assert.Null(resultLow);
+
+    // 2. Right-most boundary (Key > 85)
+    var resultHigh = await btree.SearchAsync(new Key([DataValue.CreateInteger(100)]));
+    Assert.Null(resultHigh);
+
+    // 3. Middle gap (e.g., 12 is not in Leaf 0 [10, 15])
+    var resultGap = await btree.SearchAsync(new Key([DataValue.CreateInteger(12)]));
+    Assert.Null(resultGap);
+  }
+
   private async Task<PageId> CreateAndPopulateLeafPageAsync(int[] keys)
   {
     var page = await _bpm.CreatePageAsync(_tableDef.TableId);
@@ -308,6 +435,55 @@ public partial class BTreeTests
     header.RightmostChildPageIndex = rightmostChild.PageIndex;
 
     await _bpm.UnpinPageAsync(page.Id, true);
+    return page.Id;
+  }
+
+  private async Task<PageId> CreateAndPopulateLeafPageAsync(TableDefinition tableDef, int[] keys)
+  {
+    // 1. Create page
+    var page = await _bpm.CreatePageAsync(tableDef.TableId);
+
+    // 2. Format as Leaf
+    SlottedPage.Initialize(page, PageType.LeafNode);
+
+    // 3. Insert Data
+    var leafNode = new BTreeLeafNode(page, tableDef);
+    foreach (var key in keys)
+    {
+      var record = new Record(DataValue.CreateInteger(key), DataValue.CreateString($"Data_{key}"));
+      leafNode.TryInsert(record);
+    }
+
+    // 4. Unpin (mark dirty)
+    await _bpm.UnpinPageAsync(page.Id, isDirty: true);
+    return page.Id;
+  }
+
+  private async Task<PageId> CreateInternalPageAsync(TableDefinition tableDef, (int key, PageId ptr)[] entries, PageId rightmostChild)
+  {
+    // 1. Create page
+    var page = await _bpm.CreatePageAsync(tableDef.TableId);
+
+    // 2. Format as Internal
+    SlottedPage.Initialize(page, PageType.InternalNode);
+
+    // 3. Insert Entries
+    // We use the lower-level SlottedPage.TryAddRecord to avoid needing the BTreeInternalNode.Insert logic here,
+    // ensuring we test SearchAsync in isolation.
+    int slotIndex = 0;
+    foreach (var entry in entries)
+    {
+      var key = new Key([DataValue.CreateInteger(entry.key)]);
+      // Assuming SerializeEntry is internal static on BTreeInternalNode
+      var recordBytes = BTreeInternalNode.SerializeRecord(key, entry.ptr, tableDef);
+      SlottedPage.TryAddRecord(page, recordBytes, slotIndex++);
+    }
+
+    // 4. Set Rightmost Pointer
+    new PageHeader(page).RightmostChildPageIndex = rightmostChild.PageIndex;
+
+    // 5. Unpin
+    await _bpm.UnpinPageAsync(page.Id, isDirty: true);
     return page.Id;
   }
 }
