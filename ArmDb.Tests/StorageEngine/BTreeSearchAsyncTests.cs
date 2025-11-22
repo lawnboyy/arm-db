@@ -1,6 +1,7 @@
 using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
 using ArmDb.StorageEngine;
+using Record = ArmDb.DataModel.Record;
 
 namespace ArmDb.UnitTests.StorageEngine;
 
@@ -186,5 +187,127 @@ public partial class BTreeTests
 
     Assert.NotNull(result);
     Assert.Equal(expectedRecord, result);
+  }
+
+  [Fact]
+  public async Task SearchAsync_OnThreeLevelTree_FindsRecordsSuccessfully()
+  {
+    // Arrange
+    // 1. Setup Leaves (Level 2)
+    // We will create 9 leaf pages, numbered 0-8 logically.
+    // Leaf 0: [10, 11]
+    // Leaf 1: [20, 21]
+    // ...
+    // Leaf 8: [90, 91]
+    var leafIds = new PageId[9];
+    for (int i = 0; i < 9; i++)
+    {
+      var startKey = (i + 1) * 10;
+      leafIds[i] = await CreateAndPopulateLeafPageAsync(
+          new[] { startKey, startKey + 1 }
+      );
+    }
+
+    // 2. Setup Internal Nodes (Level 1)
+    // We will create 3 internal nodes, each covering 3 leaves.
+
+    // Internal A: Points to Leaves 0, 1, 2. 
+    // Separators: Key(20) -> Leaf 0, Key(30) -> Leaf 1. Rightmost -> Leaf 2.
+    var internalA = await CreateInternalPageAsync(
+        new[] { (20, leafIds[0]), (30, leafIds[1]) },
+        rightmostChild: leafIds[2]
+    );
+
+    // Internal B: Points to Leaves 3, 4, 5.
+    // Separators: Key(50) -> Leaf 3, Key(60) -> Leaf 4. Rightmost -> Leaf 5.
+    var internalB = await CreateInternalPageAsync(
+        new[] { (50, leafIds[3]), (60, leafIds[4]) },
+        rightmostChild: leafIds[5]
+    );
+
+    // Internal C: Points to Leaves 6, 7, 8.
+    // Separators: Key(80) -> Leaf 6, Key(90) -> Leaf 7. Rightmost -> Leaf 8.
+    var internalC = await CreateInternalPageAsync(
+        new[] { (80, leafIds[6]), (90, leafIds[7]) },
+        rightmostChild: leafIds[8]
+    );
+
+    // 3. Setup Root Node (Level 0)
+    // Points to Internal A, B, C.
+    // Separators: Key(40) -> Internal A, Key(70) -> Internal B. Rightmost -> Internal C.
+    // Note: Key 40 is chosen because it's > all keys in Internal A (max 31) and <= all keys in Internal B (min 40)
+    // Actually, strict B+Tree logic: separator is the smallest key in the right-hand child.
+    // Leaf 3 starts with 40. Leaf 6 starts with 70.
+    var rootPageId = await CreateInternalPageAsync(
+        new[] { (40, internalA), (70, internalB) },
+        rightmostChild: internalC
+    );
+
+    // 4. Create BTree instance
+    // Assuming you added an overload or internal constructor to take an existing rootPageId
+    var btree = await BTree.CreateAsync(_bpm, _tableDef, rootPageId);
+
+    // Act & Assert
+
+    // Case 1: Left-most search (Leaf 0, Val 10)
+    var result1 = await btree.SearchAsync(new Key([DataValue.CreateInteger(10)]));
+    Assert.NotNull(result1);
+    Assert.Equal("Data 10", result1.Values[1].GetAs<string>());
+
+    // Case 2: Middle search (Leaf 4, Val 51)
+    var result2 = await btree.SearchAsync(new Key([DataValue.CreateInteger(51)]));
+    Assert.NotNull(result2);
+    Assert.Equal("Data 51", result2.Values[1].GetAs<string>());
+
+    // Case 3: Right-most search (Leaf 8, Val 91)
+    var result3 = await btree.SearchAsync(new Key([DataValue.CreateInteger(91)]));
+    Assert.NotNull(result3);
+    Assert.Equal("Data 91", result3.Values[1].GetAs<string>());
+
+    // Case 4: Not found (Range that would be in Leaf 1 but isn't there)
+    var result4 = await btree.SearchAsync(new Key([DataValue.CreateInteger(25)]));
+    Assert.Null(result4);
+  }
+
+  private async Task<PageId> CreateAndPopulateLeafPageAsync(int[] keys)
+  {
+    var page = await _bpm.CreatePageAsync(_tableDef.TableId);
+    SlottedPage.Initialize(page, PageType.LeafNode);
+
+    var leafNode = new BTreeLeafNode(page, _tableDef);
+    foreach (var k in keys)
+    {
+      var rec = new Record(DataValue.CreateInteger(k), DataValue.CreateString($"Data {k}"));
+      leafNode.TryInsert(rec);
+    }
+
+    await _bpm.UnpinPageAsync(page.Id, true);
+    return page.Id;
+  }
+
+  private async Task<PageId> CreateInternalPageAsync((int key, PageId ptr)[] entries, PageId rightmostChild)
+  {
+    var page = await _bpm.CreatePageAsync(_tableDef.TableId);
+    SlottedPage.Initialize(page, PageType.InternalNode);
+
+    // We can use the BTreeInternalNode wrapper if we made InsertEntryForTest internal/public
+    // Or use the raw SlottedPage.TryAddRecord logic you used in your test.
+    // Using the raw logic to ensure we don't depend on BTreeInternalNode.Insert logic yet:
+
+    foreach (var entry in entries)
+    {
+      var key = new Key([DataValue.CreateInteger(entry.key)]);
+      var recordBytes = BTreeInternalNode.SerializeRecord(key, entry.ptr, _tableDef);
+
+      // For test setup, we can just append to slot 0, 1, 2... since we are adding in order
+      int nextSlot = new PageHeader(page).ItemCount;
+      SlottedPage.TryAddRecord(page, recordBytes, nextSlot);
+    }
+
+    var header = new PageHeader(page);
+    header.RightmostChildPageIndex = rightmostChild.PageIndex;
+
+    await _bpm.UnpinPageAsync(page.Id, true);
+    return page.Id;
   }
 }

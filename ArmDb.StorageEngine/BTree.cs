@@ -27,8 +27,6 @@ internal sealed class BTree
     // If are handed a root page, then just unpin it and return the new B-Tree...
     if (rootPageId.HasValue)
     {
-      await bpm.UnpinPageAsync(rootPageId.Value, true);
-
       // Return a new BTree instance...
       return new BTree(bpm, tableDef, rootPageId.Value);
     }
