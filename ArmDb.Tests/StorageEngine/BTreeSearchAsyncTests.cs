@@ -132,4 +132,59 @@ public partial class BTreeTests
         btree.SearchAsync(searchKey)
     );
   }
+
+  [Fact]
+  public async Task SearchAsync_OnTwoLevelTree_FindsRecordInLeaf()
+  {
+    // Create, initialize, and unpin the leaf pages
+    var leafPage1 = await _bpm.CreatePageAsync(_tableDef.TableId);
+    SlottedPage.Initialize(leafPage1, PageType.LeafNode);
+    await _bpm.UnpinPageAsync(leafPage1.Id, true);
+    // Create 2 records for the 1st Page
+    var page1Record1 = new ArmDb.DataModel.Record([DataValue.CreateInteger(10), DataValue.CreateString("Data 10")]);
+    var page1Record2 = new ArmDb.DataModel.Record([DataValue.CreateInteger(20), DataValue.CreateString("Data 20")]);
+    // Add the records to the leaf node
+    var page1LeafNode = new BTreeLeafNode(leafPage1, _tableDef);
+    page1LeafNode.TryInsert(page1Record1);
+    page1LeafNode.TryInsert(page1Record2);
+
+
+    var leafPage2 = await _bpm.CreatePageAsync(_tableDef.TableId);
+    SlottedPage.Initialize(leafPage2, PageType.LeafNode);
+    await _bpm.UnpinPageAsync(leafPage2.Id, true);
+    // Create 2 records for the second leaf page
+    var page2Record1 = new ArmDb.DataModel.Record([DataValue.CreateInteger(30), DataValue.CreateString("Data 30")]);
+    var page2Record2 = new ArmDb.DataModel.Record([DataValue.CreateInteger(40), DataValue.CreateString("Data 40")]);
+    // Add the records to the leaf node
+    var page2LeafNode = new BTreeLeafNode(leafPage2, _tableDef);
+    page2LeafNode.TryInsert(page2Record1);
+    page2LeafNode.TryInsert(page2Record2);
+
+    // Create the root page
+    var rootPage = await _bpm.CreatePageAsync(_tableDef.TableId);
+    SlottedPage.Initialize(rootPage, PageType.InternalNode);
+
+    // Define the separator key
+    var separatorKey = new Key([DataValue.CreateBigInteger(30)]);
+    var childPageId = leafPage1.Id;
+    var separatorKeyRecordBytes = BTreeInternalNode.SerializeRecord(separatorKey, childPageId, _tableDef);
+    SlottedPage.TryAddRecord(rootPage, separatorKeyRecordBytes, 0);
+
+    // Get page header for the root page, so we can set the rightmost pointer.
+    var rootPageHeader = new PageHeader(rootPage);
+    rootPageHeader.RightmostChildPageIndex = leafPage2.Id.PageIndex;
+
+    // Now create the B-Tree
+    var bTree = await BTree.CreateAsync(_bpm, _tableDef, rootPage.Id);
+
+    // Key to search for...
+    var searchKey = new Key([DataValue.CreateInteger(40)]);
+    var expectedRecord = new ArmDb.DataModel.Record(DataValue.CreateInteger(40), DataValue.CreateString("Data 40"));
+
+    // Now search the tree for the key and verify that we get back the expected record.
+    var result = await bTree.SearchAsync(searchKey);
+
+    Assert.NotNull(result);
+    Assert.Equal(expectedRecord, result);
+  }
 }

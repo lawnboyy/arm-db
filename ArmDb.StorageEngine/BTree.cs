@@ -19,10 +19,19 @@ internal sealed class BTree
     _rootPageId = rootPageId;
   }
 
-  internal static async Task<BTree> CreateAsync(BufferPoolManager bpm, TableDefinition tableDef)
+  internal static async Task<BTree> CreateAsync(BufferPoolManager bpm, TableDefinition tableDef, PageId? rootPageId = null)
   {
     ArgumentNullException.ThrowIfNull(bpm, nameof(bpm));
     ArgumentNullException.ThrowIfNull(tableDef, nameof(tableDef));
+
+    // If are handed a root page, then just unpin it and return the new B-Tree...
+    if (rootPageId.HasValue)
+    {
+      await bpm.UnpinPageAsync(rootPageId.Value, true);
+
+      // Return a new BTree instance...
+      return new BTree(bpm, tableDef, rootPageId.Value);
+    }
 
     // Use the buffer pool manager to allocate a new page for this table.
     var rootPage = await bpm.CreatePageAsync(tableDef.TableId);
