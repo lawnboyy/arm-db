@@ -165,7 +165,7 @@ public partial class BTreeTests
     SlottedPage.Initialize(rootPage, PageType.InternalNode);
 
     // Define the separator key
-    var separatorKey = new Key([DataValue.CreateBigInteger(30)]);
+    var separatorKey = new Key([DataValue.CreateInteger(30)]);
     var childPageId = leafPage1.Id;
     var separatorKeyRecordBytes = BTreeInternalNode.SerializeRecord(separatorKey, childPageId, _tableDef);
     SlottedPage.TryAddRecord(rootPage, separatorKeyRecordBytes, 0);
