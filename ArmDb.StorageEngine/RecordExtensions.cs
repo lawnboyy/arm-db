@@ -1,10 +1,9 @@
-using System.Reflection.Metadata.Ecma335;
 using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
 
 namespace ArmDb.StorageEngine;
 
-public static class DataRowExtensions
+public static class RecordExtensions
 {
   public static Key GetPrimaryKey(this Record row, TableDefinition tableDefinition)
   {

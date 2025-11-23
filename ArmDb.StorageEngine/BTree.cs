@@ -45,6 +45,18 @@ internal sealed class BTree
   }
 
   /// <summary>
+  /// 
+  /// </summary>
+  /// <param name="record"></param>
+  /// <returns></returns>
+  internal async Task InsertAsync(Record record)
+  {
+    // Get the primary key for this record so we can navigate the tree to find the insertion point...
+    var key = record.GetPrimaryKey(_tableDefinition);
+    var _ = await InsertRecursive(_rootPageId, record, key);
+  }
+
+  /// <summary>
   /// Searches the B-Tree by traversing internal nodes to find the leaf node that would contain the
   /// given key value. If the record is found in the leaf node, it is returned. Otherwise, a null
   /// value is returned. The bulk of the work is delegated to the private recursive method.
@@ -55,6 +67,44 @@ internal sealed class BTree
   {
     ArgumentNullException.ThrowIfNull(key, nameof(key));
     return await SearchRecursiveAsync(_rootPageId, key);
+  }
+
+  private async Task<SplitResult?> InsertRecursive(PageId pageId, Record record, Key key)
+  {
+    // Fetch the page (this will pin the page)...
+    var page = await _bpm.FetchPageAsync(pageId);
+
+    var header = new PageHeader(page);
+
+    // Base Case: Leaf
+    // Try to insert the new record in this leaf node...
+    if (header.PageType == PageType.LeafNode)
+    {
+      // Wrap the page in a leaf node...
+      var leafNode = new BTreeLeafNode(page, _tableDefinition);
+      if (leafNode.TryInsert(record))
+      {
+        return null;
+      }
+
+      // Page is full and we could not insert, so we'll need to split this node...
+      return new SplitResult();
+    }
+    // Otherwise, it's an internal node and we need to recurse further...
+    else if (header.PageType == PageType.InternalNode)
+    {
+      // Find the child node associated with this key...
+      var internalNode = new BTreeInternalNode(page, _tableDefinition);
+      var childPageId = internalNode.LookupChildPage(key);
+
+      // Unpin the page now that we are done with it...
+      await _bpm.UnpinPageAsync(pageId, false);
+
+      // Recursively call this search method...
+      return await InsertRecursive(childPageId, record, key);
+    }
+
+    throw new InvalidDataException("B-Tree Node type was invalid!");
   }
 
   private async Task<Record?> SearchRecursiveAsync(PageId pageId, Key key)
@@ -93,6 +143,8 @@ internal sealed class BTree
 
     throw new InvalidDataException("B-Tree Node type was invalid!");
   }
+
+  private class SplitResult { }
 
 #if DEBUG
   // Test hook to get the root page ID
