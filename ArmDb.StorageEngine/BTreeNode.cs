@@ -12,6 +12,8 @@ internal abstract class BTreeNode
 
   internal int ItemCount => new PageHeader(_page).ItemCount;
 
+  internal int ParentPageIndex => new PageHeader(_page).ParentPageIndex;
+
   internal int FreeSpace => SlottedPage.GetFreeSpace(_page);
 
   internal BTreeNode(Page page, TableDefinition tableDefinition)

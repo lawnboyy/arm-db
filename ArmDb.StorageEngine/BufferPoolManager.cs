@@ -137,6 +137,13 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     _logger.LogInformation("Buffer Pool Manager initialized with {FrameCount} frames.", _frames.Length);
   }
 
+  /// <summary>
+  /// Allocates a new page, pins it, and loads it into a buffer frame.
+  /// </summary>
+  /// <param name="tableId">Table ID to create a new page for.</param>
+  /// <returns>The newly allocated page.</returns>
+  /// <exception cref="CouldNotFlushToDiskException"></exception>
+  /// <exception cref="InvalidOperationException"></exception>
   internal async Task<Page> CreatePageAsync(int tableId)
   {
     // Allocate a new page on disk. This will create a new table file if it doesn't exist

@@ -88,7 +88,47 @@ internal sealed class BTree
       }
 
       // Page is full and we could not insert, so we'll need to split this node...
-      return new SplitResult();
+      // First we need to allocate a new leaf node to house half the contents of the existing node...
+      var (newLeafNode, newLeafPageId) = await CreateNewLeafNode();
+
+      // Fetch the right sibling...
+      var rightSiblingIndex = leafNode.NextPageIndex;
+      BTreeLeafNode? rightSiblingLeafNode = null;
+      if (rightSiblingIndex != PageHeader.INVALID_PAGE_INDEX)
+      {
+        var rightSiblingPage = await _bpm.FetchPageAsync(new PageId(_tableDefinition.TableId, rightSiblingIndex));
+        rightSiblingLeafNode = new BTreeLeafNode(rightSiblingPage, _tableDefinition);
+      }
+
+      var newSeparatorKey = leafNode.SplitAndInsert(record, newLeafNode, rightSiblingLeafNode);
+
+      // If there is no parent, then we have a single level tree with a single leaf and must create
+      // a new internal node as the new root to promote the separate key to.
+      if (leafNode.ParentPageIndex == PageHeader.INVALID_PAGE_INDEX)
+      {
+        var (newRootNode, newPageId) = await CreateNewInternalNode();
+        // Insert our new separator key+child pointer record...
+        if (!newRootNode.TryInsert(newSeparatorKey, pageId))
+        {
+          // This should not happen since this is a brand new root node...
+          throw new Exception("Could not insert into a new empty node!");
+        }
+        // Set the right most pointer to the new right sibling leaf node...
+        newRootNode.SetRightmostChildId(newLeafNode.PageIndex);
+
+        // Unpin all pages...
+        await _bpm.UnpinPageAsync(page.Id, true);
+        await _bpm.UnpinPageAsync(newLeafPageId, true);
+
+        // Set the new root ID
+        _rootPageId = newPageId;
+
+        return null;
+      }
+      else
+      {
+        return new SplitResult(newSeparatorKey, pageId);
+      }
     }
     // Otherwise, it's an internal node and we need to recurse further...
     else if (header.PageType == PageType.InternalNode)
@@ -144,7 +184,35 @@ internal sealed class BTree
     throw new InvalidDataException("B-Tree Node type was invalid!");
   }
 
-  private class SplitResult { }
+  private async Task<(BTreeLeafNode newInternalNode, PageId newPageId)> CreateNewLeafNode()
+  {
+    var newPage = await _bpm.CreatePageAsync(_tableDefinition.TableId);
+    var newPageId = newPage.Id;
+    SlottedPage.Initialize(newPage, PageType.LeafNode);
+    var newLeafNode = new BTreeLeafNode(newPage, _tableDefinition);
+    return (newLeafNode, newPageId);
+  }
+
+  private async Task<(BTreeInternalNode newInternalNode, PageId newPageId)> CreateNewInternalNode()
+  {
+    var newPage = await _bpm.CreatePageAsync(_tableDefinition.TableId);
+    var newPageId = newPage.Id;
+    SlottedPage.Initialize(newPage, PageType.InternalNode);
+    var newInternalNode = new BTreeInternalNode(newPage, _tableDefinition);
+    return (newInternalNode, newPageId);
+  }
+
+  private record SplitResult
+  {
+    public Key KeyToPromote { get; init; }
+    public PageId ChildPageId { get; init; }
+
+    public SplitResult(Key keyToPromote, PageId childPageId)
+    {
+      KeyToPromote = keyToPromote;
+      ChildPageId = childPageId;
+    }
+  }
 
 #if DEBUG
   // Test hook to get the root page ID

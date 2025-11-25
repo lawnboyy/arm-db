@@ -135,14 +135,14 @@ internal sealed class BTreeLeafNode : BTreeNode
   /// If there is sufficient space an exception will be thrown.
   /// </remarks>
   /// <param name="rowToInsert">The new data row to insert.</param>
-  /// <param name="newLeaf">New node that will house half the current records.</param>
+  /// <param name="newRightLeaf">New node that will house half the current records.</param>
   /// <returns>The separator key to promote to the parent node.</returns>
   /// <exception cref="NotImplementedException"></exception>
-  internal Key SplitAndInsert(Record rowToInsert, BTreeLeafNode newLeaf, BTreeLeafNode? rightLeafSibling = null)
+  internal Key SplitAndInsert(Record rowToInsert, BTreeLeafNode newRightLeaf, BTreeLeafNode? rightLeafSibling = null)
   {
-    if (newLeaf.ItemCount != 0)
+    if (newRightLeaf.ItemCount != 0)
     {
-      throw new ArgumentException("The new sibling leaf must be an empty, initialized page", nameof(newLeaf));
+      throw new ArgumentException("The new sibling leaf must be an empty, initialized page", nameof(newRightLeaf));
     }
 
     var thisLeafHeader = new PageHeader(_page);
@@ -207,7 +207,7 @@ internal sealed class BTreeLeafNode : BTreeNode
     // Write the second half of the data rows to the new node...
     for (int i = midpoint; i < sortedDataRows.Length; i++)
     {
-      if (!newLeaf.TryInsert(sortedDataRows[i]))
+      if (!newRightLeaf.TryInsert(sortedDataRows[i]))
       {
         throw new Exception("Insert failed after a split! Something went terribly wrong since all inserts on a fresh new leaf page are guaranteed to succeed.");
       }
@@ -215,13 +215,13 @@ internal sealed class BTreeLeafNode : BTreeNode
 
     // Update the sibling pointers...
     // Splitting this node into 2; This Leaf <-> New Leaf <-> Right Sibling Leaf
-    thisLeafHeader.NextPageIndex = newLeaf.PageIndex;
-    newLeaf.NextPageIndex = nextLeafIndex;
-    newLeaf.PrevPageIndex = this.PageIndex;
+    thisLeafHeader.NextPageIndex = newRightLeaf.PageIndex;
+    newRightLeaf.NextPageIndex = nextLeafIndex;
+    newRightLeaf.PrevPageIndex = this.PageIndex;
 
     if (rightLeafSibling != null)
     {
-      rightLeafSibling.PrevPageIndex = newLeaf.PageIndex;
+      rightLeafSibling.PrevPageIndex = newRightLeaf.PageIndex;
     }
 
     return separatortKey;
