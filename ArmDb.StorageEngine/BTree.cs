@@ -53,7 +53,17 @@ internal sealed class BTree
   {
     // Get the primary key for this record so we can navigate the tree to find the insertion point...
     var key = record.GetPrimaryKey(_tableDefinition);
-    var _ = await InsertRecursive(_rootPageId, record, key);
+    var splitResult = await InsertRecursiveAsync(_rootPageId, record, key);
+
+    // If we have a split result, we must recursively promote separator keys and propagate any additional splits up the tree...
+    if (splitResult != null)
+    {
+      var result = await PromoteKeyRecursive(splitResult);
+      if (result != null)
+      {
+        throw new Exception("Got a split result back after completing recursive key promotion!");
+      }
+    }
   }
 
   /// <summary>
@@ -69,7 +79,7 @@ internal sealed class BTree
     return await SearchRecursiveAsync(_rootPageId, key);
   }
 
-  private async Task<SplitResult?> InsertRecursive(PageId pageId, Record record, Key key)
+  private async Task<SplitResult?> InsertRecursiveAsync(PageId pageId, Record record, Key key, BTreeInternalNode? parentNode = null)
   {
     // Fetch the page (this will pin the page)...
     var page = await _bpm.FetchPageAsync(pageId);
@@ -127,7 +137,12 @@ internal sealed class BTree
       }
       else
       {
-        return new SplitResult(newSeparatorKey, pageId);
+        if (parentNode == null)
+        {
+          throw new Exception("Cannot promote new separator key because the parent node was null!");
+        }
+        // Return the result of the leaf split so we can promote a new separator key...        
+        return new SplitResult(newSeparatorKey, parentNode, pageId, newLeafPageId);
       }
     }
     // Otherwise, it's an internal node and we need to recurse further...
@@ -141,7 +156,7 @@ internal sealed class BTree
       await _bpm.UnpinPageAsync(pageId, false);
 
       // Recursively call this search method...
-      return await InsertRecursive(childPageId, record, key);
+      return await InsertRecursiveAsync(childPageId, record, key, internalNode);
     }
 
     throw new InvalidDataException("B-Tree Node type was invalid!");
@@ -184,6 +199,61 @@ internal sealed class BTree
     throw new InvalidDataException("B-Tree Node type was invalid!");
   }
 
+  private async Task<SplitResult?> PromoteKeyRecursive(SplitResult splitResult)
+  {
+    var (keyToPromote, nodeToInsertPromotedKey, childPageId, rightSiblingChildId) = splitResult;
+
+    // Base case: Root Node Reached (no parent)
+    if (nodeToInsertPromotedKey.ParentPageIndex == PageHeader.INVALID_PAGE_INDEX)
+    {
+      // If this is the root node, try to insert the new separator key...
+      if (!nodeToInsertPromotedKey.TryInsert(keyToPromote, childPageId))
+      {
+        // TODO: If the root is full, we must split it and form a new root node.
+
+      }
+
+      // If we complete the base case, no further splits are possible or necessary, so
+      // return null;
+      return null;
+    }
+    // This is an internal node. We'll need to recursely promote if the given node is full...
+    else
+    {
+      // If the node is not full, we insert the new separator key which shall point to the original child,
+      // and point the next greatest separator key to the right sibling.
+      // First find the slot index where the new key will go... The existing key that slot needs to point to the new right sibling child.
+      var slotInsertionIndex = nodeToInsertPromotedKey.FindPrimaryKeySlotIndex(keyToPromote);
+      // The slot index should be negative, otherwise the separator key already exists in the node and
+      // we have an error condition.
+      if (slotInsertionIndex >= 0)
+      {
+        // TODO: Throw an exception here as the separator key to insert is already present in the internal node.
+      }
+
+      // Convert the slot index using the bitwise complement.
+      var nextKeyToTheRightIndex = ~slotInsertionIndex;
+
+      // Now update the separator key to the right of the new promoted key to point to the new right sibling child.
+      nodeToInsertPromotedKey.SetChildPointer(nextKeyToTheRightIndex, rightSiblingChildId.PageIndex);
+
+      if (nodeToInsertPromotedKey.TryInsert(keyToPromote, childPageId))
+      {
+        // If we successfully insert a promoted key, then we need no further splits and
+        // are done.
+        return null;
+      }
+      else
+      {
+        // TODO: Handle case in which we could not insert the promoted key into the internal node
+        // which means we need to perform a recursive split.
+
+        // TODO: Placeholder for now so code will compile, but we should return a split result here...
+        return null;
+      }
+    }
+  }
+
   private async Task<(BTreeLeafNode newInternalNode, PageId newPageId)> CreateNewLeafNode()
   {
     var newPage = await _bpm.CreatePageAsync(_tableDefinition.TableId);
@@ -202,16 +272,8 @@ internal sealed class BTree
     return (newInternalNode, newPageId);
   }
 
-  private record SplitResult
+  private record SplitResult(Key keyToPromote, BTreeInternalNode nodeToInsertPromotedKey, PageId childPageId, PageId rightSiblingChildId)
   {
-    public Key KeyToPromote { get; init; }
-    public PageId ChildPageId { get; init; }
-
-    public SplitResult(Key keyToPromote, PageId childPageId)
-    {
-      KeyToPromote = keyToPromote;
-      ChildPageId = childPageId;
-    }
   }
 
 #if DEBUG

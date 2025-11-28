@@ -143,7 +143,7 @@ internal abstract class BTreeNode
   }
 
   /// <summary>
-  /// Searches the clustered index for the given search key. If an exact match is found, the slot index
+  /// Searches the slotted page for the given search key. If an exact match is found, the slot index
   /// is returned as a positive value. If an exact match is not found, the insertion point is returned
   /// as the bitwise complement (i.e. a negative value).
   /// </summary>
@@ -152,15 +152,13 @@ internal abstract class BTreeNode
   /// the insertion point index if no exact match is found.</returns>
   internal int FindPrimaryKeySlotIndex(Key searchKey)
   {
-    // It provides the specific key deserialization logic as a lambda
-    // to the generic internal helper.
     return FindSlotIndex(searchKey, recordBytes =>
         RecordSerializer.DeserializePrimaryKey(_tableDefinition, recordBytes)
     );
   }
 
   /// <summary>
-  /// Performs a binary search on the node page for the given search key.
+  /// Performs a binary search on the node slotted page for the given search key.
   /// </summary>
   /// <param name="searchKey"></param>
   /// <param name="deserializeKey"></param>

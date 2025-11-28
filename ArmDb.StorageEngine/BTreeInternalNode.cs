@@ -27,7 +27,7 @@ internal sealed class BTreeInternalNode : BTreeNode
   /// Use the given key to find the corresponding child pointer. We need to do a binary
   /// search across the interal node's records and find the smallest separator key that
   /// is larger than the given key. If such a key exists, return the corresponding child
-  /// pointer. If no key exists, return the right-most (largest) separator key in this
+  /// pointer. If no key exists, return the right-most (largest) separator key in thisd
   /// internal node.
   /// </summary>
   /// <param name="searchKey"></param>
@@ -67,7 +67,7 @@ internal sealed class BTreeInternalNode : BTreeNode
       {
         // Return the page ID associated with the record at the given slot.
         var recordData = SlottedPage.GetRawRecord(_page, convertedIndex);
-        var (key, childPageId) = DeserializeRecord(_tableDefinition, recordData);
+        var (key, childPageId) = DeserializeSeparatorKey(_tableDefinition, recordData);
         return childPageId;
       }
     }
@@ -87,7 +87,7 @@ internal sealed class BTreeInternalNode : BTreeNode
       {
         // Return the page ID associated with the record at the given slot.
         var recordData = SlottedPage.GetRawRecord(_page, adjustedSlotIndex);
-        var (key, childPageId) = DeserializeRecord(_tableDefinition, recordData);
+        var (key, childPageId) = DeserializeSeparatorKey(_tableDefinition, recordData);
         return childPageId;
       }
     }
@@ -149,6 +149,25 @@ internal sealed class BTreeInternalNode : BTreeNode
     Repopulate(rawRecords, PageType.InternalNode);
   }
 
+  /// <summary>
+  /// Searches the internal node page for a record with the given key. The separator key record is returned, if
+  /// found, otherwise, null is returned.
+  /// </summary>
+  /// <param name="key">Key of the record to search for.</param>
+  /// <returns>DataRow record if found, otherwise, null.</returns>
+  internal Record? Search(Key key)
+  {
+    // Attempt to locate the record with the given key...
+    var slotIndex = FindPrimaryKeySlotIndex(key);
+    if (slotIndex >= 0)
+    {
+      var recordData = SlottedPage.GetRawRecord(_page, slotIndex);
+      return RecordSerializer.Deserialize(GetInternalNodeColumnDefinitions(_tableDefinition.GetPrimaryKeyColumnDefinitions()), recordData);
+    }
+
+    return null;
+  }
+
   internal static byte[] SerializeRecord(Key key, PageId childPageId, TableDefinition tableDef)
   {
     // First, construct a column list that represents the internal node record. This will be the primary key
@@ -165,6 +184,21 @@ internal sealed class BTreeInternalNode : BTreeNode
     var bytes = RecordSerializer.Serialize(recordColumns, record);
 
     return bytes;
+  }
+
+  internal void SetChildPointer(int slotIndex, int childPageIndex)
+  {
+    // First get the record at the slot index...
+    var rawRecord = SlottedPage.GetRawRecord(_page, slotIndex);
+    var record = DeserializeRecord(_tableDefinition, rawRecord);
+    // Update the child pointer...
+    var updatedValues = record.Values.ToArray();
+    updatedValues[updatedValues.Length - 1] = DataValue.CreateInteger(childPageIndex);
+    var updatedRecord = new Record(updatedValues);
+    if (!TryUpdate(slotIndex, updatedRecord))
+    {
+      throw new CouldNotSetChildPointerException($"Could not set the child pointer at slot index: {slotIndex}");
+    }
   }
 
   internal void SetRightmostChildId(int pageIndex) => new PageHeader(_page).RightmostChildPageIndex = pageIndex;
@@ -280,7 +314,36 @@ internal sealed class BTreeInternalNode : BTreeNode
     return TryInsert(recordToInsert);
   }
 
-  private static (Key key, PageId childPageId) DeserializeRecord(TableDefinition tableDef, ReadOnlySpan<byte> recordData)
+  /// <summary>
+  /// Attempts to update the given row. It looks up the current record by primary key. If the row is not
+  /// found, then it throws an exception. Otherwise, it returns the result of updated the record in the
+  /// slotted page.
+  /// </summary>
+  /// <param name="updatedRow">The updated row</param>
+  /// <returns>True if the row is updated successfully, false otherwise.</returns>
+  /// <exception cref="InvalidOperationException">Thrown if no record is found using the given primary key.</exception>
+  private bool TryUpdate(int slotIndex, Record updatedRow)
+  {
+    if (slotIndex >= 0)
+    {
+      var keyColumns = _tableDefinition.GetPrimaryKeyColumnDefinitions();
+      // Get the record column definition list for internal nodes.
+      var recordColumns = GetInternalNodeColumnDefinitions(keyColumns);
+      return SlottedPage.TryUpdateRecord(_page, slotIndex, RecordSerializer.Serialize(recordColumns, updatedRow));
+    }
+
+    throw new RecordNotFoundException("Record could not be found using the given slot index.");
+  }
+
+  private static (Key key, PageId childPageId) DeserializeSeparatorKey(TableDefinition tableDef, ReadOnlySpan<byte> recordData)
+  {
+    // Now we can deserialize an internal node record entry.
+    var record = DeserializeRecord(tableDef, recordData);
+
+    return ExtractKeyAndPageId(tableDef, record);
+  }
+
+  private static Record DeserializeRecord(TableDefinition tableDef, ReadOnlySpan<byte> recordData)
   {
     // First, construct a column list that represents the internal node record. This will be the primary key
     // columns, followed by the columns that make up the child pointer columns, the table ID and the page index.
@@ -293,7 +356,7 @@ internal sealed class BTreeInternalNode : BTreeNode
     // Now we can deserialize an internal node record entry.
     var record = RecordSerializer.Deserialize(recordColumns, recordData);
 
-    return ExtractKeyAndPageId(tableDef, record);
+    return record;
   }
 
   private bool TryInsert(Record recordToInsert)
@@ -381,7 +444,7 @@ internal sealed class BTreeInternalNode : BTreeNode
   internal (Key key, PageId childPageId) GetEntryForTest(int slotIndex)
   {
     var recordBytes = SlottedPage.GetRawRecord(_page, slotIndex);
-    return DeserializeRecord(_tableDefinition, recordBytes);
+    return DeserializeSeparatorKey(_tableDefinition, recordBytes);
   }
 #endif
 
@@ -393,7 +456,7 @@ internal sealed class BTreeInternalNode : BTreeNode
     for (int i = 0; i < ItemCount; i++)
     {
       ReadOnlySpan<byte> rawBytesSpan = SlottedPage.GetRawRecord(_page, i);
-      list.Add(DeserializeRecord(_tableDefinition, rawBytesSpan));
+      list.Add(DeserializeSeparatorKey(_tableDefinition, rawBytesSpan));
     }
     return list;
   }
