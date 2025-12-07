@@ -259,13 +259,8 @@ internal sealed class BTree
         // anything about the new right side sibling node. That prevents us from properly wire up everything in
         // the SplitAndInsert. Perhaps we just need to refactor the logic to take an optional parameter that is
         // a new child node that results from a split.
+        // TODO: Can we just update the node to insert's 
         var newSeparatorKey = nodeToInsertPromotedKey.SplitAndInsert(keyToPromote, childPageId, newInternalNode);
-
-        // Adjust the rightmost pointer to point to the new separator key child.
-        // TODO: This is a bit hacky since the split and insert is supposed to set the rightmost child pointer correctly. However, 
-        // in the SplitAndInsert call above, it doesn't have knowledge of the leaf split, so it doesn't know about the new right sibling
-        // node.        
-        nodeToInsertPromotedKey.SetRightmostChildId(rightSiblingChildId.PageIndex);
 
         var parentPage = await _bpm.FetchPageAsync(new PageId(_tableDefinition.TableId, nodeToInsertPromotedKey.ParentPageIndex));
         var parentNode = new BTreeInternalNode(parentPage, _tableDefinition);
