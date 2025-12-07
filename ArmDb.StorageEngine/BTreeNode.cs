@@ -12,7 +12,11 @@ internal abstract class BTreeNode
 
   internal int ItemCount => new PageHeader(_page).ItemCount;
 
+  internal PageId PageId => _page.Id;
+
   internal int ParentPageIndex => new PageHeader(_page).ParentPageIndex;
+
+  internal int RightmostChildIndex => new PageHeader(_page).RightmostChildPageIndex;
 
   internal int FreeSpace => SlottedPage.GetFreeSpace(_page);
 
@@ -30,6 +34,8 @@ internal abstract class BTreeNode
     _page = page;
     _tableDefinition = tableDefinition;
   }
+
+  internal abstract int FindPrimaryKeySlotIndex(Key keyToDelete);
 
   /// <summary>
   /// Appends a raw record to the page. This method is meant to be used for performance when merging
@@ -140,21 +146,6 @@ internal abstract class BTreeNode
     SlottedPage.TryAddRecord(_page, serializedRecord, convertedIndex);
 
     return true;
-  }
-
-  /// <summary>
-  /// Searches the slotted page for the given search key. If an exact match is found, the slot index
-  /// is returned as a positive value. If an exact match is not found, the insertion point is returned
-  /// as the bitwise complement (i.e. a negative value).
-  /// </summary>
-  /// <param name="searchKey"></param>
-  /// <returns>Positive integer value if exact match is found. Negative integer value representing
-  /// the insertion point index if no exact match is found.</returns>
-  internal int FindPrimaryKeySlotIndex(Key searchKey)
-  {
-    return FindSlotIndex(searchKey, recordBytes =>
-        RecordSerializer.DeserializePrimaryKey(_tableDefinition, recordBytes)
-    );
   }
 
   /// <summary>

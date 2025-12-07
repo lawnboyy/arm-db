@@ -48,6 +48,21 @@ internal sealed class BTreeLeafNode : BTreeNode
   }
 
   /// <summary>
+  /// Searches the slotted page for the given search key. If an exact match is found, the slot index
+  /// is returned as a positive value. If an exact match is not found, the insertion point is returned
+  /// as the bitwise complement (i.e. a negative value).
+  /// </summary>
+  /// <param name="searchKey"></param>
+  /// <returns>Positive integer value if exact match is found. Negative integer value representing
+  /// the insertion point index if no exact match is found.</returns>
+  internal override int FindPrimaryKeySlotIndex(Key searchKey)
+  {
+    return FindSlotIndex(searchKey, recordBytes =>
+        RecordSerializer.DeserializePrimaryKey(_tableDefinition, recordBytes)
+    );
+  }
+
+  /// <summary>
   /// Merges this leaf node's data into the left sibling node and reformats itself. The B*Tree
   /// orchestrator will call this if it determines the data for 2 sibling leaf nodes can fit
   /// into a single node. This would occur after a delete operation.

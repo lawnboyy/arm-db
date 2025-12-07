@@ -1,3 +1,4 @@
+using System.Text;
 using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
 
@@ -53,12 +54,12 @@ internal sealed class BTree
   {
     // Get the primary key for this record so we can navigate the tree to find the insertion point...
     var key = record.GetPrimaryKey(_tableDefinition);
-    var splitResult = await InsertRecursiveAsync(_rootPageId, record, key);
+    var leafSplitResult = await InsertRecursiveAsync(_rootPageId, record, key);
 
     // If we have a split result, we must recursively promote separator keys and propagate any additional splits up the tree...
-    if (splitResult != null)
+    if (leafSplitResult != null)
     {
-      var result = await PromoteKeyRecursive(splitResult);
+      var result = await PromoteKeyRecursive(leafSplitResult);
       if (result != null)
       {
         throw new Exception("Got a split result back after completing recursive key promotion!");
@@ -102,14 +103,9 @@ internal sealed class BTree
       var (newLeafNode, newLeafPageId) = await CreateNewLeafNode();
 
       // Fetch the right sibling...
-      var rightSiblingIndex = leafNode.NextPageIndex;
-      BTreeLeafNode? rightSiblingLeafNode = null;
-      if (rightSiblingIndex != PageHeader.INVALID_PAGE_INDEX)
-      {
-        var rightSiblingPage = await _bpm.FetchPageAsync(new PageId(_tableDefinition.TableId, rightSiblingIndex));
-        rightSiblingLeafNode = new BTreeLeafNode(rightSiblingPage, _tableDefinition);
-      }
+      var rightSiblingLeafNode = await FetchRightLeafSiblingAsync(leafNode);
 
+      // Now perform the split...
       var newSeparatorKey = leafNode.SplitAndInsert(record, newLeafNode, rightSiblingLeafNode);
 
       // If there is no parent, then we have a single level tree with a single leaf and must create
@@ -141,6 +137,7 @@ internal sealed class BTree
         {
           throw new Exception("Cannot promote new separator key because the parent node was null!");
         }
+
         // Return the result of the leaf split so we can promote a new separator key...        
         return new SplitResult(newSeparatorKey, parentNode, pageId, newLeafPageId);
       }
@@ -207,10 +204,17 @@ internal sealed class BTree
     if (nodeToInsertPromotedKey.ParentPageIndex == PageHeader.INVALID_PAGE_INDEX)
     {
       // If this is the root node, try to insert the new separator key...
-      if (!nodeToInsertPromotedKey.TryInsert(keyToPromote, childPageId))
+      if (nodeToInsertPromotedKey.TryInsert(keyToPromote, childPageId))
+      {
+        // First find the slot index where the new key will go... The existing key of that slot needs to point to the new right sibling child.
+        var slotInsertionIndex = nodeToInsertPromotedKey.FindPrimaryKeySlotIndex(keyToPromote);
+        var nextKeyToTheRightIndex = slotInsertionIndex + 1;
+        // Now update the separator key to the right of the new promoted key to point to the new right sibling child.
+        nodeToInsertPromotedKey.SetChildPointer(nextKeyToTheRightIndex, rightSiblingChildId.PageIndex);
+      }
+      else
       {
         // TODO: If the root is full, we must split it and form a new root node.
-
       }
 
       // If we complete the base case, no further splits are possible or necessary, so
@@ -221,7 +225,7 @@ internal sealed class BTree
     else
     {
       // If the node is not full, we insert the new separator key which shall point to the original child,
-      // and point the next greatest separator key to the right sibling.
+      // and point the next greatest separator key to the right sibling.    
       // First find the slot index where the new key will go... The existing key that slot needs to point to the new right sibling child.
       var slotInsertionIndex = nodeToInsertPromotedKey.FindPrimaryKeySlotIndex(keyToPromote);
       // The slot index should be negative, otherwise the separator key already exists in the node and
@@ -245,11 +249,29 @@ internal sealed class BTree
       }
       else
       {
-        // TODO: Handle case in which we could not insert the promoted key into the internal node
+        // Handle case in which we could not insert the promoted key into the internal node
         // which means we need to perform a recursive split.
 
-        // TODO: Placeholder for now so code will compile, but we should return a split result here...
-        return null;
+        // First we need to allocate a new internal node to house half the contents of the existing node...
+        var (newInternalNode, newInternalNodeId) = await CreateNewInternalNode();
+        // Split the node...
+        // TODO: This can't function properly yet after a child split because the method is not designed to know
+        // anything about the new right side sibling node. That prevents us from properly wire up everything in
+        // the SplitAndInsert. Perhaps we just need to refactor the logic to take an optional parameter that is
+        // a new child node that results from a split.
+        var newSeparatorKey = nodeToInsertPromotedKey.SplitAndInsert(keyToPromote, childPageId, newInternalNode);
+
+        // Adjust the rightmost pointer to point to the new separator key child.
+        // TODO: This is a bit hacky since the split and insert is supposed to set the rightmost child pointer correctly. However, 
+        // in the SplitAndInsert call above, it doesn't have knowledge of the leaf split, so it doesn't know about the new right sibling
+        // node.        
+        nodeToInsertPromotedKey.SetRightmostChildId(rightSiblingChildId.PageIndex);
+
+        var parentPage = await _bpm.FetchPageAsync(new PageId(_tableDefinition.TableId, nodeToInsertPromotedKey.ParentPageIndex));
+        var parentNode = new BTreeInternalNode(parentPage, _tableDefinition);
+        var recursiveSplit = new SplitResult(newSeparatorKey, parentNode, nodeToInsertPromotedKey.PageId, newInternalNodeId);
+
+        return await PromoteKeyRecursive(recursiveSplit);
       }
     }
   }
@@ -270,6 +292,20 @@ internal sealed class BTree
     SlottedPage.Initialize(newPage, PageType.InternalNode);
     var newInternalNode = new BTreeInternalNode(newPage, _tableDefinition);
     return (newInternalNode, newPageId);
+  }
+
+  private async Task<BTreeLeafNode?> FetchRightLeafSiblingAsync(BTreeLeafNode leafNode)
+  {
+    // Fetch the right sibling...
+    var rightSiblingIndex = leafNode.NextPageIndex;
+    BTreeLeafNode? rightSiblingLeafNode = null;
+    if (rightSiblingIndex != PageHeader.INVALID_PAGE_INDEX)
+    {
+      var rightSiblingPage = await _bpm.FetchPageAsync(new PageId(_tableDefinition.TableId, rightSiblingIndex));
+      rightSiblingLeafNode = new BTreeLeafNode(rightSiblingPage, _tableDefinition);
+    }
+
+    return rightSiblingLeafNode;
   }
 
   private record SplitResult(Key keyToPromote, BTreeInternalNode nodeToInsertPromotedKey, PageId childPageId, PageId rightSiblingChildId)

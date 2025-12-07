@@ -1,3 +1,4 @@
+using System.Text;
 using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
 using ArmDb.StorageEngine.Exceptions;
@@ -21,6 +22,20 @@ internal sealed class BTreeInternalNode : BTreeNode
     {
       throw new ArgumentException($"Expected an internal node page but recieved: {header.PageType}", "page");
     }
+  }
+
+  /// <summary>
+  /// Searches the slotted page for the given search key. If an exact match is found, the slot index
+  /// is returned as a positive value. If an exact match is not found, the insertion point is returned
+  /// as the bitwise complement (i.e. a negative value).
+  /// </summary>
+  /// <param name="searchKey"></param>
+  /// <returns>Positive integer value if exact match is found. Negative integer value representing
+  /// the insertion point index if no exact match is found.</returns>
+  internal override int FindPrimaryKeySlotIndex(Key searchKey)
+  {
+    return FindSlotIndex(searchKey, recordBytes => DeserializeRecordKey(_tableDefinition, recordBytes)
+    );
   }
 
   /// <summary>
@@ -155,18 +170,18 @@ internal sealed class BTreeInternalNode : BTreeNode
   /// </summary>
   /// <param name="key">Key of the record to search for.</param>
   /// <returns>DataRow record if found, otherwise, null.</returns>
-  internal Record? Search(Key key)
-  {
-    // Attempt to locate the record with the given key...
-    var slotIndex = FindPrimaryKeySlotIndex(key);
-    if (slotIndex >= 0)
-    {
-      var recordData = SlottedPage.GetRawRecord(_page, slotIndex);
-      return RecordSerializer.Deserialize(GetInternalNodeColumnDefinitions(_tableDefinition.GetPrimaryKeyColumnDefinitions()), recordData);
-    }
+  // internal Record? Search(Key key)
+  // {
+  //   // Attempt to locate the record with the given key...
+  //   var slotIndex = FindPrimaryKeySlotIndex(key);
+  //   if (slotIndex >= 0)
+  //   {
+  //     var recordData = SlottedPage.GetRawRecord(_page, slotIndex);
+  //     return RecordSerializer.Deserialize(GetInternalNodeColumnDefinitions(_tableDefinition.GetPrimaryKeyColumnDefinitions()), recordData);
+  //   }
 
-    return null;
-  }
+  //   return null;
+  // }
 
   internal static byte[] SerializeRecord(Key key, PageId childPageId, TableDefinition tableDef)
   {
@@ -283,6 +298,11 @@ internal sealed class BTreeInternalNode : BTreeNode
       }
     }
 
+    // TODO: This is not correct. An internal node split will only happen if it's child was split prior to this. The child split
+    // will create a new right sibling of this node's original child. This node's rightmost pointer needs to point to that new
+    // right sibling of the original child, not the midpoint's child. This is because the midpoint (the key that will be promoted)
+    // separator key would be pointing to the new right sibling of the child node. But that update is superfluous because we are
+    // promoting the separator key.
     thisNodeHeader.RightmostChildPageIndex = midpointPageId.PageIndex;
 
     // Write the second half of the data rows to the new node...
@@ -312,6 +332,24 @@ internal sealed class BTreeInternalNode : BTreeNode
     // Construct the record we want to insert into the internal node. This is a (separator key, child pointer) pair.
     var recordToInsert = GetRecord(separatorKey, childPageId);
     return TryInsert(recordToInsert);
+  }
+
+  public override string ToString()
+  {
+    StringBuilder stringBuilder = new();
+    var header = new PageHeader(_page);
+    for (int slotIndex = 0; slotIndex < header.ItemCount; slotIndex++)
+    {
+      // Fetch the record at the slot offset and deserialize it...
+      var currentRawRecord = SlottedPage.GetRawRecord(_page, slotIndex);
+      var (separatorKey, childPageId) = DeserializeSeparatorKey(_tableDefinition, currentRawRecord);
+      var firstChar = separatorKey.Values[0].ToString()[0];
+      stringBuilder.Append($"{firstChar}-->{childPageId.PageIndex} Rightmost->{header.RightmostChildPageIndex}");
+    }
+
+    stringBuilder.Remove(stringBuilder.Length - 1, 1);
+
+    return stringBuilder.ToString();
   }
 
   /// <summary>
@@ -446,9 +484,7 @@ internal sealed class BTreeInternalNode : BTreeNode
     var recordBytes = SlottedPage.GetRawRecord(_page, slotIndex);
     return DeserializeSeparatorKey(_tableDefinition, recordBytes);
   }
-#endif
 
-#if DEBUG
   // Helper for test verification, similar to BTreeLeafNode's
   internal List<(Key Key, PageId PageId)> GetAllRawEntriesForTest()
   {
@@ -459,6 +495,12 @@ internal sealed class BTreeInternalNode : BTreeNode
       list.Add(DeserializeSeparatorKey(_tableDefinition, rawBytesSpan));
     }
     return list;
+  }
+
+  internal static (Key key, PageId childPageId) ExtractKeyAndPageIdForTests(TableDefinition tableDef, ReadOnlySpan<byte> rawRecord)
+  {
+    var record = DeserializeRecord(tableDef, rawRecord);
+    return ExtractKeyAndPageId(tableDef, record);
   }
 #endif
 }

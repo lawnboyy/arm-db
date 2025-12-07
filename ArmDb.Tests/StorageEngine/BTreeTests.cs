@@ -4,6 +4,7 @@ using ArmDb.Common.Abstractions;
 using ArmDb.Common.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Xunit.Abstractions;
 
 namespace ArmDb.UnitTests.StorageEngine;
 
@@ -14,9 +15,11 @@ public partial class BTreeTests : IDisposable
   private readonly BufferPoolManager _bpm;
   private readonly string _baseTestDir;
   private readonly TableDefinition _tableDef;
+  private readonly ITestOutputHelper _outputHelper;
 
-  public BTreeTests()
+  public BTreeTests(ITestOutputHelper output)
   {
+    _outputHelper = output;
     _fileSystem = new FileSystem(); // Using the real file system
     _baseTestDir = Path.Combine(Path.GetTempPath(), $"ArmDb_BTree_Tests_{Guid.NewGuid()}");
 
