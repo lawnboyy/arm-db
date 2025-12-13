@@ -60,11 +60,11 @@ public partial class BufferPoolManagerTests : IDisposable
 
     // 3. Make P0 dirty and the LRU victim.
     p0.Data.Span[0] = 0xFE; // Mark P0 with known data
-    await localBpm.UnpinPageAsync(p0.Id, isDirty: true);
+    localBpm.UnpinPage(p0.Id, isDirty: true);
 
     // Unpin the others as clean. They will be MRU relative to P0.
-    await localBpm.UnpinPageAsync(p1.Id, isDirty: false);
-    await localBpm.UnpinPageAsync(p2.Id, isDirty: false);
+    localBpm.UnpinPage(p1.Id, isDirty: false);
+    localBpm.UnpinPage(p2.Id, isDirty: false);
 
     // Current expected state: Pool=[P0, P1, P2], LRU=[P0, P1, P2] (MRU)
 

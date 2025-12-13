@@ -48,7 +48,7 @@ public partial class BTreeTests
     Assert.True(added, "SlottedPage.TryAddRecord failed during test setup.");
 
     // 2c. Unpin the page, marking it as dirty
-    await _bpm.UnpinPageAsync(rootPageId, isDirty: true);
+    _bpm.UnpinPage(rootPageId, isDirty: true);
 #else
         // This test cannot run without the test hooks
         Assert.True(false, "This test requires DEBUG build with test hooks (GetRootPageIdForTest, GetFrameByPageId_TestOnly).");
@@ -84,7 +84,7 @@ public partial class BTreeTests
     Assert.NotNull(rootPage);
     bool added = SlottedPage.TryAddRecord(rootPage, recordBytes, 0);
     Assert.True(added, "Test setup failed to add record.");
-    await _bpm.UnpinPageAsync(rootPageId, isDirty: true);
+    _bpm.UnpinPage(rootPageId, isDirty: true);
 #else
         // This test requires the ability to manually insert data to set up the state
         // without relying on a working InsertAsync.
@@ -122,7 +122,7 @@ public partial class BTreeTests
     header.PageType = PageType.Invalid; // Set to 0
 
     // 4. Unpin the corrupted page, marking it dirty
-    await _bpm.UnpinPageAsync(rootPageId, isDirty: true);
+    _bpm.UnpinPage(rootPageId, isDirty: true);
 #else
         Assert.True(false, "This test requires DEBUG build with test hooks.");
 #endif
@@ -140,7 +140,7 @@ public partial class BTreeTests
     // Create, initialize, and unpin the leaf pages
     var leafPage1 = await _bpm.CreatePageAsync(_tableDef.TableId);
     SlottedPage.Initialize(leafPage1, PageType.LeafNode);
-    await _bpm.UnpinPageAsync(leafPage1.Id, true);
+    _bpm.UnpinPage(leafPage1.Id, true);
     // Create 2 records for the 1st Page
     var page1Record1 = new ArmDb.DataModel.Record([DataValue.CreateInteger(10), DataValue.CreateString("Data 10")]);
     var page1Record2 = new ArmDb.DataModel.Record([DataValue.CreateInteger(20), DataValue.CreateString("Data 20")]);
@@ -152,7 +152,7 @@ public partial class BTreeTests
 
     var leafPage2 = await _bpm.CreatePageAsync(_tableDef.TableId);
     SlottedPage.Initialize(leafPage2, PageType.LeafNode);
-    await _bpm.UnpinPageAsync(leafPage2.Id, true);
+    _bpm.UnpinPage(leafPage2.Id, true);
     // Create 2 records for the second leaf page
     var page2Record1 = new ArmDb.DataModel.Record([DataValue.CreateInteger(30), DataValue.CreateString("Data 30")]);
     var page2Record2 = new ArmDb.DataModel.Record([DataValue.CreateInteger(40), DataValue.CreateString("Data 40")]);
@@ -408,7 +408,7 @@ public partial class BTreeTests
       leafNode.TryInsert(rec);
     }
 
-    await _bpm.UnpinPageAsync(page.Id, true);
+    _bpm.UnpinPage(page.Id, true);
     return page.Id;
   }
 
@@ -434,7 +434,7 @@ public partial class BTreeTests
     var header = new PageHeader(page);
     header.RightmostChildPageIndex = rightmostChild.PageIndex;
 
-    await _bpm.UnpinPageAsync(page.Id, true);
+    _bpm.UnpinPage(page.Id, true);
     return page.Id;
   }
 
@@ -455,7 +455,7 @@ public partial class BTreeTests
     }
 
     // 4. Unpin (mark dirty)
-    await _bpm.UnpinPageAsync(page.Id, isDirty: true);
+    _bpm.UnpinPage(page.Id, isDirty: true);
     return page.Id;
   }
 
@@ -483,7 +483,7 @@ public partial class BTreeTests
     new PageHeader(page).RightmostChildPageIndex = rightmostChild.PageIndex;
 
     // 5. Unpin
-    await _bpm.UnpinPageAsync(page.Id, isDirty: true);
+    _bpm.UnpinPage(page.Id, isDirty: true);
     return page.Id;
   }
 }

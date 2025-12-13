@@ -35,9 +35,9 @@ public partial class BufferPoolManagerTests
 
     // 2. Unpin all pages so they are eligible for eviction.
     // Unpinning shouldn't change their LRU order based on our current design (updates on fetch).
-    await localBpm.UnpinPageAsync(p0, false);
-    await localBpm.UnpinPageAsync(p1, false);
-    await localBpm.UnpinPageAsync(p2, false);
+    localBpm.UnpinPage(p0, false);
+    localBpm.UnpinPage(p1, false);
+    localBpm.UnpinPage(p2, false);
 
     // Act
     // 3. Fetch P3. This requires eviction.
@@ -88,15 +88,15 @@ public partial class BufferPoolManagerTests
     await localBpm.FetchPageAsync(p0);
     await localBpm.FetchPageAsync(p1);
     await localBpm.FetchPageAsync(p2);
-    await localBpm.UnpinPageAsync(p0, false);
-    await localBpm.UnpinPageAsync(p1, false);
-    await localBpm.UnpinPageAsync(p2, false);
+    localBpm.UnpinPage(p0, false);
+    localBpm.UnpinPage(p1, false);
+    localBpm.UnpinPage(p2, false);
 
     // Act
     // 2. Access P0 again. It should move from LRU position to MRU position.
     // New expected order: [P1, P2, P0] (MRU)
     await localBpm.FetchPageAsync(p0);
-    await localBpm.UnpinPageAsync(p0, false);
+    localBpm.UnpinPage(p0, false);
 
     // 3. Fetch P3, forcing eviction. P1 should now be the victim.
     await localBpm.FetchPageAsync(p3);
@@ -138,7 +138,7 @@ public partial class BufferPoolManagerTests
       await CreateTestPageFileWithDataAsync(tableId, i, CreateTestBuffer((byte)i));
       await localBpm.FetchPageAsync(pageIds[i]);
       // Unpin immediately so they are all valid eviction candidates
-      await localBpm.UnpinPageAsync(pageIds[i], false);
+      localBpm.UnpinPage(pageIds[i], false);
     }
 
     // Act
@@ -162,7 +162,7 @@ public partial class BufferPoolManagerTests
           var page = await localBpm.FetchPageAsync(pageId);
           Assert.NotNull(page);
           // Unpin it immediately to keep it evictable for later steps
-          await localBpm.UnpinPageAsync(pageId, false);
+          localBpm.UnpinPage(pageId, false);
         }
       });
     }

@@ -38,10 +38,10 @@ public partial class BufferPoolManagerTests
     Assert.NotNull(p1_instance1);
 
     // 3. Unpin P0 (isDirty: false): pool=[P0, P1*], LRU=[P0(clean,LRU), P1(MRU,pinned)]
-    await localBpm.UnpinPageAsync(pageId0, false);
+    localBpm.UnpinPage(pageId0, false);
 
     // 4. Unpin P1 (isDirty: false): pool=[P0, P1], LRU=[P0(clean,LRU), P1(clean,MRU)]
-    await localBpm.UnpinPageAsync(pageId1, false);
+    localBpm.UnpinPage(pageId1, false);
     // At this point, P0 is the LRU candidate for eviction.
 
     // Act: Fetch P2. This should cause P0 (clean) to be evicted.
@@ -62,7 +62,7 @@ public partial class BufferPoolManagerTests
     Page? p1_instance2 = await localBpm.FetchPageAsync(pageId1);
     Assert.NotNull(p1_instance2);
     Assert.True(p1_instance2.Data.Span.SequenceEqual(page1InitialData), "P1 content mismatch after P0 eviction; implies P1 might have been wrongly evicted or its data corrupted.");
-    await localBpm.UnpinPageAsync(pageId1, false); // Unpin for cleanup
+    localBpm.UnpinPage(pageId1, false); // Unpin for cleanup
 
     // Cleanup local BPM
     await localBpm.DisposeAsync();
@@ -101,10 +101,10 @@ public partial class BufferPoolManagerTests
     page0ModifiedData.CopyTo(p0_instance1.Data); // page0_instance1.Data is Memory<byte>
 
     // 4. Unpin P0 (isDirty: true). P0 is now dirty and an LRU candidate.
-    await localBpm.UnpinPageAsync(pageId0, true);
+    localBpm.UnpinPage(pageId0, true);
 
     // 5. Unpin P1 (isDirty: false). P1 is now MRU. P0 is LRU.
-    await localBpm.UnpinPageAsync(pageId1, false);
+    localBpm.UnpinPage(pageId1, false);
 
     // Act: Fetch P2. This should cause P0 (dirty) to be flushed and evicted.
     Page? p2_instance = await localBpm.FetchPageAsync(pageId2);
@@ -123,7 +123,7 @@ public partial class BufferPoolManagerTests
     Page? p1_instance2 = await localBpm.FetchPageAsync(pageId1);
     Assert.NotNull(p1_instance2);
     Assert.True(p1_instance2.Data.Span.SequenceEqual(page1InitialData), "P1 content mismatch after P0 eviction.");
-    await localBpm.UnpinPageAsync(pageId1, false);
+    localBpm.UnpinPage(pageId1, false);
 
     // Cleanup local BPM
     await localBpm.DisposeAsync();

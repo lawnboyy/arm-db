@@ -356,6 +356,8 @@ internal sealed class BufferPoolManager : IAsyncDisposable
   }
 
   /// <summary>
+  /// TODO: This doesn't need to be asynchronous since we do not flush to disk unless we
+  /// evict.
   /// Decrements the pin count of a page. If the page was marked as dirty by the caller,
   /// its dirty flag in the frame is set. If the pin count reaches zero, the page becomes
   /// a candidate for eviction.
@@ -367,7 +369,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
   /// Thrown if the pageId is not found in the buffer pool,
   /// or (later) if an attempt is made to unpin a page whose pin count is already zero.
   /// </exception>
-  internal async Task UnpinPageAsync(PageId pageId, bool isDirty)
+  internal void UnpinPage(PageId pageId, bool isDirty)
   {
     _logger.LogTrace("Attempting to unpin page {PageId}. IsDirty: {IsDirtyFlag}", pageId, isDirty);
 
@@ -440,7 +442,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
 
     // Placeholder to make the method async if no other await is present in subsequent steps.
     // This will be removed as more logic (especially any async disk operations if needed for some reason) is added.
-    await Task.CompletedTask;
+    // await Task.CompletedTask;
   }
 
   /// <summary>

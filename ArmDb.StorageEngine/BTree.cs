@@ -39,7 +39,7 @@ internal sealed class BTree
     SlottedPage.Initialize(rootPage, PageType.LeafNode);
 
     // Now we are done with the page, so we can unpin it.
-    await bpm.UnpinPageAsync(rootPage.Id, true);
+    bpm.UnpinPage(rootPage.Id, true);
 
     // Return a new BTree instance...
     return new BTree(bpm, tableDef, rootPage.Id);
@@ -123,8 +123,8 @@ internal sealed class BTree
         newRootNode.SetRightmostChildId(newLeafNode.PageIndex);
 
         // Unpin all pages...
-        await _bpm.UnpinPageAsync(page.Id, true);
-        await _bpm.UnpinPageAsync(newLeafPageId, true);
+        _bpm.UnpinPage(page.Id, true);
+        _bpm.UnpinPage(newLeafPageId, true);
 
         // Set the new root ID
         _rootPageId = newPageId;
@@ -150,7 +150,7 @@ internal sealed class BTree
       var childPageId = internalNode.LookupChildPage(key);
 
       // Unpin the page now that we are done with it...
-      await _bpm.UnpinPageAsync(pageId, false);
+      _bpm.UnpinPage(pageId, false);
 
       // Recursively call this search method...
       return await InsertRecursiveAsync(childPageId, record, key, internalNode);
@@ -175,7 +175,7 @@ internal sealed class BTree
       var record = leafNode.Search(key);
 
       // Unpin the page now that we are done with it.
-      await _bpm.UnpinPageAsync(pageId, false);
+      _bpm.UnpinPage(pageId, false);
 
       return record;
     }
@@ -187,7 +187,7 @@ internal sealed class BTree
       var childPageId = internalNode.LookupChildPage(key);
 
       // Unpin the page now that we are done with it...
-      await _bpm.UnpinPageAsync(pageId, false);
+      _bpm.UnpinPage(pageId, false);
 
       // Recursively call this search method...
       return await SearchRecursiveAsync(childPageId, key);
@@ -255,11 +255,6 @@ internal sealed class BTree
         // First we need to allocate a new internal node to house half the contents of the existing node...
         var (newInternalNode, newInternalNodeId) = await CreateNewInternalNode();
         // Split the node...
-        // TODO: This can't function properly yet after a child split because the method is not designed to know
-        // anything about the new right side sibling node. That prevents us from properly wire up everything in
-        // the SplitAndInsert. Perhaps we just need to refactor the logic to take an optional parameter that is
-        // a new child node that results from a split.
-        // TODO: Can we just update the node to insert's 
         var newSeparatorKey = nodeToInsertPromotedKey.SplitAndInsert(keyToPromote, childPageId, newInternalNode);
 
         var parentPage = await _bpm.FetchPageAsync(new PageId(_tableDefinition.TableId, nodeToInsertPromotedKey.ParentPageIndex));

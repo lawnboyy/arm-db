@@ -182,8 +182,8 @@ public partial class BufferPoolManagerTests : IDisposable
     bool isDirty = false;
 
     // Act & Assert
-    var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-        _bpm.UnpinPageAsync(nonExistentPageId, isDirty)
+    var exception = Assert.Throws<InvalidOperationException>(() =>
+        _bpm.UnpinPage(nonExistentPageId, isDirty)
     );
 
     // Optional: Verify the exception message for more specificity
@@ -209,13 +209,13 @@ public partial class BufferPoolManagerTests : IDisposable
     // 2. Unpin it the first time: PinCount should go from 1 to 0.
     //    We assume this call works as intended based on future tests or implementation.
     //    No specific 'isDirty' concern for this test's purpose.
-    await _bpm.UnpinPageAsync(pageId, isDirty: false);
+    _bpm.UnpinPage(pageId, isDirty: false);
 
     // At this point, the Frame for pageId in the BPM should have PinCount = 0.
 
     // Act: Attempt to unpin the *same page* again.
-    var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-        _bpm.UnpinPageAsync(pageId, isDirty: false)
+    var exception = Assert.Throws<InvalidOperationException>(() =>
+        _bpm.UnpinPage(pageId, isDirty: false)
     );
 
     // Assert
@@ -286,7 +286,7 @@ public partial class BufferPoolManagerTests : IDisposable
     Page? p0 = await bpmWithErrorHandling.FetchPageAsync(pageIdToEvict);
     Assert.NotNull(p0);
     p0.Data.Span[0] = 0xFF; // Modify it
-    await bpmWithErrorHandling.UnpinPageAsync(pageIdToEvict, true); // Unpin as dirty
+    bpmWithErrorHandling.UnpinPage(pageIdToEvict, true); // Unpin as dirty
 
     // Setup ControllableFileSystem to fail when WriteFileAsync is called for pageIdToEvict's file
     mockFileSystem.WriteFailurePaths.Add(page0FilePath);
@@ -355,10 +355,10 @@ public partial class BufferPoolManagerTests : IDisposable
     p3ModifiedData.CopyTo(p3.Data);
 
     // 3. Unpin pages, setting the dirty flag appropriately
-    await bpm.UnpinPageAsync(cleanPageId0, isDirty: false);
-    await bpm.UnpinPageAsync(dirtyPageId1, isDirty: true);
-    await bpm.UnpinPageAsync(cleanPageId2, isDirty: false);
-    await bpm.UnpinPageAsync(dirtyPageId3, isDirty: true);
+    bpm.UnpinPage(cleanPageId0, isDirty: false);
+    bpm.UnpinPage(dirtyPageId1, isDirty: true);
+    bpm.UnpinPage(cleanPageId2, isDirty: false);
+    bpm.UnpinPage(dirtyPageId3, isDirty: true);
 
     // Reset I/O counters after the setup phase
     mockFileSystem.ResetReadFileCallCount(filePath);

@@ -94,7 +94,7 @@ public partial class BufferPoolManagerTests
     {
       if (pageInstance != null)
       {
-        await bpm.UnpinPageAsync(pageInstance.Id, false);
+        bpm.UnpinPage(pageInstance.Id, false);
       }
     }
     Assert.Equal(0, frame.PinCount); // Verify it goes back to 0
@@ -206,7 +206,7 @@ public partial class BufferPoolManagerTests
     // --- Pre-populate the cache with cachedPageId ---
     Page? prewarmedPage = await bpm.FetchPageAsync(cachedPageId);
     Assert.NotNull(prewarmedPage);
-    await bpm.UnpinPageAsync(cachedPageId, isDirty: false); // Unpin it so its PinCount starts at 0 for our test
+    bpm.UnpinPage(cachedPageId, isDirty: false); // Unpin it so its PinCount starts at 0 for our test
 
     // Reset the read count *after* the setup fetch
     // Assuming your ControllableFileSystem has a method like this
@@ -321,8 +321,8 @@ public partial class BufferPoolManagerTests
     Assert.NotNull(p1);
 
     // 2. Unpin both pages 0 and 1 so they are eligible for eviction.
-    await bpm.UnpinPageAsync(pageId0, isDirty: false);
-    await bpm.UnpinPageAsync(pageId1, isDirty: false);
+    bpm.UnpinPage(pageId0, isDirty: false);
+    bpm.UnpinPage(pageId1, isDirty: false);
 
     // 3. Reset disk I/O counters after setup
     mockFileSystem.ResetReadFileCallCount(filePath);
@@ -427,8 +427,8 @@ public partial class BufferPoolManagerTests
     page1ModifiedData.CopyTo(p1.Data);
 
     // 3. Unpin them, mark as dirty
-    await bpm.UnpinPageAsync(pageId0, isDirty: true); // LRU
-    await bpm.UnpinPageAsync(pageId1, isDirty: true); // MRU
+    bpm.UnpinPage(pageId0, isDirty: true); // LRU
+    bpm.UnpinPage(pageId1, isDirty: true); // MRU
 
     // 4. Reset disk I/O counters after setup
     mockFileSystem.ResetReadFileCallCount(filePath);
@@ -532,7 +532,7 @@ public partial class BufferPoolManagerTests
 
 
     // Act & Assert - Stage 2: One unpin
-    await bpm.UnpinPageAsync(targetPageId, isDirty: false);
+    bpm.UnpinPage(targetPageId, isDirty: false);
 
     Assert.Equal(1, frame.PinCount); // <<< PinCount should be 1
 
@@ -545,10 +545,10 @@ public partial class BufferPoolManagerTests
 
 
     // Act & Assert - Stage 4: Final unpins
-    await bpm.UnpinPageAsync(targetPageId, isDirty: false);
+    bpm.UnpinPage(targetPageId, isDirty: false);
     Assert.Equal(1, frame.PinCount); // <<< PinCount should be 1
 
-    await bpm.UnpinPageAsync(targetPageId, isDirty: false);
+    bpm.UnpinPage(targetPageId, isDirty: false);
     Assert.Equal(0, frame.PinCount); // <<< PinCount should be 0
 
 

@@ -303,7 +303,7 @@ public partial class BTreeTests
     {
       leafNode.TryInsert(new Record(DataValue.CreateInteger(k), DataValue.CreateString(filler)));
     }
-    await _bpm.UnpinPageAsync(page.Id, true);
+    _bpm.UnpinPage(page.Id, true);
     return page.Id;
   }
 
@@ -317,7 +317,7 @@ public partial class BTreeTests
       node.InsertEntryForTest(new Key([DataValue.CreateInteger(e.key)]), e.ptr);
     }
     node.SetRightmostChildId(rightmost.PageIndex);
-    await _bpm.UnpinPageAsync(page.Id, true);
+    _bpm.UnpinPage(page.Id, true);
     return page.Id;
   }
 
@@ -328,7 +328,7 @@ public partial class BTreeTests
     Assert.NotNull(page);
     var header = new PageHeader(page);
     header.ParentPageIndex = parentId.PageIndex;
-    await _bpm.UnpinPageAsync(childId, isDirty: true);
+    _bpm.UnpinPage(childId, isDirty: true);
   }
 
   private async Task<PageId> ManualCreateLeaf(TableDefinition def, string[] keys)
@@ -340,7 +340,7 @@ public partial class BTreeTests
     {
       leafNode.TryInsert(new Record(DataValue.CreateString(k), DataValue.CreateInteger(0)));
     }
-    await _bpm.UnpinPageAsync(page.Id, true);
+    _bpm.UnpinPage(page.Id, true);
     return page.Id;
   }
 
@@ -356,7 +356,7 @@ public partial class BTreeTests
     if (rightmost != null)
       node.SetRightmostChildId(rightmost.Value.PageIndex);
 
-    await _bpm.UnpinPageAsync(page.Id, true);
+    _bpm.UnpinPage(page.Id, true);
     return page.Id;
   }
 }
