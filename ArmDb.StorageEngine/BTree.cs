@@ -109,7 +109,7 @@ internal sealed class BTree
       var newSeparatorKey = leafNode.SplitAndInsert(record, newLeafNode, rightSiblingLeafNode);
 
       // If there is no parent, then we have a single level tree with a single leaf and must create
-      // a new internal node as the new root to promote the separate key to.
+      // a new internal node as the new root to promote the separator key to.
       if (leafNode.ParentPageIndex == PageHeader.INVALID_PAGE_INDEX)
       {
         var (newRootNode, newPageId) = await CreateNewInternalNode();
@@ -217,8 +217,7 @@ internal sealed class BTree
         // TODO: If the root is full, we must split it and form a new root node.
       }
 
-      // If we complete the base case, no further splits are possible or necessary, so
-      // return null;
+      // If we complete the base case, no further splits are possible or necessary, so return null;
       return null;
     }
     // This is an internal node. We'll need to recursely promote if the given node is full...

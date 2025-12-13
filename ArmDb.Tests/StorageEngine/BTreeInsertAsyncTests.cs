@@ -283,6 +283,294 @@ public partial class BTreeTests
     Assert.NotNull(await btree.SearchAsync(new Key([DataValue.CreateString(kC)])));
   }
 
+  [Fact]
+  public async Task InsertAsync_LeafAndParentSplit_PromotesSameKeyToRoot()
+  {
+    // Arrange
+    // 1. Define schema with a LARGE Primary Key to force Internal Nodes to split easily.
+    var hugeKeyTableDef = new TableDefinition("RecursiveSplitTable_HugePK");
+    hugeKeyTableDef.AddColumn(new ColumnDefinition("KeyData", new DataTypeInfo(PrimitiveDataType.Varchar, 3000), false));
+    hugeKeyTableDef.AddColumn(new ColumnDefinition("Val", new DataTypeInfo(PrimitiveDataType.Int), false));
+    hugeKeyTableDef.AddConstraint(new PrimaryKeyConstraint("PK_Huge", new[] { "KeyData" }));
+
+    // Helper strings for keys (Length ~3000)
+    string kA = new string('A', 3000);  // Separator 1
+    string kB = new string('B', 3000);  // Insert Target
+    string kC = new string('C', 3000);
+    string kF = new string('F', 3000);  // Separator 1 (exists in leaf)
+    string kG = new string('G', 3000);
+    string kI = new string('I', 3000);  // Separator 2 (exists in leaf)
+    string kL = new string('L', 3000);  // Root Separator
+    string kN = new string('N', 3000);
+
+    // --- Construct Tree Bottom-Up ---
+    /*
+       Initial Tree Structure (Keys Only):
+       * = Rightmost Child Pointer
+
+                                 [ L ]*
+                                /      \
+                          [F|I]*      [  ]*
+                          /  |  \           \
+                     [A|C] [F|G] [I]          [N]
+    */
+
+    // 2. Leaf Nodes
+    // Leaf Left (Target - Full): [A, C]. Inserting B will split it.
+    var leafLeft = await ManualCreateLeaf(hugeKeyTableDef, new[] { kA, kC });
+    // Leaf Middle: [F, G].
+    var leafMiddle = await ManualCreateLeaf(hugeKeyTableDef, new[] { kF, kG });
+    // Leaf Right: [I].
+    var leafRight = await ManualCreateLeaf(hugeKeyTableDef, new[] { kI });
+    // Sibling Leaf: [N].
+    var siblingLeaf = await ManualCreateLeaf(hugeKeyTableDef, new[] { kN });
+
+    // 3. Parent Internal Node (L1) - Full (Capacity 2)
+    // Entries: (F, leafLeft), (I, leafMiddle). Rightmost: leafRight.
+    // Logic:
+    //   Keys < F -> leafLeft [A, C]
+    //   Keys >= F, < I -> leafMiddle [F, G]
+    //   Keys >= I -> leafRight [I]
+    var parentNodeId = await ManualCreateInternal(hugeKeyTableDef,
+        new[] { (kF, leafLeft), (kI, leafMiddle) },
+        leafRight);
+
+    // Link leaves to parent
+    await SetParentPointer(leafLeft, parentNodeId);
+    await SetParentPointer(leafMiddle, parentNodeId);
+    await SetParentPointer(leafRight, parentNodeId);
+
+    // 4. Sibling Internal Node (L1) - Dummy
+    var siblingNodeId = await ManualCreateInternal(hugeKeyTableDef,
+        new (string, PageId)[0],
+        siblingLeaf);
+    await SetParentPointer(siblingLeaf, siblingNodeId);
+
+    // 5. Root Node (L0) - Not Full
+    // Entries: (L, parentNodeId). Rightmost: siblingNodeId.
+    // Logic:
+    //   Keys < L -> parentNodeId (covers A..I)
+    //   Keys >= L -> siblingNodeId (covers N)
+    var rootPageId = await ManualCreateInternal(hugeKeyTableDef,
+        new[] { (kL, parentNodeId) },
+        siblingNodeId);
+
+    await SetParentPointer(parentNodeId, rootPageId);
+    await SetParentPointer(siblingNodeId, rootPageId);
+
+    var btree = await BTree.CreateAsync(_bpm, hugeKeyTableDef, rootPageId);
+    var initialRootId = rootPageId;
+
+    // Act
+    // Insert B.
+    var recordToInsert = new Record(DataValue.CreateString(kB), DataValue.CreateInteger(1));
+    await btree.InsertAsync(recordToInsert);
+
+    /*
+       Resulting Tree Structure (Keys Only):
+       * = Rightmost Child Pointer
+
+                                 [ F | L ]*
+                                /    |    \
+                               /     |     \
+              .---------------'      |      '------------.
+              |                      |                   |
+          [ B ]*                   [ I ]*              [   ]*
+         /      \                /      \                    \
+   [ A ]      [ B | C ]      [ F | G ] [ I ]               [ N ]
+  (LeafL)    (LeafNew)      (LeafMid) (LeafR)             (SibLeaf)
+    */
+
+    // Assert
+    // 1. Root should NOT have changed (didn't split)
+    Assert.Equal(initialRootId, btree.GetRootPageIdForTest());
+
+    // 2. Root should now have 2 entries.
+    var rootFrame = _bpm.GetFrameByPageId_TestOnly(initialRootId);
+    var rootHeader = new PageHeader(new Page(rootFrame!.CurrentPageId, rootFrame.PageData));
+    Assert.Equal(2, rootHeader.ItemCount);
+
+    // 3. Verify searches find everything
+    var foundB = await btree.SearchAsync(new Key([DataValue.CreateString(kB)]));
+    Assert.NotNull(foundB);
+    Assert.Equal(1, foundB.Values[1].GetAs<int>());
+
+    var foundA = await btree.SearchAsync(new Key([DataValue.CreateString(kA)]));
+    Assert.NotNull(foundA);
+
+    var foundC = await btree.SearchAsync(new Key([DataValue.CreateString(kC)]));
+    Assert.NotNull(foundC);
+
+    var foundF = await btree.SearchAsync(new Key([DataValue.CreateString(kF)]));
+    Assert.NotNull(foundF);
+
+    var foundG = await btree.SearchAsync(new Key([DataValue.CreateString(kG)]));
+    Assert.NotNull(foundG);
+
+    var foundI = await btree.SearchAsync(new Key([DataValue.CreateString(kI)]));
+    Assert.NotNull(foundI);
+
+    var foundN = await btree.SearchAsync(new Key([DataValue.CreateString(kN)]));
+    Assert.NotNull(foundN);
+  }
+
+  [Fact]
+  public async Task InsertAsync_RecursiveSplit_Height4_PropagatesToRoot()
+  {
+    // Arrange
+    // 1. Define schema with a LARGE Primary Key to force Internal Nodes to split easily.
+    //    (Key VARCHAR(3000) PK, Data INT)
+    //    Max capacity per page (Leaf or Internal) will be ~2 items.
+    var hugeKeyTableDef = new TableDefinition("RecursiveSplitTable_Height4");
+    hugeKeyTableDef.AddColumn(new ColumnDefinition("KeyData", new DataTypeInfo(PrimitiveDataType.Varchar, 3000), false));
+    hugeKeyTableDef.AddColumn(new ColumnDefinition("Val", new DataTypeInfo(PrimitiveDataType.Int), false));
+    hugeKeyTableDef.AddConstraint(new PrimaryKeyConstraint("PK_Huge", new[] { "KeyData" }));
+
+    // Helper strings for keys (Length ~3000)
+    string kA = new string('A', 3000);
+    string kB = new string('B', 3000); // Insert Target
+    string kC = new string('C', 3000);
+    string kE = new string('E', 3000); // L2 Sep 1
+    string kF = new string('F', 3000);
+    string kG = new string('G', 3000); // L2 Sep 2
+    string kH = new string('H', 3000);
+    string kI = new string('I', 3000); // L1 Sep 1
+    string kJ = new string('J', 3000);
+    string kK = new string('K', 3000); // L1 Sep 2
+    string kM = new string('M', 3000);
+    string kN = new string('N', 3000); // Root Sep
+    string kO = new string('O', 3000);
+
+    // --- Level 3 (Leaves) ---
+    // L3_1 (Target - Full): [A, C]. Inserting B will split it.
+    var leaf1 = await ManualCreateLeaf(hugeKeyTableDef, new[] { kA, kC });
+    // L3_2: [F]
+    var leaf2 = await ManualCreateLeaf(hugeKeyTableDef, new[] { kF });
+    // L3_3: [H]
+    var leaf3 = await ManualCreateLeaf(hugeKeyTableDef, new[] { kH });
+    // L3_4: [J]
+    var leaf4 = await ManualCreateLeaf(hugeKeyTableDef, new[] { kJ });
+    // L3_5: [M]
+    var leaf5 = await ManualCreateLeaf(hugeKeyTableDef, new[] { kM });
+    // L3_6: [O]
+    var leaf6 = await ManualCreateLeaf(hugeKeyTableDef, new[] { kO });
+
+    // --- Level 2 (Internal) ---
+    // L2_1 (Full): Entries (E, leaf1), (G, leaf2). Rightmost: leaf3.
+    // Range: < E (A,C); >= E < G (F); >= G (H).
+    var l2_1 = await ManualCreateInternal(hugeKeyTableDef,
+        new[] { (kE, leaf1), (kG, leaf2) },
+        leaf3);
+    await SetParentPointer(leaf1, l2_1);
+    await SetParentPointer(leaf2, l2_1);
+    await SetParentPointer(leaf3, l2_1);
+
+    // L2_2 (Empty-ish): Rightmost leaf4.
+    // Range: < K (J).
+    var l2_2 = await ManualCreateInternal(hugeKeyTableDef, new (string, PageId)[0], leaf4);
+    await SetParentPointer(leaf4, l2_2);
+
+    // L2_3 (Empty-ish): Rightmost leaf5.
+    // Range: < N (M).
+    var l2_3 = await ManualCreateInternal(hugeKeyTableDef, new (string, PageId)[0], leaf5);
+    await SetParentPointer(leaf5, l2_3);
+
+    // L2_4 (Empty-ish): Rightmost leaf6.
+    // Range: >= N (O).
+    var l2_4 = await ManualCreateInternal(hugeKeyTableDef, new (string, PageId)[0], leaf6);
+    await SetParentPointer(leaf6, l2_4);
+
+    // --- Level 1 (Internal) ---
+    // L1_1 (Full): Entries (I, l2_1), (K, l2_2). Rightmost: l2_3.
+    // Range: < I (A..H); >= I < K (J); >= K (M).
+    var l1_1 = await ManualCreateInternal(hugeKeyTableDef,
+        new[] { (kI, l2_1), (kK, l2_2) },
+        l2_3);
+    await SetParentPointer(l2_1, l1_1);
+    await SetParentPointer(l2_2, l1_1);
+    await SetParentPointer(l2_3, l1_1);
+
+    // L1_2: Rightmost l2_4.
+    // Range: >= N (O).
+    var l1_2 = await ManualCreateInternal(hugeKeyTableDef, new (string, PageId)[0], l2_4);
+    await SetParentPointer(l2_4, l1_2);
+
+    // --- Root (L0) ---
+    // Root (Not Full): Entries (N, l1_1). Rightmost: l1_2.
+    // Range: < N (A..M); >= N (O).
+    var rootPageId = await ManualCreateInternal(hugeKeyTableDef,
+        new[] { (kN, l1_1) },
+        l1_2);
+    await SetParentPointer(l1_1, rootPageId);
+    await SetParentPointer(l1_2, rootPageId);
+
+    /*
+       Initial Tree Structure (Keys Only):
+       * = Rightmost Child Pointer
+
+                     [ N ]*             (Root L0)
+                    /      \
+             [ I | K ]*    [ ]*              (L1)
+            /    |     \        \
+       [E|G]*   [ ]*   [ ]*     [ ]*         (L2)
+       / | \       \       \        \
+    [AC][F][H]     [J]     [M]      [O]   (Leaves)
+    */
+
+    var btree = await BTree.CreateAsync(_bpm, hugeKeyTableDef, rootPageId);
+    var initialRootId = rootPageId;
+
+    // Act
+    // Insert B.
+    // 1. Leaf Split (A, B, C) -> Med: B. Promotes B.
+    // 2. L2_1 Insert: (E->NewLeaf), Insert (B, leaf1).
+    //    L2_1 [ (B, leaf1), (E, NewLeaf), (G, leaf2) ]. FULL.
+    //    Split L2_1: Median E. Left [(B, leaf1)], Right [(G, leaf2)]. Promoted E.
+    // 3. L1_1 Insert: (I->L2_1_Right), Insert (E, L2_1_Left).
+    //    L1_1 [ (E, L2_1_Left), (I, L2_1_Right), (K, L2_2) ]. FULL.
+    //    Split L1_1: Median I. Left [(E, ...)], Right [(K, ...)]. Promoted I.
+    // 4. Root Insert: (N->L1_1_Right), Insert (I, L1_1_Left).
+    //    Root [ (I, L1_1_Left), (N, L1_1_Right) ].
+    var recordToInsert = new Record(DataValue.CreateString(kB), DataValue.CreateInteger(1));
+    await btree.InsertAsync(recordToInsert);
+
+    /*
+       Resulting Tree Structure (Keys Only):
+       * = Rightmost Child Pointer
+
+                        [  I |  N  ]*                 (Root L0)
+                       /        |     \
+                   [E]*        [K]*    [ ]*                (L1)
+                   /   \      /    \       \
+               [B]*    [G]*  []*  []*      []*             (L2)
+              /    \   /   \   \     \        \
+          [A]    [BC] [F]  [H] [J]   [M]      [O]   (Leaves L3)
+    */
+
+    // Assert
+    // 1. Root should NOT have changed ID
+    Assert.Equal(initialRootId, btree.GetRootPageIdForTest());
+
+    // 2. Root should now have 2 entries: (I, N)
+    var rootFrame = _bpm.GetFrameByPageId_TestOnly(initialRootId);
+    var rootHeader = new PageHeader(new Page(rootFrame!.CurrentPageId, rootFrame.PageData));
+    Assert.Equal(2, rootHeader.ItemCount);
+
+    // 3. Verify B found
+    var foundB = await btree.SearchAsync(new Key([DataValue.CreateString(kB)]));
+    Assert.NotNull(foundB);
+    Assert.Equal(1, foundB.Values[1].GetAs<int>());
+
+    // 4. Verify neighbors
+    Assert.NotNull(await btree.SearchAsync(new Key([DataValue.CreateString(kA)])));
+    Assert.NotNull(await btree.SearchAsync(new Key([DataValue.CreateString(kC)])));
+    Assert.NotNull(await btree.SearchAsync(new Key([DataValue.CreateString(kF)])));
+    Assert.NotNull(await btree.SearchAsync(new Key([DataValue.CreateString(kH)])));
+    Assert.NotNull(await btree.SearchAsync(new Key([DataValue.CreateString(kJ)])));
+    Assert.NotNull(await btree.SearchAsync(new Key([DataValue.CreateString(kM)])));
+    Assert.NotNull(await btree.SearchAsync(new Key([DataValue.CreateString(kO)])));
+  }
+
   private async Task<PageId> ManualCreateLeaf(TableDefinition def, int[] keys, string filler)
   {
     var page = await _bpm.CreatePageAsync(def.TableId);
