@@ -25,7 +25,7 @@ internal sealed class BTree
     ArgumentNullException.ThrowIfNull(bpm, nameof(bpm));
     ArgumentNullException.ThrowIfNull(tableDef, nameof(tableDef));
 
-    // If are handed a root page, then just unpin it and return the new B-Tree...
+    // If we are handed a root page, then just unpin it and return the new B-Tree...
     if (rootPageId.HasValue)
     {
       // Return a new BTree instance...
@@ -214,7 +214,35 @@ internal sealed class BTree
       }
       else
       {
-        // TODO: If the root is full, we must split it and form a new root node.
+        // If the root is full, we must split it and form a new root node.
+        // Page is full and we could not insert, so we'll need to split the root node...
+        UpdatePointerOfKeyOnTheRight(keyToPromote, nodeToInsertPromotedKey, rightSiblingChildId);
+
+        // First we need to allocate a new internal node to house half the contents of the existing node...
+        var (newInternalNode, newInternalNodeId) = await CreateNewInternalNode();
+        // Split the node and get the new separator key which will need to go into a new root node...
+        var newSeparatorKey = nodeToInsertPromotedKey.SplitAndInsert(keyToPromote, childPageId, newInternalNode);
+
+        // Now create a new root node, insert the new separator key that points to the original internal node that was split.
+        var (newRootNode, newRootPageId) = await CreateNewInternalNode();
+
+        // Insert our new separator key+child pointer record...
+        if (!newRootNode.TryInsert(newSeparatorKey, childPageId))
+        {
+          // This should not happen since this is a brand new root node...
+          throw new Exception("Could not insert into a new empty node!");
+        }
+        // Set the right most pointer to the new right sibling internal node...
+        newRootNode.SetRightmostChildId(newInternalNodeId.PageIndex);
+
+        // Unpin all pages...
+        _bpm.UnpinPage(newRootPageId, true);
+        _bpm.UnpinPage(newInternalNodeId, true);
+
+        // Set the new root ID
+        _rootPageId = newRootPageId;
+
+        return null;
       }
 
       // If we complete the base case, no further splits are possible or necessary, so return null;
@@ -225,20 +253,7 @@ internal sealed class BTree
     {
       // If the node is not full, we insert the new separator key which shall point to the original child,
       // and point the next greatest separator key to the right sibling.    
-      // First find the slot index where the new key will go... The existing key that slot needs to point to the new right sibling child.
-      var slotInsertionIndex = nodeToInsertPromotedKey.FindPrimaryKeySlotIndex(keyToPromote);
-      // The slot index should be negative, otherwise the separator key already exists in the node and
-      // we have an error condition.
-      if (slotInsertionIndex >= 0)
-      {
-        // TODO: Throw an exception here as the separator key to insert is already present in the internal node.
-      }
-
-      // Convert the slot index using the bitwise complement.
-      var nextKeyToTheRightIndex = ~slotInsertionIndex;
-
-      // Now update the separator key to the right of the new promoted key to point to the new right sibling child.
-      nodeToInsertPromotedKey.SetChildPointer(nextKeyToTheRightIndex, rightSiblingChildId.PageIndex);
+      UpdatePointerOfKeyOnTheRight(keyToPromote, nodeToInsertPromotedKey, rightSiblingChildId);
 
       if (nodeToInsertPromotedKey.TryInsert(keyToPromote, childPageId))
       {
@@ -262,6 +277,32 @@ internal sealed class BTree
 
         return await PromoteKeyRecursive(recursiveSplit);
       }
+    }
+  }
+
+  private void UpdatePointerOfKeyOnTheRight(Key keyToPromote, BTreeInternalNode nodeToInsertPromotedKey, PageId rightSiblingChildId)
+  {
+    // First find the slot index where the new key will go... The existing key in that slot needs to point to the new right sibling child.
+    var slotInsertionIndex = nodeToInsertPromotedKey.FindPrimaryKeySlotIndex(keyToPromote);
+    // The slot index should be negative, otherwise the separator key already exists in the node and
+    // we have an error condition.
+    if (slotInsertionIndex >= 0)
+    {
+      // TODO: Throw an exception here as the separator key to insert is already present in the internal node.
+    }
+
+    // Convert the slot index using the bitwise complement.
+    var nextKeyToTheRightIndex = ~slotInsertionIndex;
+
+    // Check if the insertion point is the last index which indicates that the key is the largest separator key in the node and there
+    // is no key to the right. In this case, we need to update the rightmost pointer of the node to point to the right sibling child page.
+    if (nextKeyToTheRightIndex == nodeToInsertPromotedKey.ItemCount)
+    {
+      nodeToInsertPromotedKey.SetRightmostChildId(rightSiblingChildId.PageIndex);
+    }
+    else // Otherwise, update the separator key to the right of the new promoted key to point to the new right sibling child.
+    {
+      nodeToInsertPromotedKey.SetChildPointer(nextKeyToTheRightIndex, rightSiblingChildId.PageIndex);
     }
   }
 
@@ -296,6 +337,20 @@ internal sealed class BTree
 
     return rightSiblingLeafNode;
   }
+
+  // private async Task<BTreeLeafNode?> FetchRightInternalSiblingAsync(BTreeInternalNode internalNode)
+  // {
+  //   // Fetch the right sibling...
+  //   var rightSiblingIndex = internalNode.NextPageIndex;
+  //   BTreeLeafNode? rightSiblingLeafNode = null;
+  //   if (rightSiblingIndex != PageHeader.INVALID_PAGE_INDEX)
+  //   {
+  //     var rightSiblingPage = await _bpm.FetchPageAsync(new PageId(_tableDefinition.TableId, rightSiblingIndex));
+  //     rightSiblingLeafNode = new BTreeLeafNode(rightSiblingPage, _tableDefinition);
+  //   }
+
+  //   return rightSiblingLeafNode;
+  // }
 
   private record SplitResult(Key keyToPromote, BTreeInternalNode nodeToInsertPromotedKey, PageId childPageId, PageId rightSiblingChildId)
   {
