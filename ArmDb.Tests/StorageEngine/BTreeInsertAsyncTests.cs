@@ -784,7 +784,7 @@ public partial class BTreeTests
     // 1. Verify Parent Node Content
     var parentFrame = _bpm.GetFrameByPageId_TestOnly(parentNodeId);
     // Re-wrap to access internal node methods
-    var parentNode = new BTreeInternalNode(new Page(parentFrame.CurrentPageId, parentFrame.PageData), hugeKeyTableDef);
+    var parentNode = new BTreeInternalNode(new Page(parentFrame!.CurrentPageId, parentFrame.PageData), hugeKeyTableDef);
 
     Assert.Equal(2, parentNode.ItemCount);
 
