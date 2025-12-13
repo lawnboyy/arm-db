@@ -183,7 +183,7 @@ public partial class BTreeTests
     var hugeKeyTableDef = new TableDefinition("RecursiveSplitTable_HugePK");
     hugeKeyTableDef.AddColumn(new ColumnDefinition("KeyData", new DataTypeInfo(PrimitiveDataType.Varchar, 3000), false));
     hugeKeyTableDef.AddColumn(new ColumnDefinition("Val", new DataTypeInfo(PrimitiveDataType.Int), false));
-    hugeKeyTableDef.AddConstraint(new PrimaryKeyConstraint("PK_Huge", new[] { "KeyData" }));
+    hugeKeyTableDef.AddConstraint(new PrimaryKeyConstraint("PK_Huge", ["KeyData"]));
 
     // Helper strings for keys (Length ~3000)
     string kA = new string('A', 3000);
@@ -192,11 +192,7 @@ public partial class BTreeTests
     string kE = new string('E', 3000); // Separator 1
     string kF = new string('F', 3000);
     string kG = new string('G', 3000); // Separator 2
-    // string kH = new string('H', 3000);
-    // string kL = new string('L', 3000); // Child of N
     string kM = new string('M', 3000); // Root Separator
-    // string kN = new string('N', 3000); // Separator 3 (Right Sibling)
-    // string kR = new string('R', 3000); // Rightmost Leaf
 
     // --- Construct Tree Bottom-Up ---
     /*
@@ -278,10 +274,6 @@ public partial class BTreeTests
     Assert.Equal(2, rootHeader.ItemCount);
 
     // 3. Verify we can find the new record (B)
-    // TODO: The new tree is pointing the left most internal node separator key for B
-    // back to the page ID 0 when it should now point to page ID 8 (contains B, C). The 
-    // internal node at page index 5's rightmost pointer is not getting adjusted to
-    // point to the new right sibling leaf node after the split.
     var foundB = await btree.SearchAsync(new Key([DataValue.CreateString(kB)]));
     Assert.NotNull(foundB);
     Assert.Equal(1, foundB.Values[1].GetAs<int>());
@@ -289,9 +281,6 @@ public partial class BTreeTests
     // 4. Verify neighbors
     Assert.NotNull(await btree.SearchAsync(new Key([DataValue.CreateString(kA)])));
     Assert.NotNull(await btree.SearchAsync(new Key([DataValue.CreateString(kC)])));
-    // Assert.NotNull(await btree.SearchAsync(new Key([DataValue.CreateString(kH)])));
-    // Assert.NotNull(await btree.SearchAsync(new Key([DataValue.CreateString(kN)])));
-    // Assert.NotNull(await btree.SearchAsync(new Key([DataValue.CreateString(kR)])));
   }
 
   private async Task<PageId> ManualCreateLeaf(TableDefinition def, int[] keys, string filler)
