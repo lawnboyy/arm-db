@@ -211,6 +211,11 @@ internal sealed class BTree
     // Base case: Root Node Reached (no parent)
     if (nodeToInsertPromotedKey.ParentPageIndex == PageHeader.INVALID_PAGE_INDEX)
     {
+      // Before we insert the key, we must update the child pointer at the insertion point. If there
+      // is a separator key record here, then it needs to point to the new right sibling child that
+      // was created because of a split. If there is no separator key record here, then the promoted
+      // key is the largest key in the node, so we must update the node's rightmost pointer to point
+      // to the newly created right sibling child node.
       UpdateRightSidePointer(keyToPromote, nodeToInsertPromotedKey, rightSiblingChildId);
       // If this is the root node, try to insert the new separator key...
       if (!nodeToInsertPromotedKey.TryInsert(keyToPromote, childPageId))
