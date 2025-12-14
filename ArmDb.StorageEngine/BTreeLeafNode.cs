@@ -1,3 +1,4 @@
+using System.Text;
 using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
 using ArmDb.StorageEngine.Exceptions;
@@ -276,5 +277,25 @@ internal sealed class BTreeLeafNode : BTreeNode
     }
 
     throw new RecordNotFoundException("Record could not be found using the given primary key.");
+  }
+
+  public override string ToString()
+  {
+    StringBuilder stringBuilder = new();
+    var header = new PageHeader(_page);
+    stringBuilder.Append("[");
+    for (int slotIndex = 0; slotIndex < header.ItemCount; slotIndex++)
+    {
+      // Fetch the record at the slot offset and deserialize it...
+      var currentRawRecord = SlottedPage.GetRawRecord(_page, slotIndex);
+      var primaryKey = RecordSerializer.DeserializePrimaryKey(_tableDefinition, currentRawRecord);
+      var keyStr = primaryKey.ToString();
+      stringBuilder.Append($"{keyStr},");
+    }
+
+    stringBuilder.Remove(stringBuilder.Length - 1, 1);
+    stringBuilder.Append("]");
+
+    return stringBuilder.ToString();
   }
 }

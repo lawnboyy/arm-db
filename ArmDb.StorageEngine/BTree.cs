@@ -108,6 +108,10 @@ internal sealed class BTree
       // Now perform the split...
       var newSeparatorKey = leafNode.SplitAndInsert(record, newLeafNode, rightSiblingLeafNode);
 
+      // If we have a parent, set the new leaf node's parent index here.
+      if (parentNode != null)
+        newLeafNode.SetParentPageIndex(parentNode.PageId.PageIndex);
+
       // If there is no parent, then we have a single level tree with a single leaf and must create
       // a new internal node as the new root to promote the separator key to.
       if (leafNode.ParentPageIndex == PageHeader.INVALID_PAGE_INDEX)
@@ -121,6 +125,10 @@ internal sealed class BTree
         }
         // Set the right most pointer to the new right sibling leaf node...
         newRootNode.SetRightmostChildId(newLeafNode.PageIndex);
+
+        // Set the parent pointers of our split nodes to the new root node.
+        leafNode.SetParentPageIndex(newRootNode.PageId.PageIndex);
+        newLeafNode.SetParentPageIndex(newRootNode.PageId.PageIndex);
 
         // Unpin all pages...
         _bpm.UnpinPage(page.Id, true);
@@ -203,20 +211,21 @@ internal sealed class BTree
     // Base case: Root Node Reached (no parent)
     if (nodeToInsertPromotedKey.ParentPageIndex == PageHeader.INVALID_PAGE_INDEX)
     {
+      UpdateRightSidePointer(keyToPromote, nodeToInsertPromotedKey, rightSiblingChildId);
       // If this is the root node, try to insert the new separator key...
       if (nodeToInsertPromotedKey.TryInsert(keyToPromote, childPageId))
       {
-        // First find the slot index where the new key will go... The existing key of that slot needs to point to the new right sibling child.
-        var slotInsertionIndex = nodeToInsertPromotedKey.FindPrimaryKeySlotIndex(keyToPromote);
-        var nextKeyToTheRightIndex = slotInsertionIndex + 1;
-        // Now update the separator key to the right of the new promoted key to point to the new right sibling child.
-        nodeToInsertPromotedKey.SetChildPointer(nextKeyToTheRightIndex, rightSiblingChildId.PageIndex);
+        // TODO: Remove this block if the logic is sound.
+        // // First find the slot index where the new key will go... The existing key of that slot needs to point to the new right sibling child.
+        // var slotInsertionIndex = nodeToInsertPromotedKey.FindPrimaryKeySlotIndex(keyToPromote);
+        // var nextKeyToTheRightIndex = slotInsertionIndex + 1;
+        // // Now update the separator key to the right of the new promoted key to point to the new right sibling child.
+        // nodeToInsertPromotedKey.SetChildPointer(nextKeyToTheRightIndex, rightSiblingChildId.PageIndex);
       }
       else
       {
         // If the root is full, we must split it and form a new root node.
         // Page is full and we could not insert, so we'll need to split the root node...
-        UpdateRightSidePointer(keyToPromote, nodeToInsertPromotedKey, rightSiblingChildId);
 
         // First we need to allocate a new internal node to house half the contents of the existing node...
         var (newInternalNode, newInternalNodeId) = await CreateNewInternalNode();
@@ -235,14 +244,16 @@ internal sealed class BTree
         // Set the right most pointer to the new right sibling internal node...
         newRootNode.SetRightmostChildId(newInternalNodeId.PageIndex);
 
+        // Set the parent pointers of our split nodes to the new root node.
+        nodeToInsertPromotedKey.SetParentPageIndex(newRootNode.PageId.PageIndex);
+        newInternalNode.SetParentPageIndex(newRootNode.PageId.PageIndex);
+
         // Unpin all pages...
         _bpm.UnpinPage(newRootPageId, true);
         _bpm.UnpinPage(newInternalNodeId, true);
 
         // Set the new root ID
         _rootPageId = newRootPageId;
-
-        return null;
       }
 
       // If we complete the base case, no further splits are possible or necessary, so return null;

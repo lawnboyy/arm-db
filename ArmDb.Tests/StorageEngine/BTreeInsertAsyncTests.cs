@@ -1,4 +1,5 @@
 using ArmDb.DataModel;
+using ArmDb.DataModel.Exceptions;
 using ArmDb.SchemaDefinition;
 using ArmDb.StorageEngine;
 using Record = ArmDb.DataModel.Record;
@@ -812,6 +813,67 @@ public partial class BTreeTests
     Assert.Equal(1, foundF.Values[1].GetAs<int>());
 
     Assert.NotNull(await btree.SearchAsync(new Key([DataValue.CreateString(kI)])));
+  }
+
+  [Fact]
+  public async Task InsertAsync_DuplicateKey_ThrowsDuplicateKeyException()
+  {
+    // Arrange
+    var tableDef = CreateIntPKTable(999);
+    var btree = await BTree.CreateAsync(_bpm, tableDef);
+
+    var record = new Record(DataValue.CreateInteger(100), DataValue.CreateString("Original"));
+
+    // 1. Initial Insert
+    await btree.InsertAsync(record);
+
+    // Act & Assert
+    // 2. Attempt duplicate insert
+    await Assert.ThrowsAsync<DuplicateKeyException>(() => btree.InsertAsync(record));
+  }
+
+  [Fact]
+  public async Task InsertAsync_SequentialInserts_ForcesMultipleSplitsAndMaintainsIntegrity()
+  {
+    // Arrange
+    // Use a schema with a large column so we trigger splits frequently (every ~3 records)
+    var largeTableDef = new TableDefinition("SequentialTable");
+    largeTableDef.AddColumn(new ColumnDefinition("Id", new DataTypeInfo(PrimitiveDataType.Int), false));
+    largeTableDef.AddColumn(new ColumnDefinition("Data", new DataTypeInfo(PrimitiveDataType.Varchar, 2000), false));
+    largeTableDef.AddConstraint(new PrimaryKeyConstraint("PK_Seq", ["Id"]));
+
+    var btree = await BTree.CreateAsync(_bpm, largeTableDef);
+    string payload = new string('S', 2000);
+
+    int recordCount = 50; // Enough to cause ~16 splits (50 / 3) and grow tree height
+
+    // Act
+    // Insert 0..49 sequentially
+    for (int i = 0; i < recordCount; i++)
+    {
+      var rec = new Record(DataValue.CreateInteger(i), DataValue.CreateString(payload));
+      await btree.InsertAsync(rec);
+    }
+
+    // Assert
+    // Verify all records exist
+    for (int i = 0; i < recordCount; i++)
+    {
+      var key = new Key([DataValue.CreateInteger(i)]);
+      var result = await btree.SearchAsync(key);
+      Assert.NotNull(result);
+      Assert.Equal(i, result.Values[0].GetAs<int>());
+    }
+
+    // Verify root is likely an internal node now (height > 1)
+    // 50 records * 2000 bytes = ~100KB data. 
+    // 1 Page = 8KB. Tree must be multi-level.
+    var rootId = btree.GetRootPageIdForTest();
+    var rootFrame = _bpm.GetFrameByPageId_TestOnly(rootId);
+    Assert.NotNull(rootFrame);
+    var rootHeader = new PageHeader(new Page(rootFrame.CurrentPageId, rootFrame.PageData));
+
+    Assert.Equal(PageType.InternalNode, rootHeader.PageType);
   }
 
   private async Task<PageId> ManualCreateLeaf(TableDefinition def, int[] keys, string filler)

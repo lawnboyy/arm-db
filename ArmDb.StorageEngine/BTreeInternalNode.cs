@@ -343,11 +343,10 @@ internal sealed class BTreeInternalNode : BTreeNode
       // Fetch the record at the slot offset and deserialize it...
       var currentRawRecord = SlottedPage.GetRawRecord(_page, slotIndex);
       var (separatorKey, childPageId) = DeserializeSeparatorKey(_tableDefinition, currentRawRecord);
-      var firstChar = separatorKey.Values[0].ToString()[0];
-      stringBuilder.Append($"{firstChar}-->{childPageId.PageIndex} Rightmost->{header.RightmostChildPageIndex}");
+      var keyStr = separatorKey.ToString();
+      stringBuilder.Append($"Key:{keyStr}-->Index:{childPageId.PageIndex} ");
     }
-
-    stringBuilder.Remove(stringBuilder.Length - 1, 1);
+    stringBuilder.Append($"Rightmost-->Index:{header.RightmostChildPageIndex}");
 
     return stringBuilder.ToString();
   }

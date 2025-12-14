@@ -230,4 +230,6 @@ internal abstract class BTreeNode
 
     return spaceNeededInBytes <= spaceAvailable;
   }
+
+  internal void SetParentPageIndex(int pageIndex) => new PageHeader(_page).ParentPageIndex = pageIndex;
 }
