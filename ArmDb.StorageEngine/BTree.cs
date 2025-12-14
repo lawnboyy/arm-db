@@ -213,19 +213,9 @@ internal sealed class BTree
     {
       UpdateRightSidePointer(keyToPromote, nodeToInsertPromotedKey, rightSiblingChildId);
       // If this is the root node, try to insert the new separator key...
-      if (nodeToInsertPromotedKey.TryInsert(keyToPromote, childPageId))
+      if (!nodeToInsertPromotedKey.TryInsert(keyToPromote, childPageId))
       {
-        // TODO: Remove this block if the logic is sound.
-        // // First find the slot index where the new key will go... The existing key of that slot needs to point to the new right sibling child.
-        // var slotInsertionIndex = nodeToInsertPromotedKey.FindPrimaryKeySlotIndex(keyToPromote);
-        // var nextKeyToTheRightIndex = slotInsertionIndex + 1;
-        // // Now update the separator key to the right of the new promoted key to point to the new right sibling child.
-        // nodeToInsertPromotedKey.SetChildPointer(nextKeyToTheRightIndex, rightSiblingChildId.PageIndex);
-      }
-      else
-      {
-        // If the root is full, we must split it and form a new root node.
-        // Page is full and we could not insert, so we'll need to split the root node...
+        // If the root is full, we must split it and form a new root node...
 
         // First we need to allocate a new internal node to house half the contents of the existing node...
         var (newInternalNode, newInternalNodeId) = await CreateNewInternalNode();
