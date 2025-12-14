@@ -876,6 +876,48 @@ public partial class BTreeTests
     Assert.Equal(PageType.InternalNode, rootHeader.PageType);
   }
 
+  [Fact]
+  public async Task InsertAsync_ReverseSequentialInserts_MaintainsIntegrity()
+  {
+    // Arrange
+    var largeTableDef = new TableDefinition("ReverseSequentialTable");
+    largeTableDef.AddColumn(new ColumnDefinition("Id", new DataTypeInfo(PrimitiveDataType.Int), false));
+    largeTableDef.AddColumn(new ColumnDefinition("Data", new DataTypeInfo(PrimitiveDataType.Varchar, 2000), false));
+    largeTableDef.AddConstraint(new PrimaryKeyConstraint("PK_RevSeq", new[] { "Id" }));
+
+    var btree = await BTree.CreateAsync(_bpm, largeTableDef);
+    string payload = new string('R', 2000);
+
+    int recordCount = 50;
+
+    // Act
+    // Insert 49..0 (Reverse order)
+    // This stresses the "Insert at Slot 0" and "Split with New Key at Beginning" logic
+    for (int i = recordCount - 1; i >= 0; i--)
+    {
+      var rec = new Record(DataValue.CreateInteger(i), DataValue.CreateString(payload));
+      await btree.InsertAsync(rec);
+    }
+
+    // Assert
+    // Verify all records exist and contain correct data
+    for (int i = 0; i < recordCount; i++)
+    {
+      var key = new Key([DataValue.CreateInteger(i)]);
+      var result = await btree.SearchAsync(key);
+      Assert.NotNull(result);
+      Assert.Equal(i, result.Values[0].GetAs<int>());
+    }
+
+    // Verify root is an internal node (growth occurred)
+    var rootId = btree.GetRootPageIdForTest();
+    var rootFrame = _bpm.GetFrameByPageId_TestOnly(rootId);
+    Assert.NotNull(rootFrame);
+    var rootHeader = new PageHeader(new Page(rootFrame.CurrentPageId, rootFrame.PageData));
+
+    Assert.Equal(PageType.InternalNode, rootHeader.PageType);
+  }
+
   private async Task<PageId> ManualCreateLeaf(TableDefinition def, int[] keys, string filler)
   {
     var page = await _bpm.CreatePageAsync(def.TableId);
