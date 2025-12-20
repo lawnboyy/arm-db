@@ -153,7 +153,6 @@ internal sealed class BTreeLeafNode : BTreeNode
   /// <param name="rowToInsert">The new data row to insert.</param>
   /// <param name="newRightLeaf">New node that will house half the current records.</param>
   /// <returns>The separator key to promote to the parent node.</returns>
-  /// <exception cref="NotImplementedException"></exception>
   internal Key SplitAndInsert(Record rowToInsert, BTreeLeafNode newRightLeaf, BTreeLeafNode? rightLeafSibling = null)
   {
     if (newRightLeaf.ItemCount != 0)

@@ -93,9 +93,19 @@ internal sealed class BTree
     {
       // Wrap the page in a leaf node...
       var leafNode = new BTreeLeafNode(page, _tableDefinition);
-      if (leafNode.TryInsert(record))
+
+      try
       {
-        return null;
+        if (leafNode.TryInsert(record))
+        {
+          _bpm.UnpinPage(page.Id, true);
+          return null;
+        }
+      }
+      catch
+      {
+        _bpm.UnpinPage(page.Id, false);
+        throw;
       }
 
       // Page is full and we could not insert, so we'll need to split this node...
@@ -117,27 +127,37 @@ internal sealed class BTree
       if (leafNode.ParentPageIndex == PageHeader.INVALID_PAGE_INDEX)
       {
         var (newRootNode, newPageId) = await CreateNewInternalNode();
-        // Insert our new separator key+child pointer record...
-        if (!newRootNode.TryInsert(newSeparatorKey, pageId))
+        try
         {
-          // This should not happen since this is a brand new root node...
-          throw new Exception("Could not insert into a new empty node!");
+          // Insert our new separator key+child pointer record...
+          if (!newRootNode.TryInsert(newSeparatorKey, pageId))
+          {
+            // This should not happen since this is a brand new root node...
+            throw new Exception("Could not insert into a new empty node!");
+          }
+          // Set the right most pointer to the new right sibling leaf node...
+          newRootNode.SetRightmostChildId(newLeafNode.PageIndex);
+
+          // Set the parent pointers of our split nodes to the new root node.
+          leafNode.SetParentPageIndex(newRootNode.PageId.PageIndex);
+          newLeafNode.SetParentPageIndex(newRootNode.PageId.PageIndex);
+
+          // Unpin all pages...
+          _bpm.UnpinPage(page.Id, true);
+          _bpm.UnpinPage(newLeafPageId, true);
+
+          // Set the new root ID
+          _rootPageId = newPageId;
+
+          return null;
         }
-        // Set the right most pointer to the new right sibling leaf node...
-        newRootNode.SetRightmostChildId(newLeafNode.PageIndex);
-
-        // Set the parent pointers of our split nodes to the new root node.
-        leafNode.SetParentPageIndex(newRootNode.PageId.PageIndex);
-        newLeafNode.SetParentPageIndex(newRootNode.PageId.PageIndex);
-
-        // Unpin all pages...
-        _bpm.UnpinPage(page.Id, true);
-        _bpm.UnpinPage(newLeafPageId, true);
-
-        // Set the new root ID
-        _rootPageId = newPageId;
-
-        return null;
+        catch
+        {
+          // Unpin all pages...
+          _bpm.UnpinPage(page.Id, false);
+          _bpm.UnpinPage(newLeafPageId, false);
+          throw;
+        }
       }
       else
       {
@@ -145,6 +165,8 @@ internal sealed class BTree
         {
           throw new Exception("Cannot promote new separator key because the parent node was null!");
         }
+        // Unpin the current page...
+        _bpm.UnpinPage(page.Id, true);
 
         // Return the result of the leaf split so we can promote a new separator key...        
         return new SplitResult(newSeparatorKey, parentNode, pageId, newLeafPageId);
