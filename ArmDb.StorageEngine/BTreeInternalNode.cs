@@ -344,6 +344,8 @@ internal sealed class BTreeInternalNode : BTreeNode
       var currentRawRecord = SlottedPage.GetRawRecord(_page, slotIndex);
       var (separatorKey, childPageId) = DeserializeSeparatorKey(_tableDefinition, currentRawRecord);
       var keyStr = separatorKey.ToString();
+      if (keyStr.Length > 10)
+        keyStr = keyStr[0].ToString();
       stringBuilder.Append($"Key:{keyStr}-->Index:{childPageId.PageIndex} ");
     }
     stringBuilder.Append($"Rightmost-->Index:{header.RightmostChildPageIndex}");

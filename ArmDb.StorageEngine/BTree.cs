@@ -1,3 +1,4 @@
+using System.IO.Pipelines;
 using System.Text;
 using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
@@ -146,6 +147,9 @@ internal sealed class BTree
           _bpm.UnpinPage(page.Id, true);
           _bpm.UnpinPage(newLeafPageId, true);
 
+          if (parentNode != null)
+            _bpm.UnpinPage(parentNode.PageId, false);
+
           // Set the new root ID
           _rootPageId = newPageId;
 
@@ -156,6 +160,8 @@ internal sealed class BTree
           // Unpin all pages...
           _bpm.UnpinPage(page.Id, false);
           _bpm.UnpinPage(newLeafPageId, false);
+          if (parentNode != null)
+            _bpm.UnpinPage(parentNode.PageId, false);
           throw;
         }
       }
@@ -168,7 +174,9 @@ internal sealed class BTree
         // Unpin the current page...
         _bpm.UnpinPage(page.Id, true);
 
-        // Return the result of the leaf split so we can promote a new separator key...        
+        // Return the result of the leaf split so we can promote a new separator key...      
+        // TODO: We are passing the parentNode back here as the node to promote the separator key to, but 
+        // it is unpinned and should be pinned.  
         return new SplitResult(newSeparatorKey, parentNode, pageId, newLeafPageId);
       }
     }
@@ -179,11 +187,14 @@ internal sealed class BTree
       var internalNode = new BTreeInternalNode(page, _tableDefinition);
       var childPageId = internalNode.LookupChildPage(key);
 
-      // Unpin the page now that we are done with it...
-      _bpm.UnpinPage(pageId, false);
-
       // Recursively call this search method...
-      return await InsertRecursiveAsync(childPageId, record, key, internalNode);
+      var result = await InsertRecursiveAsync(childPageId, record, key, internalNode);
+
+      // Make sure to unpin the current page unless it is part of a split result.
+      if (result != null && result.nodeToInsertPromotedKey.PageId != pageId)
+        _bpm.UnpinPage(pageId, false);
+
+      return result;
     }
 
     throw new InvalidDataException("B-Tree Node type was invalid!");
@@ -265,12 +276,17 @@ internal sealed class BTree
         nodeToInsertPromotedKey.SetParentPageIndex(newRootNode.PageId.PageIndex);
         newInternalNode.SetParentPageIndex(newRootNode.PageId.PageIndex);
 
-        // Unpin all pages...
+        // Unpin all new pages...
         _bpm.UnpinPage(newRootPageId, true);
         _bpm.UnpinPage(newInternalNodeId, true);
 
         // Set the new root ID
         _rootPageId = newRootPageId;
+      }
+      else
+      {
+        // Be sure to unpin the root now that we are done.
+        _bpm.UnpinPage(nodeToInsertPromotedKey.PageId, true);
       }
 
       // If we complete the base case, no further splits are possible or necessary, so return null;
@@ -285,6 +301,7 @@ internal sealed class BTree
 
       if (nodeToInsertPromotedKey.TryInsert(keyToPromote, childPageId))
       {
+        //_bpm.UnpinPage(nodeToInsertPromotedKey.PageId, true);
         // If we successfully insert a promoted key, then we need no further splits and
         // are done.
         return null;
@@ -302,6 +319,8 @@ internal sealed class BTree
         var parentPage = await _bpm.FetchPageAsync(new PageId(_tableDefinition.TableId, nodeToInsertPromotedKey.ParentPageIndex));
         var parentNode = new BTreeInternalNode(parentPage, _tableDefinition);
         var recursiveSplit = new SplitResult(newSeparatorKey, parentNode, nodeToInsertPromotedKey.PageId, newInternalNodeId);
+
+        _bpm.UnpinPage(nodeToInsertPromotedKey.PageId, true);
 
         return await PromoteKeyRecursive(recursiveSplit);
       }
