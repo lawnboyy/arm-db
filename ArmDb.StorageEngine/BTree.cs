@@ -47,7 +47,13 @@ internal sealed class BTree
   }
 
   /// <summary>
-  /// 
+  /// Inserts a new record into the tree. Traverses the tree comparing the record key to the 
+  /// internal nodes' separator keys to find the leaf where the record key belongs. If there
+  /// is sufficient space in the leaf, the new record is inserted in the proper order in the
+  /// slotted page's slot array. If there is insufficient space in the leaf, then the leaf is
+  /// split into two separate nodes and the contents, including the new inserted record, are 
+  /// split between them. The split promotes a key upwards recursively to the first parent
+  /// node with sufficient space to insert the new promoted separator key.
   /// </summary>
   /// <param name="record"></param>
   /// <returns></returns>
