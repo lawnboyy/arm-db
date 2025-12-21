@@ -143,4 +143,25 @@ public readonly ref struct PageHeader
       BinaryPrimitives.WriteInt32LittleEndian(_headerSpan.Slice(TYPE_SPECIFIC_POINTER_1_OFFSET), value);
     }
   }
+
+  /// <summary>
+  /// Gets or sets the Root Page's index in the table metadata. Specific to table
+  /// header pages.
+  /// Throws InvalidOperationException if this is not a TableHeader page.
+  /// </summary>
+  public int RootPageIndex
+  {
+    get
+    {
+      if (PageType != PageType.TableHeader)
+        throw new InvalidOperationException("RootPageIndex is only valid for TableHeader pages.");
+      return BinaryPrimitives.ReadInt32LittleEndian(_headerSpan.Slice(TYPE_SPECIFIC_POINTER_1_OFFSET));
+    }
+    set
+    {
+      if (PageType != PageType.TableHeader)
+        throw new InvalidOperationException("RootPageIndex is only valid for TableHeader pages.");
+      BinaryPrimitives.WriteInt32LittleEndian(_headerSpan.Slice(TYPE_SPECIFIC_POINTER_1_OFFSET), value);
+    }
+  }
 }

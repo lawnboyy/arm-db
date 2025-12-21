@@ -21,7 +21,9 @@ public enum PageType : byte // Stored as a single byte
   /// </summary>
   InternalNode = 2,
 
-  // Add other page types later as needed:
-  // FreeSpaceMap = 3,
-  // AllocationMap = 4,
+  /// <summary>
+  /// The page at index 0 will hold any metadata about the table, such as the page index
+  /// of the root of the clustered index / B-Tree.
+  /// </summary>
+  TableHeader = 3
 }

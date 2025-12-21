@@ -36,6 +36,9 @@ internal static class SlottedPage
     // --- Set Type-Specific Header Fields to their "null" state ---
     switch (pageType)
     {
+      case PageType.TableHeader:
+        header.RootPageIndex = 0;
+        break;
       case PageType.LeafNode:
         header.PrevPageIndex = PageHeader.INVALID_PAGE_INDEX;
         header.NextPageIndex = PageHeader.INVALID_PAGE_INDEX;
