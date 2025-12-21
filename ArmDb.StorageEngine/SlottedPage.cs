@@ -37,7 +37,7 @@ internal static class SlottedPage
     switch (pageType)
     {
       case PageType.TableHeader:
-        header.RootPageIndex = 0;
+        header.RootPageIndex = PageHeader.INVALID_PAGE_INDEX;
         break;
       case PageType.LeafNode:
         header.PrevPageIndex = PageHeader.INVALID_PAGE_INDEX;
