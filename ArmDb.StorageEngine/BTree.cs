@@ -55,8 +55,8 @@ internal sealed class BTree
   /// split between them. The split promotes a key upwards recursively to the first parent
   /// node with sufficient space to insert the new promoted separator key.
   /// </summary>
-  /// <param name="record"></param>
-  /// <returns></returns>
+  /// <param name="record">The record to insert.</param>
+  /// <returns>A task representing the asynchronous work yet to be completed.</returns>
   internal async Task InsertAsync(Record record)
   {
     // Get the primary key for this record so we can navigate the tree to find the insertion point...
