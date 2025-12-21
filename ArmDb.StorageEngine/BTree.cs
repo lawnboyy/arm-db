@@ -307,7 +307,7 @@ internal sealed class BTree
 
       if (nodeToInsertPromotedKey.TryInsert(keyToPromote, childPageId))
       {
-        //_bpm.UnpinPage(nodeToInsertPromotedKey.PageId, true);
+        _bpm.UnpinPage(nodeToInsertPromotedKey.PageId, true);
         // If we successfully insert a promoted key, then we need no further splits and
         // are done.
         return null;

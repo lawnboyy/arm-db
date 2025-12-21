@@ -162,4 +162,143 @@ public partial class BTreeTests
     if (siblingFrame != null) Assert.Equal(0, siblingFrame.PinCount);
 #endif
   }
+
+  [Fact]
+  public async Task InsertAsync_LeafSplitOnly_ReleasesAllPins()
+  {
+    // Arrange
+    var hugeKeyTableDef = new TableDefinition("RecursiveSplitTable_HugePK_Pinning");
+    hugeKeyTableDef.AddColumn(new ColumnDefinition("KeyData", new DataTypeInfo(PrimitiveDataType.Varchar, 3000), false));
+    hugeKeyTableDef.AddColumn(new ColumnDefinition("Val", new DataTypeInfo(PrimitiveDataType.Int), false));
+    hugeKeyTableDef.AddConstraint(new PrimaryKeyConstraint("PK_Huge", new[] { "KeyData" }));
+
+    string kA = new string('A', 3000);
+    string kB = new string('B', 3000); // Insert Target
+    string kC = new string('C', 3000);
+    string kE = new string('E', 3000);
+    string kH = new string('H', 3000);
+    string kM = new string('M', 3000);
+    string kN = new string('N', 3000);
+
+    // --- Construct Tree ---
+    // Leaf Target (Full): [A, C]
+    var leafTarget = await ManualCreateLeaf(hugeKeyTableDef, new[] { kA, kC });
+    // Leaf Sibling: [H]
+    var leafSibling = await ManualCreateLeaf(hugeKeyTableDef, new[] { kH });
+
+    // Parent (L1) - Not Full (1 Entry)
+    // Entries: (E, leafTarget). Rightmost: leafSibling.
+    var parentNodeId = await ManualCreateInternal(hugeKeyTableDef,
+        new[] { (kE, leafTarget) },
+        leafSibling);
+    await SetParentPointer(leafTarget, parentNodeId);
+    await SetParentPointer(leafSibling, parentNodeId);
+
+    // Root (L0)
+    // Entries: (M, parentNodeId). Rightmost: Dummy.
+    var dummyLeaf = await ManualCreateLeaf(hugeKeyTableDef, new[] { kN });
+    var rootPageId = await ManualCreateInternal(hugeKeyTableDef,
+        new[] { (kM, parentNodeId) },
+        dummyLeaf); // Dummy rightmost
+    await SetParentPointer(parentNodeId, rootPageId);
+
+    var btree = await BTree.CreateAsync(_bpm, hugeKeyTableDef, rootPageId);
+
+    // Act
+    // Insert B. 
+    // LeafTarget [A, C] splits -> Promotes B.
+    // Parent [E] inserts B -> [B, E]. Parent has space (max 2). No split.
+    var recordToInsert = new Record(DataValue.CreateString(kB), DataValue.CreateInteger(1));
+    await btree.InsertAsync(recordToInsert);
+
+    // Assert
+#if DEBUG
+    // 1. Root
+    var rootFrame = _bpm.GetFrameByPageId_TestOnly(rootPageId);
+    Assert.NotNull(rootFrame);
+    Assert.Equal(0, rootFrame.PinCount);
+
+    // 2. Parent - Absorbed the key
+    var parentFrame = _bpm.GetFrameByPageId_TestOnly(parentNodeId);
+    Assert.NotNull(parentFrame);
+    Assert.Equal(0, parentFrame.PinCount);
+
+    // 3. Leaf Target - Split
+    var leafFrame = _bpm.GetFrameByPageId_TestOnly(leafTarget);
+    Assert.NotNull(leafFrame);
+    Assert.Equal(0, leafFrame.PinCount);
+#endif
+  }
+
+  [Fact]
+  public async Task InsertAsync_LeafAndParentSplit_NoRootSplit_ReleasesAllPins()
+  {
+    // Arrange
+    var hugeKeyTableDef = new TableDefinition("RecursiveSplitTable_HugePK_Pinning");
+    hugeKeyTableDef.AddColumn(new ColumnDefinition("KeyData", new DataTypeInfo(PrimitiveDataType.Varchar, 3000), false));
+    hugeKeyTableDef.AddColumn(new ColumnDefinition("Val", new DataTypeInfo(PrimitiveDataType.Int), false));
+    hugeKeyTableDef.AddConstraint(new PrimaryKeyConstraint("PK_Huge", new[] { "KeyData" }));
+
+    string kA = new string('A', 3000);
+    string kB = new string('B', 3000); // Insert Target
+    string kC = new string('C', 3000);
+    string kE = new string('E', 3000);
+    string kF = new string('F', 3000);
+    string kG = new string('G', 3000);
+    string kH = new string('H', 3000);
+    string kM = new string('M', 3000);
+    string kN = new string('N', 3000);
+
+    // --- Construct Tree ---
+    // Leaf Target (Full): [A, C]
+    var leafTarget = await ManualCreateLeaf(hugeKeyTableDef, new[] { kA, kC });
+    var leaf2 = await ManualCreateLeaf(hugeKeyTableDef, new[] { kF });
+    var leaf3 = await ManualCreateLeaf(hugeKeyTableDef, new[] { kH });
+
+    // Parent (L1) - Full (2 Entries)
+    // Entries: (E, leafTarget), (G, leaf2). Rightmost: leaf3.
+    var parentNodeId = await ManualCreateInternal(hugeKeyTableDef,
+        new[] { (kE, leafTarget), (kG, leaf2) },
+        leaf3);
+    await SetParentPointer(leafTarget, parentNodeId);
+    await SetParentPointer(leaf2, parentNodeId);
+    await SetParentPointer(leaf3, parentNodeId);
+
+    // Root (L0) - Not Full (1 Entry)
+    // Entries: (M, parentNodeId).
+    var dummyLeaf = await ManualCreateLeaf(hugeKeyTableDef, new[] { kN });
+    var rootPageId = await ManualCreateInternal(hugeKeyTableDef,
+        new[] { (kM, parentNodeId) },
+        dummyLeaf);
+    await SetParentPointer(parentNodeId, rootPageId);
+
+    var btree = await BTree.CreateAsync(_bpm, hugeKeyTableDef, rootPageId);
+
+    // Act
+    // Insert B. 
+    // 1. LeafTarget splits -> Promotes B.
+    // 2. Parent inserts B -> [B, E, G]. Full (max 2). Parent Splits.
+    //    Median E promoted.
+    // 3. Root inserts E -> [E, M]. Root has space. No split.
+    var recordToInsert = new Record(DataValue.CreateString(kB), DataValue.CreateInteger(1));
+    await btree.InsertAsync(recordToInsert);
+
+    // Assert
+#if DEBUG
+    // 1. Root - Absorbed key E
+    var rootFrame = _bpm.GetFrameByPageId_TestOnly(rootPageId);
+    Assert.NotNull(rootFrame);
+    Assert.Equal(0, rootFrame.PinCount);
+
+    // 2. Parent - Split source
+    var parentFrame = _bpm.GetFrameByPageId_TestOnly(parentNodeId);
+    Assert.NotNull(parentFrame);
+    Assert.Equal(0, parentFrame.PinCount);
+
+    // 3. Leaf Target - Split source
+    var leafFrame = _bpm.GetFrameByPageId_TestOnly(leafTarget);
+    Assert.NotNull(leafFrame);
+    Assert.Equal(0, leafFrame.PinCount);
+#endif
+  }
 }
