@@ -301,4 +301,34 @@ public partial class BTreeTests
     Assert.Equal(0, leafFrame.PinCount);
 #endif
   }
+
+  [Fact]
+  public async Task InsertAsync_RecordLargerThanPage_ThrowsExceptionAndReleasesPins()
+  {
+    // Arrange
+    var btree = await BTree.CreateAsync(_bpm, _tableDef);
+    var rootPageId = btree.GetRootPageIdForTest();
+
+    // Create a record larger than the page size (8192 bytes).
+    // 9000 characters + overhead will definitely not fit.
+    var hugeRecord = new Record(
+        DataValue.CreateInteger(1),
+        DataValue.CreateString(new string('X', 9000))
+    );
+
+    // Act & Assert
+    // We expect an InvalidOperationException (or similar) because SplitAndInsert 
+    // will fail to insert the record even into a fresh, empty page.
+    await Assert.ThrowsAsync<InvalidOperationException>(() => btree.InsertAsync(hugeRecord));
+
+    // Verify pins are released
+#if DEBUG
+    var rootFrame = _bpm.GetFrameByPageId_TestOnly(rootPageId);
+    // Depending on implementation, the root might still be in memory but must have 0 pins.
+    if (rootFrame != null)
+    {
+      Assert.Equal(0, rootFrame.PinCount);
+    }
+#endif
+  }
 }

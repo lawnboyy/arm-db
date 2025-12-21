@@ -123,7 +123,17 @@ internal sealed class BTree
       var rightSiblingLeafNode = await FetchRightLeafSiblingAsync(leafNode);
 
       // Now perform the split...
-      var newSeparatorKey = leafNode.SplitAndInsert(record, newLeafNode, rightSiblingLeafNode);
+      Key newSeparatorKey;
+      try
+      {
+        newSeparatorKey = leafNode.SplitAndInsert(record, newLeafNode, rightSiblingLeafNode);
+      }
+      catch (InvalidOperationException)
+      {
+        // Unpin our leaf node and rethrow so previous nodes in the call stack can also unpin and rethrow...
+        _bpm.UnpinPage(leafNode.PageId, false);
+        throw;
+      }
 
       // If we have a parent, set the new leaf node's parent index here.
       if (parentNode != null)
@@ -194,7 +204,18 @@ internal sealed class BTree
       var childPageId = internalNode.LookupChildPage(key);
 
       // Recursively call this search method...
-      var result = await InsertRecursiveAsync(childPageId, record, key, internalNode);
+      SplitResult? result = null;
+      try
+      {
+        result = await InsertRecursiveAsync(childPageId, record, key, internalNode);
+      }
+      catch (InvalidOperationException)
+      {
+        // It's possible the record to insert was too large to fit on a page so we can't complete
+        // the operation. We need to make sure we unpin our page here and re-throw.
+        _bpm.UnpinPage(internalNode.PageId, false);
+        throw;
+      }
 
       // Make sure to unpin the current page unless it is part of a split result.
       if (result != null && result.nodeToInsertPromotedKey.PageId != pageId)

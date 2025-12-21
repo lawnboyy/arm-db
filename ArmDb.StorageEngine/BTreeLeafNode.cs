@@ -215,7 +215,7 @@ internal sealed class BTreeLeafNode : BTreeNode
     {
       if (!TryInsert(sortedDataRows[i]))
       {
-        throw new Exception("Insert failed after a split! Something went terribly wrong since all inserts after a re-init of the leaf page are guaranteed to succeed.");
+        throw new InvalidOperationException("Insert failed after a split. The record to insert may be too large to fit on a page. TODO: Implement overflow pages.");
       }
     }
 
@@ -224,7 +224,7 @@ internal sealed class BTreeLeafNode : BTreeNode
     {
       if (!newRightLeaf.TryInsert(sortedDataRows[i]))
       {
-        throw new Exception("Insert failed after a split! Something went terribly wrong since all inserts on a fresh new leaf page are guaranteed to succeed.");
+        throw new InvalidOperationException("Insert failed after a split. The record to insert may be too large to fit on a page. TODO: Implement overflow pages.");
       }
     }
 
