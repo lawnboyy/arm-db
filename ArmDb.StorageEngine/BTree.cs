@@ -13,12 +13,14 @@ internal sealed class BTree
   private readonly BufferPoolManager _bpm;
   private readonly TableDefinition _tableDefinition;
   private PageId _rootPageId;
+  private Page _tableHeaderPage;
 
-  private BTree(BufferPoolManager bmp, TableDefinition tableDefinition, PageId rootPageId)
+  private BTree(BufferPoolManager bmp, TableDefinition tableDefinition, PageId rootPageId, Page tableHeaderPage)
   {
     _bpm = bmp;
     _tableDefinition = tableDefinition;
     _rootPageId = rootPageId;
+    _tableHeaderPage = tableHeaderPage;
   }
 
   internal static async Task<BTree> CreateAsync(BufferPoolManager bpm, TableDefinition tableDef, PageId? rootPageId = null, Page? metadataPage = null)
@@ -50,7 +52,7 @@ internal sealed class BTree
       tableHeader.RootPageIndex = rootPageId.Value.PageIndex;
       bpm.UnpinPage(metadataPage.Id, true);
       // Return a new BTree instance...
-      return new BTree(bpm, tableDef, rootPageId.Value);
+      return new BTree(bpm, tableDef, rootPageId.Value, metadataPage);
     }
     else
     {
@@ -69,7 +71,7 @@ internal sealed class BTree
       bpm.UnpinPage(metadataPage.Id, true);
 
       // Return a new BTree instance...
-      return new BTree(bpm, tableDef, rootPage.Id);
+      return new BTree(bpm, tableDef, rootPage.Id, metadataPage);
     }
   }
 
@@ -195,6 +197,9 @@ internal sealed class BTree
 
           // Set the new root ID
           _rootPageId = newPageId;
+          // Update the table metadata to point to the new root page ID
+          var tableMetadataPageHeader = new PageHeader(_tableHeaderPage);
+          tableMetadataPageHeader.RootPageIndex = newPageId.PageIndex;
 
           return null;
         }
@@ -336,6 +341,9 @@ internal sealed class BTree
 
         // Set the new root ID
         _rootPageId = newRootPageId;
+        // Update the table metadata to point to the new root page ID
+        var tableMetadataPageHeader = new PageHeader(_tableHeaderPage);
+        tableMetadataPageHeader.RootPageIndex = newRootPageId.PageIndex;
       }
       else
       {
@@ -439,20 +447,6 @@ internal sealed class BTree
     return rightSiblingLeafNode;
   }
 
-  // private async Task<BTreeLeafNode?> FetchRightInternalSiblingAsync(BTreeInternalNode internalNode)
-  // {
-  //   // Fetch the right sibling...
-  //   var rightSiblingIndex = internalNode.NextPageIndex;
-  //   BTreeLeafNode? rightSiblingLeafNode = null;
-  //   if (rightSiblingIndex != PageHeader.INVALID_PAGE_INDEX)
-  //   {
-  //     var rightSiblingPage = await _bpm.FetchPageAsync(new PageId(_tableDefinition.TableId, rightSiblingIndex));
-  //     rightSiblingLeafNode = new BTreeLeafNode(rightSiblingPage, _tableDefinition);
-  //   }
-
-  //   return rightSiblingLeafNode;
-  // }
-
   private record SplitResult(Key keyToPromote, BTreeInternalNode nodeToInsertPromotedKey, PageId childPageId, PageId rightSiblingChildId)
   {
   }
@@ -460,5 +454,10 @@ internal sealed class BTree
 #if DEBUG
   // Test hook to get the root page ID
   internal PageId GetRootPageIdForTest() => _rootPageId;
+#endif
+
+#if DEBUG
+  // Test hook to get the table header page
+  internal Page GetTableHeaderPageForTest() => _tableHeaderPage;
 #endif
 }

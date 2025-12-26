@@ -97,10 +97,24 @@ public partial class BTreeTests
     Assert.NotNull(found3);
     Assert.NotNull(found4);
 
-    // 4. Verify the old root is now a leaf child (optional deep inspection)
-    // The separator key should be somewhere between the keys (likely 30 due to median split)
-    // The pointer associated with the separator should point to the old root (or new sibling depending on logic)
-    // ...
+    // 4. Fetch the Table Header Page (Page Index 0)
+    var headerPageId = new PageId(_tableDef.TableId, 0);
+
+    // We fetch the page from the buffer pool to ensure we see the latest in-memory state
+    // (The DiskManager might not have flushed it yet, which is expected)
+    var tableHeaderPage = await _bpm.FetchPageAsync(headerPageId);
+    Assert.NotNull(tableHeaderPage);
+    try
+    {
+      var tableMetadataPageHeader = new PageHeader(tableHeaderPage);
+      // 5. Verify the header points to the NEW root      
+      Assert.Equal(newRootId.PageIndex, tableMetadataPageHeader.RootPageIndex);
+    }
+    finally
+    {
+      // Always unpin manually fetched pages
+      _bpm.UnpinPage(headerPageId, false);
+    }
   }
 
   [Fact]
@@ -722,6 +736,13 @@ public partial class BTreeTests
     // 4. Verify other keys to ensure tree integrity
     Assert.NotNull(await btree.SearchAsync(new Key([DataValue.CreateString(kA)])));
     Assert.NotNull(await btree.SearchAsync(new Key([DataValue.CreateString(kN)])));
+
+    // 5. Fetch the Table Header Page (Page Index 0) and verify the root pointer was properly updated
+    var headerPageId = new PageId(_tableDef.TableId, 0);
+    Assert.NotNull(tableHeaderPage);
+    var tableMetadataPageHeader = new PageHeader(tableHeaderPage);
+    // 5. Verify the header points to the NEW root      
+    Assert.Equal(newRootId.PageIndex, tableMetadataPageHeader.RootPageIndex);
   }
 
   [Fact]
