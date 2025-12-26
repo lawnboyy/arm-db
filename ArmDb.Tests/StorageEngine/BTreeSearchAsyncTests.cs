@@ -137,6 +137,10 @@ public partial class BTreeTests
   [Fact]
   public async Task SearchAsync_OnTwoLevelTree_FindsRecordInLeaf()
   {
+    // Start by creating our table header page.
+    var tableHeaderPage = await _bpm.CreatePageAsync(_tableDef.TableId);
+    SlottedPage.Initialize(tableHeaderPage, PageType.TableHeader);
+
     // Create, initialize, and unpin the leaf pages
     var leafPage1 = await _bpm.CreatePageAsync(_tableDef.TableId);
     SlottedPage.Initialize(leafPage1, PageType.LeafNode);
@@ -164,6 +168,8 @@ public partial class BTreeTests
     // Create the root page
     var rootPage = await _bpm.CreatePageAsync(_tableDef.TableId);
     SlottedPage.Initialize(rootPage, PageType.InternalNode);
+    // Set the root page index
+    new PageHeader(tableHeaderPage).RootPageIndex = rootPage.Id.PageIndex;
 
     // Define the separator key
     var separatorKey = new Key([DataValue.CreateInteger(30)]);
@@ -176,7 +182,7 @@ public partial class BTreeTests
     rootPageHeader.RightmostChildPageIndex = leafPage2.Id.PageIndex;
 
     // Now create the B-Tree
-    var bTree = await BTree.CreateAsync(_bpm, _tableDef, rootPage.Id);
+    var bTree = await BTree.CreateAsync(_bpm, _tableDef, rootPage.Id, tableHeaderPage);
 
     // Key to search for...
     var searchKey = new Key([DataValue.CreateInteger(40)]);
@@ -192,6 +198,10 @@ public partial class BTreeTests
   [Fact]
   public async Task SearchAsync_OnThreeLevelTree_FindsRecordsSuccessfully()
   {
+    // Start by creating our table header page.
+    var tableHeaderPage = await _bpm.CreatePageAsync(_tableDef.TableId);
+    SlottedPage.Initialize(tableHeaderPage, PageType.TableHeader);
+
     // Arrange
     // 1. Setup Leaves (Level 2)
     // We will create 9 leaf pages, numbered 0-8 logically.
@@ -243,9 +253,12 @@ public partial class BTreeTests
         rightmostChild: internalC
     );
 
+    // Set the root page index
+    new PageHeader(tableHeaderPage).RootPageIndex = rootPageId.PageIndex;
+
     // 4. Create BTree instance
     // Assuming you added an overload or internal constructor to take an existing rootPageId
-    var btree = await BTree.CreateAsync(_bpm, _tableDef, rootPageId);
+    var btree = await BTree.CreateAsync(_bpm, _tableDef, rootPageId, tableHeaderPage);
 
     // Act & Assert
 
@@ -273,6 +286,9 @@ public partial class BTreeTests
   public async Task SearchAsync_OnFourLevelTree_FindsRecordInDeepLeaf()
   {
     // --- Construct a 4-Level Tree Bottom-Up ---
+    // Start by creating our table header page.
+    var tableHeaderPage = await _bpm.CreatePageAsync(_tableDef.TableId);
+    SlottedPage.Initialize(tableHeaderPage, PageType.TableHeader);
 
     // 1. Level 3: Leaf Nodes (8 Pages)
     // We create leaves covering ranges: [10..19], [20..29], ... [80..89]
@@ -311,11 +327,13 @@ public partial class BTreeTests
     // Root points to 2 L1 nodes.
     // Root: (Sep 50 -> L1_0). Rightmost -> L1_1 (>= 50).
     var rootPageId = await CreateInternalPageAsync(_tableDef, new[] { (50, l1_0) }, l1_1);
+    // Set the root page index
+    new PageHeader(tableHeaderPage).RootPageIndex = rootPageId.PageIndex;
 
     // --- Instantiate BTree ---
     // Use the constructor that takes an existing root page
     // (Assuming you added `internal BTree(BufferPoolManager bpm, TableDefinition tableDef, PageId rootPageId)` constructor)
-    var btree = await BTree.CreateAsync(_bpm, _tableDef, rootPageId);
+    var btree = await BTree.CreateAsync(_bpm, _tableDef, rootPageId, tableHeaderPage);
 
     // --- Search Target ---
     // We want to find key 75.
@@ -340,6 +358,9 @@ public partial class BTreeTests
   {
     // Arrange
     // --- Construct a 4-Level Tree Bottom-Up ---
+    // Start by creating our table header page.
+    var tableHeaderPage = await _bpm.CreatePageAsync(_tableDef.TableId);
+    SlottedPage.Initialize(tableHeaderPage, PageType.TableHeader);
 
     // 1. Level 3: Leaf Nodes (8 Pages)
     // We create leaves covering ranges: [10..19], [20..29], ... [80..89]
@@ -378,8 +399,10 @@ public partial class BTreeTests
     // Root points to 2 L1 nodes.
     // Root: (Sep 50 -> L1_0). Rightmost -> L1_1 (>= 50).
     var rootPageId = await CreateInternalPageAsync(_tableDef, new[] { (50, l1_0) }, l1_1);
+    // Set the root page index
+    new PageHeader(tableHeaderPage).RootPageIndex = rootPageId.PageIndex;
 
-    var btree = await BTree.CreateAsync(_bpm, _tableDef, rootPageId);
+    var btree = await BTree.CreateAsync(_bpm, _tableDef, rootPageId, tableHeaderPage);
 
     // Act & Assert
 

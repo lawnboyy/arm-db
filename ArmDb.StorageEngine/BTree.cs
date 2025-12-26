@@ -21,29 +21,56 @@ internal sealed class BTree
     _rootPageId = rootPageId;
   }
 
-  internal static async Task<BTree> CreateAsync(BufferPoolManager bpm, TableDefinition tableDef, PageId? rootPageId = null)
+  internal static async Task<BTree> CreateAsync(BufferPoolManager bpm, TableDefinition tableDef, PageId? rootPageId = null, Page? metadataPage = null)
   {
     ArgumentNullException.ThrowIfNull(bpm, nameof(bpm));
     ArgumentNullException.ThrowIfNull(tableDef, nameof(tableDef));
 
+    // If we receive a root page ID of 0, we must reject it as that page index is reserved for the table metadata...
+    if (rootPageId.HasValue && rootPageId.Value.PageIndex == 0)
+    {
+      throw new InvalidOperationException("Attempt to create a new B-Tree with a given root page with index 0. The page with index 0 is reserved for table metadata only.");
+    }
+
+    // Allocate the table header page for metadata (holds the index of the root page)...
+    if (metadataPage == null)
+    {
+      metadataPage = await bpm.CreatePageAsync(tableDef.TableId);
+      SlottedPage.Initialize(metadataPage, PageType.TableHeader);
+      if (metadataPage.Id.PageIndex != 0)
+      {
+        throw new InvalidOperationException($"New metadata page for table with ID: {tableDef.TableId} has an non-zero index. Does this table already exist?");
+      }
+    }
+
     // If we are handed a root page, then just unpin it and return the new B-Tree...
     if (rootPageId.HasValue)
     {
+      var tableHeader = new PageHeader(metadataPage);
+      tableHeader.RootPageIndex = rootPageId.Value.PageIndex;
+      bpm.UnpinPage(metadataPage.Id, true);
       // Return a new BTree instance...
       return new BTree(bpm, tableDef, rootPageId.Value);
     }
+    else
+    {
+      // Use the buffer pool manager to allocate a new page for this table.
+      var rootPage = await bpm.CreatePageAsync(tableDef.TableId);
+      var tableHeader = new PageHeader(metadataPage);
+      tableHeader.RootPageIndex = rootPage.Id.PageIndex;
 
-    // Use the buffer pool manager to allocate a new page for this table.
-    var rootPage = await bpm.CreatePageAsync(tableDef.TableId);
+      // Format the new leaf page...
+      SlottedPage.Initialize(rootPage, PageType.LeafNode);
 
-    // Format the new leaf page...
-    SlottedPage.Initialize(rootPage, PageType.LeafNode);
+      // Now we are done with the page, so we can unpin it.
+      bpm.UnpinPage(rootPage.Id, true);
 
-    // Now we are done with the page, so we can unpin it.
-    bpm.UnpinPage(rootPage.Id, true);
+      // Unpin the table header page.
+      bpm.UnpinPage(metadataPage.Id, true);
 
-    // Return a new BTree instance...
-    return new BTree(bpm, tableDef, rootPage.Id);
+      // Return a new BTree instance...
+      return new BTree(bpm, tableDef, rootPage.Id);
+    }
   }
 
   /// <summary>

@@ -115,6 +115,9 @@ public partial class BTreeTests
     string largeString = new string('X', 3000);
 
     // --- Construct 3-Level Tree ---
+    // Start by creating our table header page.
+    var tableHeaderPage = await _bpm.CreatePageAsync(largeTableDef.TableId);
+    SlottedPage.Initialize(tableHeaderPage, PageType.TableHeader);
 
     // 2. Leaf Nodes
     // Leaf Target (Full): [10, 30]. Insert 20 will go here and force split.
@@ -136,11 +139,13 @@ public partial class BTreeTests
     // Structure: [] -> Rightmost: parentPageId
     // Just a pointer down to the parent. All searches go to Rightmost.
     var rootPageId = await ManualCreateInternal(largeTableDef, new (int, PageId)[0], internalParentPageId);
+    // Set the root page index
+    new PageHeader(tableHeaderPage).RootPageIndex = rootPageId.PageIndex;
 
     // Link Parent to Root
     await SetParentPointer(internalParentPageId, rootPageId);
 
-    var btree = await BTree.CreateAsync(_bpm, largeTableDef, rootPageId);
+    var btree = await BTree.CreateAsync(_bpm, largeTableDef, rootPageId, tableHeaderPage);
 
     // Act
     // Insert 20.
@@ -207,6 +212,10 @@ public partial class BTreeTests
             [ A | C ]  [ F ]  
     */
 
+    // Start by creating our table header page.
+    var tableHeaderPage = await _bpm.CreatePageAsync(hugeKeyTableDef.TableId);
+    SlottedPage.Initialize(tableHeaderPage, PageType.TableHeader);
+
     // 2. Leaf Nodes
     // Leaf 1 (Target - Full): [A, C]. Inserting B will split it.
     var leaf1 = await ManualCreateLeaf(hugeKeyTableDef, new[] { kA, kC });
@@ -233,8 +242,10 @@ public partial class BTreeTests
 
     // Link L1s to Root
     await SetParentPointer(parentNodeId, rootPageId);
+    // Set the root page index
+    new PageHeader(tableHeaderPage).RootPageIndex = rootPageId.PageIndex;
 
-    var btree = await BTree.CreateAsync(_bpm, hugeKeyTableDef, rootPageId);
+    var btree = await BTree.CreateAsync(_bpm, hugeKeyTableDef, rootPageId, tableHeaderPage);
     var initialRootId = rootPageId;
 
     // Act
@@ -316,6 +327,10 @@ public partial class BTreeTests
                      [A|C] [F|G] [I]          [N]
     */
 
+    // Start by creating our table header page.
+    var tableHeaderPage = await _bpm.CreatePageAsync(hugeKeyTableDef.TableId);
+    SlottedPage.Initialize(tableHeaderPage, PageType.TableHeader);
+
     // 2. Leaf Nodes
     // Leaf Left (Target - Full): [A, C]. Inserting B will split it.
     var leafLeft = await ManualCreateLeaf(hugeKeyTableDef, new[] { kA, kC });
@@ -356,10 +371,13 @@ public partial class BTreeTests
         new[] { (kL, parentNodeId) },
         siblingNodeId);
 
+    // Set the root page index in the table header page.
+    new PageHeader(tableHeaderPage).RootPageIndex = rootPageId.PageIndex;
+
     await SetParentPointer(parentNodeId, rootPageId);
     await SetParentPointer(siblingNodeId, rootPageId);
 
-    var btree = await BTree.CreateAsync(_bpm, hugeKeyTableDef, rootPageId);
+    var btree = await BTree.CreateAsync(_bpm, hugeKeyTableDef, rootPageId, tableHeaderPage);
     var initialRootId = rootPageId;
 
     // Act
@@ -442,6 +460,10 @@ public partial class BTreeTests
     string kN = new string('N', 3000); // Root Sep
     string kO = new string('O', 3000);
 
+    // Start by creating our table header page.
+    var tableHeaderPage = await _bpm.CreatePageAsync(hugeKeyTableDef.TableId);
+    SlottedPage.Initialize(tableHeaderPage, PageType.TableHeader);
+
     // --- Level 3 (Leaves) ---
     // L3_1 (Target - Full): [A, C]. Inserting B will split it.
     var leaf1 = await ManualCreateLeaf(hugeKeyTableDef, new[] { kA, kC });
@@ -502,6 +524,8 @@ public partial class BTreeTests
     var rootPageId = await ManualCreateInternal(hugeKeyTableDef,
         new[] { (kN, l1_1) },
         l1_2);
+    // Set the root page index in the table header page.
+    new PageHeader(tableHeaderPage).RootPageIndex = rootPageId.PageIndex;
     await SetParentPointer(l1_1, rootPageId);
     await SetParentPointer(l1_2, rootPageId);
 
@@ -518,7 +542,7 @@ public partial class BTreeTests
     [AC][F][H]     [J]     [M]      [O]   (Leaves)
     */
 
-    var btree = await BTree.CreateAsync(_bpm, hugeKeyTableDef, rootPageId);
+    var btree = await BTree.CreateAsync(_bpm, hugeKeyTableDef, rootPageId, tableHeaderPage);
     var initialRootId = rootPageId;
 
     // Act
@@ -600,6 +624,9 @@ public partial class BTreeTests
     string kN = new string('N', 3000);
 
     // --- Construct Tree Bottom-Up ---
+    // Start by creating our table header page.
+    var tableHeaderPage = await _bpm.CreatePageAsync(hugeKeyTableDef.TableId);
+    SlottedPage.Initialize(tableHeaderPage, PageType.TableHeader);
 
     // 1. Leaf Nodes (L2)
     // L2_Target (Full): [A, C]. Insert B -> Split.
@@ -641,11 +668,13 @@ public partial class BTreeTests
     var rootPageId = await ManualCreateInternal(hugeKeyTableDef,
         new[] { (kI, l1_Target), (kM, l1_Sibling1) },
         l1_Sibling2);
+    // Set the root page index in the table header page.
+    new PageHeader(tableHeaderPage).RootPageIndex = rootPageId.PageIndex;
     await SetParentPointer(l1_Target, rootPageId);
     await SetParentPointer(l1_Sibling1, rootPageId);
     await SetParentPointer(l1_Sibling2, rootPageId);
 
-    var btree = await BTree.CreateAsync(_bpm, hugeKeyTableDef, rootPageId);
+    var btree = await BTree.CreateAsync(_bpm, hugeKeyTableDef, rootPageId, tableHeaderPage);
     var initialRootId = rootPageId;
 
     /*
@@ -715,6 +744,9 @@ public partial class BTreeTests
     string kI = new string('I', 3000); // Right Sibling Leaf
 
     // --- Construct Tree ---
+    // Start by creating our table header page.
+    var tableHeaderPage = await _bpm.CreatePageAsync(hugeKeyTableDef.TableId);
+    SlottedPage.Initialize(tableHeaderPage, PageType.TableHeader);
 
     // 2. Leaf Nodes
     var leafLeft = await ManualCreateLeaf(hugeKeyTableDef, new[] { kA });
@@ -745,11 +777,13 @@ public partial class BTreeTests
     var rootPageId = await ManualCreateInternal(hugeKeyTableDef,
         new[] { (kH, parentNodeId) },
         siblingNodeId);
+    // Set the root page index in the table header page.
+    new PageHeader(tableHeaderPage).RootPageIndex = rootPageId.PageIndex;
 
     await SetParentPointer(parentNodeId, rootPageId);
     await SetParentPointer(siblingNodeId, rootPageId);
 
-    var btree = await BTree.CreateAsync(_bpm, hugeKeyTableDef, rootPageId);
+    var btree = await BTree.CreateAsync(_bpm, hugeKeyTableDef, rootPageId, tableHeaderPage);
 
     /*
        Initial Tree Structure:

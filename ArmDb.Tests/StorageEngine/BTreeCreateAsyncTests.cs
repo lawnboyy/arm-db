@@ -34,7 +34,7 @@ public partial class BTreeTests : IDisposable
 
     // 2. Verify it's the first page for this table
     Assert.Equal(expectedTableId, rootPageId.TableId);
-    Assert.Equal(0, rootPageId.PageIndex);
+    Assert.Equal(1, rootPageId.PageIndex);
 
     // 3. Get the corresponding frame from the BPM to check its state
     var rootFrame = _bpm.GetFrameByPageId_TestOnly(rootPageId);
