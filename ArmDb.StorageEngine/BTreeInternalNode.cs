@@ -284,7 +284,9 @@ internal sealed class BTreeInternalNode : BTreeNode
     var totalRecords = sortedRecords.Length;
 
     // Determine the midpoint key to promote to the parent.
-    var midpoint = keyColumns.Any(k => k.DataType.PrimitiveType == PrimitiveDataType.Varchar) ? FindOptimalSplitIndexForVariableLengthKey(sortedRawRecords, totalSize) : totalRecords / 2;
+    var midpoint = keyColumns.Any(k => k.DataType.PrimitiveType == PrimitiveDataType.Varchar)
+      ? FindOptimalSplitIndexByByteLength(sortedRawRecords, totalSize)
+      : totalRecords / 2;
 
     // Get the separator key to promote
     var midpointRecord = sortedRecords[midpoint];

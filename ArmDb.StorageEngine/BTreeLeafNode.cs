@@ -203,8 +203,8 @@ internal sealed class BTreeLeafNode : BTreeNode
     var totalRows = sortedDataRows.Length;
 
     // Determine the midpoint...
-    var midpoint = _tableDefinition.GetPrimaryKeyColumnDefinitions().Any(k => k.DataType.PrimitiveType == PrimitiveDataType.Varchar)
-      ? FindOptimalSplitIndexForVariableLengthKey(sortedRawRecords, totalSize)
+    var midpoint = _tableDefinition.Columns.Any(k => k.DataType.PrimitiveType == PrimitiveDataType.Varchar)
+      ? FindOptimalSplitIndexByByteLength(sortedRawRecords, totalSize)
       : totalRows / 2;
 
     // Get our separator key at this index...

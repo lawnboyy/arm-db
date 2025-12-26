@@ -156,7 +156,7 @@ internal abstract class BTreeNode
   /// <param name="sortedRawRecords">Two dimensional array representing the total set of records in this node.</param>
   /// <param name="totalSize">The total data size of the records.</param>
   /// <returns></returns>
-  protected int FindOptimalSplitIndexForVariableLengthKey(byte[][] sortedRawRecords, int totalSize)
+  protected int FindOptimalSplitIndexByByteLength(byte[][] sortedRawRecords, int totalSize)
   {
     var halfOfTotal = totalSize / 2;
     var currentDataSize = 0;
