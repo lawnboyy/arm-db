@@ -973,6 +973,91 @@ public partial class BTreeTests
     Assert.Equal(PageType.InternalNode, rootHeader.PageType);
   }
 
+  [Fact]
+  public async Task InsertAsync_VariableLengthKeys_LopsidedSplit_ShouldDistributeBytesEvenly()
+  {
+    // Arrange
+    // Scenario: We have a mix of very small records and very large records.
+    // A standard "Median by Count" split (N/2) will result in highly unbalanced pages in terms of BYTES.
+    // This test exercises the need for "Median by Size" splitting logic.
+
+    var tableDef = new TableDefinition("LopsidedTable");
+    // Use a single PK column which is also the data payload for simplicity of size calculation
+    tableDef.AddColumn(new ColumnDefinition("ID", new DataTypeInfo(PrimitiveDataType.Varchar, 3000), false));
+    tableDef.AddConstraint(new PrimaryKeyConstraint("PK", new[] { "ID" }));
+
+    var btree = await BTree.CreateAsync(_bpm, tableDef);
+
+    // 1. Insert 10 "Small" records.
+    // Each is very small (~20-50 bytes with overhead).
+    // Total Size: ~500 bytes.
+    for (int i = 0; i < 10; i++)
+    {
+      // "A00", "A01"... sorts before "B"
+      var key = $"A{i:00}";
+      await btree.InsertAsync(new Record(DataValue.CreateString(key)));
+    }
+
+    // 2. Insert "Large" records until we force a split.
+    // Assuming PageSize is ~8192 (inferred from previous tests).
+    // We create records ~2000 bytes each.
+    string largePayload = new string('X', 2000);
+
+    // Insert 4 Large records.
+    // Keys: "B00"... "B03"
+    // Total Data so far: 10 Small (~500B) + 4 Large (~8000B) = ~8500B.
+    // This exceeds typical 8k page usable space (~8100B), forcing a split.
+    for (int i = 0; i < 4; i++)
+    {
+      var key = $"B{i:00}" + largePayload;
+      await btree.InsertAsync(new Record(DataValue.CreateString(key)));
+    }
+
+    // 3. Verify Split Occurred
+    var rootId = btree.GetRootPageIdForTest();
+    var rootFrame = _bpm.GetFrameByPageId_TestOnly(rootId);
+    Assert.NotNull(rootFrame);
+    var rootHeader = new PageHeader(new Page(rootFrame.CurrentPageId, rootFrame.PageData));
+
+    Assert.Equal(PageType.InternalNode, rootHeader.PageType); // Ensure Root is now Internal
+
+    // 4. Inspect the Leaf Pages
+    // In a standard split scenario (Root splits into Left and Right children):
+    // Page 1: Original Root (now Left Child)
+    // Page 2: New Sibling (now Right Child)
+    // (Note: Page ID assignment depends on implementation, but usually 1 and 2 are the children).
+
+    var leafFrame1 = _bpm.GetFrameByPageId_TestOnly(new PageId(tableDef.TableId, 1));
+    var leafFrame2 = _bpm.GetFrameByPageId_TestOnly(new PageId(tableDef.TableId, 2));
+
+    Assert.NotNull(leafFrame1);
+    Assert.NotNull(leafFrame2);
+
+    var leafHeader1 = new PageHeader(new Page(leafFrame1.CurrentPageId, leafFrame1.PageData));
+    // var leafHeader2 = new PageHeader(new Page(leafFrame2.CurrentPageId, leafFrame2.PageData));
+
+    // 5. Assert Distribution
+    // Total Items = 14 (10 Small + 4 Large).
+
+    // IF "Count-Based Split" (Midpoint = 7):
+    // Left Page: 7 items (7 Small). Size ~350B. (Utilized: ~4%)
+    // Right Page: 7 items (3 Small + 4 Large). Size ~8150B. (Overflows or 100% full)
+
+    // IF "Byte-Based Split" (Balanced ~4000B each):
+    // Left Page needs ~4000B. 
+    // 10 Small (500B) + 1 Large (2000B) = 2500B.
+    // 10 Small (500B) + 2 Large (4000B) = 4500B. -> Split point likely here.
+    // Left Page: 12 items (10 Small + 2 Large).
+    // Right Page: 2 items (2 Large).
+
+    // Assertion: 
+    // We expect the Left page to have taken MORE than just half the count to fill the byte space.
+    // If ItemCount is <= 7, the split logic is naive and inefficient/broken for variable length keys.
+    Assert.True(leafHeader1.ItemCount > 8,
+        $"Left Page has only {leafHeader1.ItemCount} items. Expected > 8 (likely 12) for a byte-balanced split. " +
+        "Naive count-based split detected.");
+  }
+
   private async Task<PageId> ManualCreateLeaf(TableDefinition def, int[] keys, string filler)
   {
     var page = await _bpm.CreatePageAsync(def.TableId);

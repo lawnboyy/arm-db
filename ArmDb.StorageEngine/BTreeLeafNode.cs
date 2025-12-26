@@ -162,9 +162,13 @@ internal sealed class BTreeLeafNode : BTreeNode
 
     var thisLeafHeader = new PageHeader(_page);
 
+    var newRawRecord = RecordSerializer.Serialize(_tableDefinition.Columns, rowToInsert);
+    var totalSize = newRawRecord.Length;
+
     // Create a sorted list of data rows by looping through the existing leaf's records and adding them to the list. Include
     // the new row in sorted order.
     var sortedDataRows = new Record[thisLeafHeader.ItemCount + 1];
+    var sortedRawRecords = new byte[thisLeafHeader.ItemCount + 1][];
     var dataKeyToInsert = rowToInsert.GetPrimaryKey(_tableDefinition);
     var keyComparer = new KeyComparer();
 
@@ -180,9 +184,12 @@ internal sealed class BTreeLeafNode : BTreeNode
       // If the key to insert is less than the current data row, insert the new row first...
       if (!newRowInserted && keyComparer.Compare(dataKeyToInsert, currentDataRowKey) < 0)
       {
+        sortedRawRecords[sortedRowIndex] = newRawRecord;
         sortedDataRows[sortedRowIndex++] = rowToInsert;
         newRowInserted = true;
       }
+      sortedRawRecords[sortedRowIndex] = rawRecord.ToArray();
+      totalSize += rawRecord.Length;
       sortedDataRows[sortedRowIndex++] = dataRow;
     }
 
@@ -195,7 +202,9 @@ internal sealed class BTreeLeafNode : BTreeNode
     var totalRows = sortedDataRows.Length;
 
     // Determine the midpoint...
-    var midpoint = totalRows / 2;
+    var midpoint = _tableDefinition.GetPrimaryKeyColumnDefinitions().Any(k => k.DataType.PrimitiveType == PrimitiveDataType.Varchar)
+      ? FindOptimalSplitIndexForVariableLengthKey(sortedRawRecords, totalSize)
+      : totalRows / 2;
 
     // Get our separator key at this index...
     var midpointRow = sortedDataRows[midpoint];

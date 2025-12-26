@@ -149,6 +149,37 @@ internal abstract class BTreeNode
   }
 
   /// <summary>
+  /// Method that determines the midpoint index for a node split based on data size rather than a simple
+  /// index midpoint. This is necessary for ensuring that data is optimally distributed between nodes 
+  /// after a split operation in the case of variable length data.
+  /// </summary>
+  /// <param name="sortedRawRecords">Two dimensional array representing the total set of records in this node.</param>
+  /// <param name="totalSize">The total data size of the records.</param>
+  /// <returns></returns>
+  protected int FindOptimalSplitIndexForVariableLengthKey(byte[][] sortedRawRecords, int totalSize)
+  {
+    var halfOfTotal = totalSize / 2;
+    var currentDataSize = 0;
+    var index = 0;
+    foreach (var rawRecord in sortedRawRecords)
+    {
+      // First add our record size to our current total...
+      currentDataSize += rawRecord.Length;
+
+      // Now compare it half the total size...
+      if (currentDataSize >= halfOfTotal)
+      {
+        // As soon as we cross over half the total, then we have found our midpoint index...
+        return index;
+      }
+
+      index++;
+    }
+
+    return index;
+  }
+
+  /// <summary>
   /// Performs a binary search on the node slotted page for the given search key.
   /// </summary>
   /// <param name="searchKey"></param>

@@ -243,9 +243,13 @@ internal sealed class BTreeInternalNode : BTreeNode
       DataValue.CreateInteger(childPageId.PageIndex)
     ]);
 
+    var newRawRecord = RecordSerializer.Serialize(_tableDefinition.Columns, newRecord);
+    var totalSize = newRawRecord.Length;
+
     // Create a sorted list of all the records for this node, including the internal node record we want to
     // add.
     var sortedRecords = new Record[thisNodeHeader.ItemCount + 1];
+    var sortedRawRecords = new byte[thisNodeHeader.ItemCount + 1][];
     var keyComparer = new KeyComparer();
     var keyColumns = _tableDefinition.GetPrimaryKeyColumnDefinitions();
 
@@ -255,15 +259,19 @@ internal sealed class BTreeInternalNode : BTreeNode
     {
       // Fetch the record at the slot offset and deserialize it...
       var currentRawRecord = SlottedPage.GetRawRecord(_page, slotIndex);
+      totalSize += currentRawRecord.Length;
       var internalNodeRecord = RecordSerializer.Deserialize(GetInternalNodeColumnDefinitions(keyColumns), currentRawRecord);
       // The slot array is ordered, but we need to determine where to insert the new record...
       var currentRecordKey = internalNodeRecord.GetPrimaryKey(_tableDefinition);
       // If the key to insert is less than the current data row, insert the new row first...
       if (!newRecordInserted && keyComparer.Compare(newSeparatorKey, currentRecordKey) < 0)
       {
+        sortedRawRecords[sortedRecordIndex] = newRawRecord;
         sortedRecords[sortedRecordIndex++] = newRecord;
         newRecordInserted = true;
       }
+      sortedRawRecords[sortedRecordIndex] = currentRawRecord.ToArray();
+      totalSize += currentRawRecord.Length;
       sortedRecords[sortedRecordIndex++] = internalNodeRecord;
     }
 
@@ -276,7 +284,7 @@ internal sealed class BTreeInternalNode : BTreeNode
     var totalRecords = sortedRecords.Length;
 
     // Determine the midpoint key to promote to the parent.
-    var midpoint = totalRecords / 2;
+    var midpoint = keyColumns.Any(k => k.DataType.PrimitiveType == PrimitiveDataType.Varchar) ? FindOptimalSplitIndexForVariableLengthKey(sortedRawRecords, totalSize) : totalRecords / 2;
 
     // Get the separator key to promote
     var midpointRecord = sortedRecords[midpoint];
