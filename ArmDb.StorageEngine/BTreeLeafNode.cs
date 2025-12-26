@@ -178,6 +178,7 @@ internal sealed class BTreeLeafNode : BTreeNode
     {
       // Get the record...
       var rawRecord = SlottedPage.GetRawRecord(_page, slotIndex);
+      totalSize += rawRecord.Length;
       var dataRow = RecordSerializer.Deserialize(_tableDefinition.Columns, rawRecord);
       // The slot array is ordered, but we need to determine where to insert the new record...
       var currentDataRowKey = dataRow.GetPrimaryKey(_tableDefinition);
@@ -189,13 +190,13 @@ internal sealed class BTreeLeafNode : BTreeNode
         newRowInserted = true;
       }
       sortedRawRecords[sortedRowIndex] = rawRecord.ToArray();
-      totalSize += rawRecord.Length;
       sortedDataRows[sortedRowIndex++] = dataRow;
     }
 
     // If we never inserted the new row, it's the largest key so add it as the last element.
     if (sortedDataRows[sortedDataRows.Length - 1] == null)
     {
+      sortedRawRecords[sortedDataRows.Length - 1] = newRawRecord;
       sortedDataRows[sortedDataRows.Length - 1] = rowToInsert;
     }
 

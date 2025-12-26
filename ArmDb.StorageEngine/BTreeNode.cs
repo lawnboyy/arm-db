@@ -167,7 +167,7 @@ internal abstract class BTreeNode
       currentDataSize += rawRecord.Length;
 
       // Now compare it half the total size...
-      if (currentDataSize >= halfOfTotal)
+      if (currentDataSize > halfOfTotal)
       {
         // As soon as we cross over half the total, then we have found our midpoint index...
         return index;

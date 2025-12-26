@@ -271,13 +271,13 @@ internal sealed class BTreeInternalNode : BTreeNode
         newRecordInserted = true;
       }
       sortedRawRecords[sortedRecordIndex] = currentRawRecord.ToArray();
-      totalSize += currentRawRecord.Length;
       sortedRecords[sortedRecordIndex++] = internalNodeRecord;
     }
 
     // If we never inserted the new record, then it's the largest separator key so add it at the end...
     if (sortedRecords[sortedRecords.Length - 1] == null)
     {
+      sortedRawRecords[sortedRecords.Length - 1] = newRawRecord;
       sortedRecords[sortedRecords.Length - 1] = newRecord;
     }
 

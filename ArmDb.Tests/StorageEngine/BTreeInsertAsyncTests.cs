@@ -1058,6 +1058,144 @@ public partial class BTreeTests
         "Naive count-based split detected.");
   }
 
+  [Fact]
+  public async Task InsertAsync_InternalNode_LopsidedSplit_ShouldDistributeBytesEvenly()
+  {
+    // Arrange
+    // We want to test the SPLIT logic of an INTERNAL node.
+    // To do this, we need to fill an Internal Node with a mix of Small and Large keys.
+    // Internal Nodes hold the keys promoted from Leaf splits.
+
+    var tableDef = new TableDefinition("InternalSplitTable");
+    // Two columns: ID (Key), Data (Payload)
+    // Constraint: Max Key Length = PageSize / 4. Assuming PageSize 8192 -> 2048 bytes.
+    tableDef.AddColumn(new ColumnDefinition("ID", new DataTypeInfo(PrimitiveDataType.Varchar, 2048), false));
+    tableDef.AddColumn(new ColumnDefinition("Data", new DataTypeInfo(PrimitiveDataType.Varchar, 5000), false));
+    tableDef.AddConstraint(new PrimaryKeyConstraint("PK", new[] { "ID" }));
+
+    var btree = await BTree.CreateAsync(_bpm, tableDef);
+    // Page 1 is the initial Root.
+
+    // 1. Populate Root with MANY Small Keys.
+    // We do this by inserting records with Small Keys ("S_00") but Large Data.
+    // This forces Leaf Splits, promoting the Small Keys to the Root.
+    // Target: ~20-30 Small Keys in Root.
+    string largeData = new string('x', 4500); // 4.5KB. 2 fit per leaf (9KB > 8KB). 
+                                              // Actually 1 fits (4.5k), 2nd triggers split (9k). 
+                                              // Each insert of 2 records = 1 Split = 1 Key in Root.
+                                              // We want ~30 keys in root. So ~60 records.
+
+    int smallKeyCount = 60;
+    for (int i = 0; i < smallKeyCount; i++)
+    {
+      var key = $"S_{i:000}"; // Small Key (~5 bytes)
+      await btree.InsertAsync(new Record(DataValue.CreateString(key), DataValue.CreateString(largeData)));
+    }
+
+    // At this point:
+    // - Root (Page 1) is an Internal Node.
+    // - It holds ~30 keys (all "S_...").
+    // - 30 keys * ~15 bytes each = ~450 bytes used. 
+    // - Root is largely EMPTY in terms of bytes, but has a decent Item Count.
+
+    // 2. Populate Root with Large Keys until Split.
+    // We insert records with Large Keys.
+    // Key: "L_00" + Padding.
+    // We reduce padding to 1900 to be safely under the 2048 limit (PageSize/4) while still being "Large".
+
+    string largeKeyPadding = new string('y', 1900);
+
+    for (int i = 0; i < 5; i++) // 5 * 1900 = 9500 bytes > 8192 page size.
+    {
+      var key = $"L_{i:000}" + largeKeyPadding;
+      await btree.InsertAsync(new Record(DataValue.CreateString(key), DataValue.CreateString("")));
+    }
+
+    // 3. Verify Internal Split Behavior
+    // The Root (Page 1) should have split.
+    // A new Root (Page X) is created.
+    // Page 1 remains as one of the children (typically Left, as "S" < "L" is NOT true... Wait).
+    // Alphabetical: "L" comes BEFORE "S".
+    // So "L..." keys are on the LEFT. "S..." keys are on the RIGHT.
+
+    // Let's re-check Sort Order: "L" < "S".
+    // So the Large keys are inserted at the BEGINNING of the sorted list.
+    // The Small keys ("S_...") are at the END.
+
+    // The Internal Node looked like: [L_00, L_01, L_02 ... S_00, S_01 ... S_29]
+    // Wait, inserting "S" first means they are already there.
+    // Inserting "L" puts them before "S".
+    // List: [L_00...L_04, S_00...S_59]
+
+    // Total Items: ~5 Large + ~30 Small = 35 items.
+    // Total Bytes: (5 * 1900) + (30 * 20) = 9500 + 600 = ~10,100 bytes.
+    // Page Capacity: ~8192.
+    // Split Target: ~4096 bytes.
+
+    // If Count-Based Split (Midpoint = 17):
+    // Left Page: 5 Large + 12 Small. Size: 9500 + ... = HUGE OVERFLOW.
+    // Actually, simple count split might fail if the left side doesn't fit?
+    // Or if it just blindly moves them, the Left page is 150% full (corruption/crash).
+
+    // If Byte-Based Split:
+    // Accumulate from Left (Large Keys):
+    // L_00 (1.9k) + L_01 (1.9k) = 3.8k. 
+    // L_02 adds 1.9k -> 5.7k.
+    // Split should happen after 2 or 3 items.
+    // Left Page: 2 or 3 items.
+    // Right Page: The rest.
+
+    // Let's inspect Page 1. 
+    // In standard B+Tree implementation, Page 1 usually stays as the "Left" or "Original" node 
+    // while a new page is allocated for the split.
+    // Since "L" keys (Large) are technically "before" "S" keys, they might end up in the Left Node.
+
+    // However, to be robust, we shouldn't guess which page ID is Left/Right.
+    // We should get the New Root and look at its children.
+
+    var newRootId = btree.GetRootPageIdForTest();
+    Assert.NotEqual(1, newRootId.PageIndex); // Root must have moved/changed
+
+    // Get New Root Frame (Internal Node)
+    var rootFrame = _bpm.GetFrameByPageId_TestOnly(newRootId);
+    Assert.NotNull(rootFrame);
+    var rootHeader = new PageHeader(new Page(rootFrame.CurrentPageId, rootFrame.PageData));
+
+    // The Root should have 1 item (Separator). 
+    // Separator Key partitions Left and Right.
+    // Left Child PageId should be implicitly accessible (e.g., in a standard B-Tree implementation logic).
+
+    // To simplify, let's just check Page 1 directly again.
+    // Page 1 was the original node. It should now contain EITHER:
+    // A) The Left partition (Large Keys)
+    // B) The Right partition (Small Keys)
+    // AND it should be a VALID page (not overflowing).
+
+    var page1Frame = _bpm.GetFrameByPageId_TestOnly(new PageId(tableDef.TableId, 1));
+    var page1Header = new PageHeader(new Page(page1Frame.CurrentPageId, page1Frame.PageData));
+
+    // We expect Page 1 to NOT be empty.
+    Assert.True(page1Header.ItemCount > 0);
+
+    // CASE A: Page 1 holds the Large Keys (Left side).
+    // It should hold very FEW items (e.g., 2 or 3).
+    // If it held half the count (17), it would be corrupted/overflowed.
+
+    // CASE B: Page 1 holds the Small Keys (Right side).
+    // It should hold MANY items (e.g., 30+).
+
+    // Given the logic, it's one or the other.
+    // Fail if it holds "Middle" count (e.g., 10-20) which implies a count-based split 
+    // that likely mixed Large and Small keys in a bad way or just happened to allow overflow.
+
+    bool isLeftSkewed = page1Header.ItemCount < 5; // Holds just a few Large keys
+    bool isRightSkewed = page1Header.ItemCount > 20; // Holds all the Small keys
+
+    Assert.True(isLeftSkewed || isRightSkewed,
+        $"Internal Node Split failed to distribute bytes evenly. Page 1 ItemCount: {page1Header.ItemCount}. " +
+        "Expected either < 5 (Large Keys) or > 20 (Small Keys). A value in between implies a naive count-based split.");
+  }
+
   private async Task<PageId> ManualCreateLeaf(TableDefinition def, int[] keys, string filler)
   {
     var page = await _bpm.CreatePageAsync(def.TableId);
