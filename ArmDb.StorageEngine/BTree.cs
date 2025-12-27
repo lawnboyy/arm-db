@@ -102,6 +102,36 @@ internal sealed class BTree
   }
 
   /// <summary>
+  /// Performs a seek and scan for all values between the minimum and maximum key provided. If no
+  /// key boundaries are given, then a full table scan is performed.
+  /// </summary>
+  /// <param name="min"></param>
+  /// <param name="max"></param>
+  /// <returns></returns>
+  internal async IAsyncEnumerable<Record> ScanAsync(Key? min = null, Key? max = null)
+  {
+    // Case 1: If no min or max keys are provided, then we do a full table scan, starting with the absolute min in the table...
+    var leftmostLeaf = await GetLeftmostLeaf(_rootPageId);
+    var currentLeaf = leftmostLeaf;
+
+    while (currentLeaf != null)
+    {
+      var rawRecords = currentLeaf.GetAllRawRecords();
+      for (int i = 0; i < currentLeaf.ItemCount; i++)
+      {
+        var record = RecordSerializer.Deserialize(_tableDefinition.Columns, rawRecords[i]);
+        yield return record;
+      }
+
+      var nextLeafPage = (currentLeaf.NextPageIndex == PageHeader.INVALID_PAGE_INDEX)
+        ? null
+        : await _bpm.FetchPageAsync(new PageId(_tableDefinition.TableId, currentLeaf.NextPageIndex));
+
+      currentLeaf = nextLeafPage == null ? null : new BTreeLeafNode(nextLeafPage, _tableDefinition);
+    }
+  }
+
+  /// <summary>
   /// Searches the B-Tree by traversing internal nodes to find the leaf node that would contain the
   /// given key value. If the record is found in the leaf node, it is returned. Otherwise, a null
   /// value is returned. The bulk of the work is delegated to the private recursive method.
@@ -447,6 +477,37 @@ internal sealed class BTree
 
   private record SplitResult(Key keyToPromote, BTreeInternalNode nodeToInsertPromotedKey, PageId childPageId, PageId rightSiblingChildId)
   {
+  }
+
+  private async Task<BTreeLeafNode> GetLeftmostLeaf(PageId pageId)
+  {
+    // Start at the root and traverse the leftmost child recursively until we hit the leftmost leaf node...
+    // Fetch the page (this will pin the page)...
+    var page = await _bpm.FetchPageAsync(pageId);
+
+    // Pull the page header and check the type...
+    var header = new PageHeader(page);
+
+    // If we have reached a leaf node then return it...
+    if (header.PageType == PageType.LeafNode)
+    {
+      var leafNode = new BTreeLeafNode(page, _tableDefinition);
+      return leafNode;
+    }
+    else if (header.PageType == PageType.InternalNode)
+    {
+      // Find the child node associated with this key...
+      var internalNode = new BTreeInternalNode(page, _tableDefinition);
+      var childPageId = internalNode.GetLeftmostChildPointer();
+
+      // Unpin the page now that we are done with it...
+      _bpm.UnpinPage(pageId, false);
+
+      // Recursively call this search method...
+      return await GetLeftmostLeaf(childPageId);
+    }
+
+    throw new InvalidDataException("Found invalud B-Tree Node type attempting to traverse the leftmost path!");
   }
 
 #if DEBUG

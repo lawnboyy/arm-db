@@ -39,6 +39,18 @@ internal sealed class BTreeInternalNode : BTreeNode
   }
 
   /// <summary>
+  /// Returns the leftmost child page ID. This is used during a table scan with no specified
+  /// minimum key value.
+  /// </summary>
+  /// <returns>The page ID of the leftmost child.</returns>
+  internal PageId GetLeftmostChildPointer()
+  {
+    var recordData = SlottedPage.GetRawRecord(_page, 0);
+    var (key, childPageId) = DeserializeSeparatorKey(_tableDefinition, recordData);
+    return childPageId;
+  }
+
+  /// <summary>
   /// Use the given key to find the corresponding child pointer. We need to do a binary
   /// search across the interal node's records and find the smallest separator key that
   /// is larger than the given key. If such a key exists, return the corresponding child
