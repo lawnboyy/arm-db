@@ -3,7 +3,7 @@ using ArmDb.StorageEngine;
 using ArmDb.StorageEngine.Exceptions;
 using Record = ArmDb.DataModel.Record;
 
-namespace ArmDb.UnitTests.StorageEngine;
+namespace ArmDb.UnitTests.StorageEngine.BTreeTests;
 
 public partial class BTreeLeafNodeTests // Using partial to extend the existing class
 {

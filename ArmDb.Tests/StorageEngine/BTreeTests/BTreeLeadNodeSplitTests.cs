@@ -2,7 +2,7 @@ using ArmDb.DataModel;
 using ArmDb.StorageEngine;
 using Record = ArmDb.DataModel.Record;
 
-namespace ArmDb.UnitTests.StorageEngine;
+namespace ArmDb.UnitTests.StorageEngine.BTreeTests;
 
 public partial class BTreeLeafNodeTests
 {
