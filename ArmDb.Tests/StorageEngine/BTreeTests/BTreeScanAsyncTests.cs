@@ -7,48 +7,50 @@ namespace ArmDb.UnitTests.StorageEngine.BTreeTests;
 
 public partial class BTreeTests
 {
-  // [Fact]
-  // public async Task ScanAsync_MinProvided_NoMax_ReturnsCorrectRange()
-  // {
-  //   // Case 1: Minimum value provided, but no max
-  //   // Goal: "Start at 'C' and go to the end"
+  [Fact]
+  public async Task ScanAsync_MinProvided_NoMax_ReturnsCorrectRange()
+  {
+    // Case 1: Minimum value provided, but no max
+    var tree = await CreatePopulatedTree();
+    var min = new Key(new List<DataValue> { DataValue.CreateString("C") });
+    Key? max = null;
 
-  //   // Arrange
-  //   var tree = CreatePopulatedTree();
-  //   string min = "C";
-  //   string? max = null;
+    // Act
+    var result = new List<Record>();
+    await foreach (var item in tree.ScanAsync(min, max))
+    {
+      result.Add(item);
+    }
 
-  //   // Act
-  //   var result = await tree.ScanAsync(min, max);
+    // Assert
+    Assert.NotNull(result);
+    Assert.Equal("Cabral", result.First().Values[0].ToString());
+    Assert.Equal("Kevin", result.Last().Values[0].ToString());
+    Assert.DoesNotContain(result, r => r.Values[0].ToString() == "Bob");
+    Assert.Equal(13, result.Count);
+  }
 
-  //   // Assert
-  //   Assert.NotNull(result);
-  //   Assert.Equal("Cabral", result.First()); // Should start with first 'C'
-  //   Assert.Equal("George", result.Last());  // Should go to the very end
-  //   Assert.DoesNotContain("Bob", result);   // Should not have items before 'C'
-  //   Assert.Equal(9, result.Count);          // Cabral through George
-  // }
+  [Fact]
+  public async Task ScanAsync_NoMin_MaxProvided_ReturnsCorrectRange()
+  {
+    // Case 2: A min is not provided, but a max is
+    var tree = await CreatePopulatedTree();
+    Key? min = null;
+    var max = new Key(new List<DataValue> { DataValue.CreateString("C") });
 
-  // [Fact]
-  // public async Task ScanAsync_NoMin_MaxProvided_ReturnsCorrectRange()
-  // {
-  //   // Case 2: A min is not provided, but a max is
-  //   // Goal: "Start at beginning and stop before 'C'" (Half-open interval)
+    // Act
+    var result = new List<Record>();
+    await foreach (var item in tree.ScanAsync(min, max))
+    {
+      result.Add(item);
+    }
 
-  //   // Arrange
-  //   var tree = CreatePopulatedTree();
-  //   string? min = null;
-  //   string max = "C"; // Exclusive upper bound
-
-  //   // Act
-  //   var result = await tree.ScanAsync(min, max);
-
-  //   // Assert
-  //   Assert.Equal(2, result.Count);
-  //   Assert.Equal("Aaron", result[0]);
-  //   Assert.Equal("Bob", result[1]);
-  //   Assert.DoesNotContain("Cabral", result); // Should stop before 'C'
-  // }
+    // Assert
+    Assert.Equal(2, result.Count); // Aaron, Bob
+    Assert.Equal("Aaron", result[0].Values[0].ToString());
+    Assert.Equal("Bob", result[1].Values[0].ToString());
+    Assert.DoesNotContain(result, r => r.Values[0].ToString() == "Cabral");
+  }
 
   [Fact]
   public async Task ScanAsync_MinAndMaxProvided_ReturnsCorrectRange()
