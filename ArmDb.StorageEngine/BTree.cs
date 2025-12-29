@@ -111,15 +111,39 @@ internal sealed class BTree
   internal async IAsyncEnumerable<Record> ScanAsync(Key? min = null, Key? max = null)
   {
     // Case 1: If no min or max keys are provided, then we do a full table scan, starting with the absolute min in the table...
-    var leftmostLeaf = await GetLeftmostLeaf(_rootPageId);
-    var currentLeaf = leftmostLeaf;
+    BTreeLeafNode minLeaf = (min == null)
+      ? await GetLeftmostLeaf(_rootPageId)
+      : await FindLeafAsync(_rootPageId, min);
+
+    var currentLeaf = minLeaf;
+
+    var startIndex = 0;
+    if (min != null)
+    {
+      var unconvertedStartIndex = currentLeaf.FindPrimaryKeySlotIndex(min);
+      startIndex = unconvertedStartIndex < 0 ? ~unconvertedStartIndex : unconvertedStartIndex;
+    }
 
     while (currentLeaf != null)
     {
       var rawRecords = currentLeaf.GetAllRawRecords();
-      for (int i = 0; i < currentLeaf.ItemCount; i++)
+
+      for (int i = startIndex; i < currentLeaf.ItemCount; i++)
       {
         var record = RecordSerializer.Deserialize(_tableDefinition.Columns, rawRecords[i]);
+        // If we have a max key, then we need to break out of the iterator as soon as we
+        // find a key that is larger than the max.
+        if (max != null)
+        {
+          var recordKey = record.GetPrimaryKey(_tableDefinition);
+          var comparer = new KeyComparer();
+          if (comparer.Compare(recordKey, max) > 0)
+          {
+            yield break;
+          }
+        }
+
+        RecordSerializer.DeserializePrimaryKey(_tableDefinition, rawRecords[i]);
         yield return record;
       }
 
@@ -128,6 +152,9 @@ internal sealed class BTree
         : await _bpm.FetchPageAsync(new PageId(_tableDefinition.TableId, currentLeaf.NextPageIndex));
 
       currentLeaf = nextLeafPage == null ? null : new BTreeLeafNode(nextLeafPage, _tableDefinition);
+
+      // Reset the start index to 0 after traversing the first leaf node...
+      startIndex = 0;
     }
   }
 
@@ -319,6 +346,40 @@ internal sealed class BTree
 
       // Recursively call this search method...
       return await SearchRecursiveAsync(childPageId, key);
+    }
+
+    throw new InvalidDataException("B-Tree Node type was invalid!");
+  }
+
+  private async Task<BTreeLeafNode> FindLeafAsync(PageId pageId, Key key)
+  {
+    // Fetch the page (this will pin the page)...
+    var page = await _bpm.FetchPageAsync(pageId);
+
+    // Pull the page header and check the type...
+    var header = new PageHeader(page);
+
+    // Base Case
+    // Once we reach a leaf node, simply return it. It doesn't matter if the 
+    // leaf node actually contains the key or not; we only want the leaf that
+    // should contain the key.
+    if (header.PageType == PageType.LeafNode)
+    {
+      var leafNode = new BTreeLeafNode(page, _tableDefinition);
+      return leafNode;
+    }
+    // Otherwise, it's an internal node and we need to recurse further...
+    else if (header.PageType == PageType.InternalNode)
+    {
+      // Find the child node associated with this key...
+      var internalNode = new BTreeInternalNode(page, _tableDefinition);
+      var childPageId = internalNode.LookupChildPage(key);
+
+      // Unpin the page now that we are done with it...
+      _bpm.UnpinPage(pageId, false);
+
+      // Recursively call this search method...
+      return await FindLeafAsync(childPageId, key);
     }
 
     throw new InvalidDataException("B-Tree Node type was invalid!");

@@ -50,30 +50,32 @@ public partial class BTreeTests
   //   Assert.DoesNotContain("Cabral", result); // Should stop before 'C'
   // }
 
-  // [Fact]
-  // public async Task ScanAsync_MinAndMaxProvided_ReturnsCorrectRange()
-  // {
-  //   // Case 3: Both min and max values are provided
-  //   // Goal: "Find usernames starting with 'C', 'D', or 'E'" (From 'C' up to 'F')
+  [Fact]
+  public async Task ScanAsync_MinAndMaxProvided_ReturnsCorrectRange()
+  {
+    // Case 3: Both min and max values are provided
+    // Goal: "Find usernames starting with 'C', 'D', or 'E'" (From 'C' up to 'F')
 
-  //   // Arrange
-  //   var tree = CreatePopulatedTree();
-  //   string min = "C";
-  //   string max = "F"; // Exclusive upper bound
+    // Arrange
+    var tree = await CreatePopulatedTree();
+    var min = new Key(new List<DataValue> { DataValue.CreateString("C") });
+    var max = new Key(new List<DataValue> { DataValue.CreateString("F") });
 
-  //   // Act
-  //   var result = await tree.ScanAsync(min, max);
+    // Act
+    var result = new List<Record>();
+    await foreach (var item in tree.ScanAsync(min, max))
+    {
+      result.Add(item);
+    }
 
-  //   // Assert
-  //   // Expected: Cabral, Cadence, Cyril, Dabney, Delta, Eagle, Ezra
-  //   Assert.Equal(7, result.Count);
-  //   Assert.Equal("Cabral", result.First());
-  //   Assert.Equal("Ezra", result.Last());
+    // Assert
+    Assert.Equal(7, result.Count); // Cabral through Ezra
+    Assert.Equal("Cabral", result.First().Values[0].ToString());
+    Assert.Equal("Ezra", result.Last().Values[0].ToString());
 
-  //   // Verify boundaries
-  //   Assert.DoesNotContain("Bob", result);   // Before Min
-  //   Assert.DoesNotContain("Fabio", result); // On/After Max
-  // }
+    Assert.DoesNotContain(result, r => r.Values[0].ToString() == "Bob");
+    Assert.DoesNotContain(result, r => r.Values[0].ToString() == "Fabio");
+  }
 
   [Fact]
   public async Task ScanAsync_NoConstraints_ReturnsAll()
