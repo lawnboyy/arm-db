@@ -110,6 +110,14 @@ internal sealed class BTree
   /// <returns></returns>
   internal async IAsyncEnumerable<Record> ScanAsync(Key? min = null, Key? max = null)
   {
+    var comparer = new KeyComparer();
+    // Edge case: the min is greater than the max..
+    if (min != null && max != null && comparer.Compare(min, max) > 0)
+    {
+      // If the min is greater than the max, then immediately return an empty set...
+      yield break;
+    }
+
     // Case 1: If no min or max keys are provided, then we do a full table scan, starting with the absolute min in the table...
     BTreeLeafNode minLeaf = (min == null)
       ? await GetLeftmostLeaf(_rootPageId)
@@ -136,7 +144,6 @@ internal sealed class BTree
         if (max != null)
         {
           var recordKey = record.GetPrimaryKey(_tableDefinition);
-          var comparer = new KeyComparer();
           if (comparer.Compare(recordKey, max) > 0)
           {
             yield break;

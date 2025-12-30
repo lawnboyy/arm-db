@@ -100,6 +100,67 @@ public partial class BTreeTests
     Assert.Equal("Kevin", result.Last().Values[0].ToString());
   }
 
+  [Fact]
+  public async Task ScanAsync_EmptyTree_ReturnsEmpty()
+  {
+    // Edge Case: Tree has no pages or only a root with no records
+    var tableDef = new TableDefinition("EmptySchema");
+    tableDef.AddColumn(new ColumnDefinition("Username", new DataTypeInfo(PrimitiveDataType.Varchar, 50), false));
+    tableDef.AddConstraint(new PrimaryKeyConstraint("PK_User", ["Username"]));
+
+    var tree = await BTree.CreateAsync(_bpm, tableDef);
+
+    var result = new List<Record>();
+    await foreach (var item in tree.ScanAsync(null, null))
+    {
+      result.Add(item);
+    }
+
+    Assert.Empty(result);
+  }
+
+  [Fact]
+  public async Task ScanAsync_RangeWithNoMatches_ReturnsEmpty()
+  {
+    // Edge Case: Valid range, but no data falls into it
+    // Data: Aaron, Bob...
+    // Search: "Ab" to "Ac".
+
+    var tree = await CreatePopulatedTree();
+    var min = CreateKey("Ab");
+    var max = CreateKey("Ac");
+
+    var result = new List<Record>();
+    await foreach (var item in tree.ScanAsync(min, max))
+    {
+      result.Add(item);
+    }
+
+    Assert.Empty(result);
+  }
+
+  [Fact]
+  public async Task ScanAsync_MinGreaterThanMax_ReturnsEmpty()
+  {
+    // Edge Case: User provides inverted range
+    var tree = await CreatePopulatedTree();
+    var min = CreateKey("Z");
+    var max = CreateKey("A");
+
+    var result = new List<Record>();
+    await foreach (var item in tree.ScanAsync(min, max))
+    {
+      result.Add(item);
+    }
+
+    Assert.Empty(result);
+  }
+
+  private Key CreateKey(string val)
+  {
+    return new Key([DataValue.CreateString(val)]);
+  }
+
   private async Task<BTree> CreatePopulatedTree()
   {
     // Arrange
