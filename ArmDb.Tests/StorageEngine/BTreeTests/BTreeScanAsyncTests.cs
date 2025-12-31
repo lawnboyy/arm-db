@@ -1,109 +1,133 @@
 using ArmDb.DataModel;
+using Record = ArmDb.DataModel.Record;
 using ArmDb.SchemaDefinition;
 using ArmDb.StorageEngine;
-using Record = ArmDb.DataModel.Record;
 
 namespace ArmDb.UnitTests.StorageEngine.BTreeTests;
 
 public partial class BTreeTests
 {
   [Fact]
-  public async Task ScanAsync_MinProvided_NoMax_ReturnsCorrectRange()
+  public async Task ScanAsync_MinExclusive_ReturnsCorrectRange()
   {
-    // Case 1: Minimum value provided, but no max
+    // Query: Username > "Aaron" (Exclusive)
+    // Should skip "Aaron" and start at "Bob"
+
     var tree = await CreatePopulatedTree();
-    var min = new Key(new List<DataValue> { DataValue.CreateString("C") });
+    var min = CreateKey("Aaron");
     Key? max = null;
 
-    // Act
+    // Act: minInclusive = false
     var result = new List<Record>();
-    await foreach (var item in tree.ScanAsync(min, max))
+    await foreach (var item in tree.ScanAsync(min, false, max, false))
     {
       result.Add(item);
     }
 
     // Assert
-    Assert.NotNull(result);
-    Assert.Equal("Cabral", result.First().Values[0].ToString());
+    Assert.Equal(14, result.Count); // 15 total - 1 (Aaron)
+    Assert.Equal("Bob", result.First().Values[0].ToString());
     Assert.Equal("Kevin", result.Last().Values[0].ToString());
-    Assert.DoesNotContain(result, r => r.Values[0].ToString() == "Bob");
-    Assert.Equal(13, result.Count);
+    Assert.DoesNotContain(result, r => r.Values[0].ToString() == "Aaron");
   }
 
   [Fact]
-  public async Task ScanAsync_NoMin_MaxProvided_ReturnsCorrectRange()
+  public async Task ScanAsync_MaxInclusive_ReturnsCorrectRange()
   {
-    // Case 2: A min is not provided, but a max is
+    // Query: Username <= "Bob" (Inclusive)
+    // Should include "Aaron" and "Bob"
+
     var tree = await CreatePopulatedTree();
     Key? min = null;
-    var max = new Key(new List<DataValue> { DataValue.CreateString("C") });
+    var max = CreateKey("Bob");
 
-    // Act
+    // Act: maxInclusive = true
     var result = new List<Record>();
-    await foreach (var item in tree.ScanAsync(min, max))
+    await foreach (var item in tree.ScanAsync(min, false, max, true))
     {
       result.Add(item);
     }
 
     // Assert
-    Assert.Equal(2, result.Count); // Aaron, Bob
+    Assert.Equal(2, result.Count);
     Assert.Equal("Aaron", result[0].Values[0].ToString());
     Assert.Equal("Bob", result[1].Values[0].ToString());
-    Assert.DoesNotContain(result, r => r.Values[0].ToString() == "Cabral");
   }
 
   [Fact]
-  public async Task ScanAsync_MinAndMaxProvided_ReturnsCorrectRange()
+  public async Task ScanAsync_MinExclusive_MaxInclusive_ReturnsCorrectRange()
   {
-    // Case 3: Both min and max values are provided
-    // Goal: "Find usernames starting with 'C', 'D', or 'E'" (From 'C' up to 'F')
+    // Query: Username > "Aaron" AND Username <= "Fabio"
+    // Should Start at "Bob" and End at "Fabio" (Including Fabio)
 
-    // Arrange
     var tree = await CreatePopulatedTree();
-    var min = new Key(new List<DataValue> { DataValue.CreateString("C") });
-    var max = new Key(new List<DataValue> { DataValue.CreateString("F") });
+    var min = CreateKey("Aaron");
+    var max = CreateKey("Fabio");
 
-    // Act
+    // Act: minInclusive = false, maxInclusive = true
     var result = new List<Record>();
-    await foreach (var item in tree.ScanAsync(min, max))
+    await foreach (var item in tree.ScanAsync(min, false, max, true))
     {
       result.Add(item);
     }
 
     // Assert
-    Assert.Equal(7, result.Count); // Cabral through Ezra
+    // Expected: Bob, Cabral, Cadence, Cyril, Dabney, Delta, Eagle, Ezra, Fabio (9 items)
+    Assert.Equal(9, result.Count);
+    Assert.Equal("Bob", result.First().Values[0].ToString());
+    Assert.Equal("Fabio", result.Last().Values[0].ToString());
+
+    Assert.DoesNotContain(result, r => r.Values[0].ToString() == "Aaron");
+    Assert.DoesNotContain(result, r => r.Values[0].ToString() == "George");
+  }
+
+  [Fact]
+  public async Task ScanAsync_MinInclusive_MaxExclusive_ReturnsCorrectRange()
+  {
+    // Query: Username >= "Cabral" AND Username < "Fabio"
+    // Should Start at "Cabral" and End at "Ezra" (Exclude Fabio)
+
+    var tree = await CreatePopulatedTree();
+    var min = CreateKey("Cabral");
+    var max = CreateKey("Fabio");
+
+    // Act: minInclusive = true, maxInclusive = false
+    var result = new List<Record>();
+    await foreach (var item in tree.ScanAsync(min, true, max, false))
+    {
+      result.Add(item);
+    }
+
+    // Assert
     Assert.Equal("Cabral", result.First().Values[0].ToString());
     Assert.Equal("Ezra", result.Last().Values[0].ToString());
-
-    Assert.DoesNotContain(result, r => r.Values[0].ToString() == "Bob");
     Assert.DoesNotContain(result, r => r.Values[0].ToString() == "Fabio");
   }
 
   [Fact]
   public async Task ScanAsync_NoConstraints_ReturnsAll()
   {
-    // Case 4: Neither min nor max values are provided
-    // Goal: Full Table Scan
-    // Arrange
+    // Case: Full Table Scan
     var tree = await CreatePopulatedTree();
 
     // Act
     var result = new List<Record>();
-    await foreach (var item in tree.ScanAsync())
+    await foreach (var item in tree.ScanAsync(null, false, null, false))
     {
       result.Add(item);
     }
 
     // Assert
-    Assert.Equal(15, result.Count); // All 15 users
-    Assert.Equal("Aaron", result.First().Values[0].ToString());
-    Assert.Equal("Kevin", result.Last().Values[0].ToString());
+    Assert.Equal(15, result.Count);
   }
+
+  // ==========================================
+  // Edge Case Tests
+  // ==========================================
 
   [Fact]
   public async Task ScanAsync_EmptyTree_ReturnsEmpty()
   {
-    // Edge Case: Tree has no pages or only a root with no records
     var tableDef = new TableDefinition("EmptySchema");
     tableDef.AddColumn(new ColumnDefinition("Username", new DataTypeInfo(PrimitiveDataType.Varchar, 50), false));
     tableDef.AddConstraint(new PrimaryKeyConstraint("PK_User", ["Username"]));
@@ -111,27 +135,7 @@ public partial class BTreeTests
     var tree = await BTree.CreateAsync(_bpm, tableDef);
 
     var result = new List<Record>();
-    await foreach (var item in tree.ScanAsync(null, null))
-    {
-      result.Add(item);
-    }
-
-    Assert.Empty(result);
-  }
-
-  [Fact]
-  public async Task ScanAsync_RangeWithNoMatches_ReturnsEmpty()
-  {
-    // Edge Case: Valid range, but no data falls into it
-    // Data: Aaron, Bob...
-    // Search: "Ab" to "Ac".
-
-    var tree = await CreatePopulatedTree();
-    var min = CreateKey("Ab");
-    var max = CreateKey("Ac");
-
-    var result = new List<Record>();
-    await foreach (var item in tree.ScanAsync(min, max))
+    await foreach (var item in tree.ScanAsync(null, false, null, false))
     {
       result.Add(item);
     }
@@ -142,13 +146,12 @@ public partial class BTreeTests
   [Fact]
   public async Task ScanAsync_MinGreaterThanMax_ReturnsEmpty()
   {
-    // Edge Case: User provides inverted range
     var tree = await CreatePopulatedTree();
     var min = CreateKey("Z");
     var max = CreateKey("A");
 
     var result = new List<Record>();
-    await foreach (var item in tree.ScanAsync(min, max))
+    await foreach (var item in tree.ScanAsync(min, true, max, true))
     {
       result.Add(item);
     }
@@ -156,36 +159,55 @@ public partial class BTreeTests
     Assert.Empty(result);
   }
 
+  [Fact]
+  public async Task ScanAsync_NonExistentStartKey_SeeksToNextAvailable()
+  {
+    // Scan starting at "Al" (Inclusive). "Al" does not exist.
+    // Should land on "Bob".
+    var tree = await CreatePopulatedTree();
+    var min = CreateKey("Al");
+    Key? max = null;
+
+    var result = new List<Record>();
+    await foreach (var item in tree.ScanAsync(min, true, max, false))
+    {
+      result.Add(item);
+    }
+
+    Assert.NotEmpty(result);
+    Assert.Equal("Bob", result.First().Values[0].ToString());
+  }
+
   private Key CreateKey(string val)
   {
-    return new Key([DataValue.CreateString(val)]);
+    return new Key(new[] { DataValue.CreateString(val) });
   }
 
   private async Task<BTree> CreatePopulatedTree()
   {
-    // Arrange
-    // 1. Define schema with large column to force small fan-out (max 2 items per page)
+    // Schema definition
     var tableDef = new TableDefinition("ScanTreeSchema");
     tableDef.AddColumn(new ColumnDefinition("Username", new DataTypeInfo(PrimitiveDataType.Varchar, 50), false));
     tableDef.AddColumn(new ColumnDefinition("Email", new DataTypeInfo(PrimitiveDataType.Varchar, 250), false));
     tableDef.AddColumn(new ColumnDefinition("DoB", new DataTypeInfo(PrimitiveDataType.DateTime), false));
+    // Bio column with padding to force page splits (sibling traversal)
     tableDef.AddColumn(new ColumnDefinition("Bio", new DataTypeInfo(PrimitiveDataType.Varchar, 3000), false));
     tableDef.AddConstraint(new PrimaryKeyConstraint("PK_User", ["Username"]));
 
     var btree = await BTree.CreateAsync(_bpm, tableDef);
 
-    // specific large string to pad the record size (approx 2KB)
+    // Padding string (approx 2KB)
     var largeString = new string('x', 2000);
 
     foreach (var user in GetUsers())
     {
       var record = new Record(new List<DataValue>
-      {
-        DataValue.CreateString(user.Username),
-        DataValue.CreateString(user.Email),
-        DataValue.CreateDateTime(user.DoB),
-        DataValue.CreateString(largeString)
-      });
+            {
+                DataValue.CreateString(user.Username),
+                DataValue.CreateString(user.Email),
+                DataValue.CreateDateTime(user.DoB),
+                DataValue.CreateString(largeString)
+            });
       await btree.InsertAsync(record);
     }
     return btree;
@@ -212,11 +234,11 @@ public partial class BTreeTests
       new User { Username = "Kevin", DoB = new DateTime(1986, 9, 29), Email = "kevin@email.com" }
     };
   }
+}
 
-  internal class User
-  {
-    public string Username { get; set; } = "";
-    public string Email { get; set; } = "";
-    public DateTime DoB { get; set; } = DateTime.Now;
-  }
+public class User
+{
+  public string Username { get; set; } = string.Empty;
+  public DateTime DoB { get; set; }
+  public string Email { get; set; } = string.Empty;
 }

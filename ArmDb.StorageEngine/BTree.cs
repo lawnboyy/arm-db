@@ -108,7 +108,8 @@ internal sealed class BTree
   /// <param name="min"></param>
   /// <param name="max"></param>
   /// <returns></returns>
-  internal async IAsyncEnumerable<Record> ScanAsync(Key? min = null, Key? max = null)
+  internal async IAsyncEnumerable<Record> ScanAsync(
+    Key? min = null, bool minInclusive = false, Key? max = null, bool maxInclusive = false)
   {
     var comparer = new KeyComparer();
     // Edge case: the min is greater than the max..
@@ -130,6 +131,8 @@ internal sealed class BTree
     {
       var unconvertedStartIndex = currentLeaf.FindPrimaryKeySlotIndex(min);
       startIndex = unconvertedStartIndex < 0 ? ~unconvertedStartIndex : unconvertedStartIndex;
+      if (!minInclusive)
+        startIndex += 1;
     }
 
     while (currentLeaf != null)
@@ -144,7 +147,10 @@ internal sealed class BTree
         if (max != null)
         {
           var recordKey = record.GetPrimaryKey(_tableDefinition);
-          if (comparer.Compare(recordKey, max) > 0)
+          if (
+            (maxInclusive && comparer.Compare(recordKey, max) > 0) ||
+            (!maxInclusive && comparer.Compare(recordKey, max) >= 0)
+          )
           {
             yield break;
           }
