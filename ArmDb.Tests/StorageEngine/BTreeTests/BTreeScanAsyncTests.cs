@@ -121,10 +121,6 @@ public partial class BTreeTests
     Assert.Equal(15, result.Count);
   }
 
-  // ==========================================
-  // Edge Case Tests
-  // ==========================================
-
   [Fact]
   public async Task ScanAsync_EmptyTree_ReturnsEmpty()
   {
@@ -176,6 +172,91 @@ public partial class BTreeTests
 
     Assert.NotEmpty(result);
     Assert.Equal("Bob", result.First().Values[0].ToString());
+  }
+
+  [Fact]
+  public async Task ScanAsync_NonExistentMin_Inclusive_SeeksToNextValue()
+  {
+    // Case: User asks for >= "Al" (Between "Aaron" and "Bob")
+    // Since "Al" doesn't exist, it should land on "Bob".
+
+    var tree = await CreatePopulatedTree();
+    var min = CreateKey("Al");
+    Key? max = null;
+
+    var result = new List<Record>();
+    // minInclusive = true
+    await foreach (var item in tree.ScanAsync(min, true, max, false))
+    {
+      result.Add(item);
+    }
+
+    Assert.NotEmpty(result);
+    Assert.Equal("Bob", result.First().Values[0].ToString());
+    // Verify it didn't accidentally wrap around or start at Aaron
+    Assert.DoesNotContain(result, r => r.Values[0].ToString() == "Aaron");
+  }
+
+  [Fact]
+  public async Task ScanAsync_NonExistentMin_Exclusive_SeeksToNextValue()
+  {
+    // Case: User asks for > "Al" (Between "Aaron" and "Bob")
+    // "Al" doesn't exist. > "Al" is effectively the same as >= "Al" 
+    // in a sparse domain. It should also land on "Bob".
+
+    var tree = await CreatePopulatedTree();
+    var min = CreateKey("Al");
+    Key? max = null;
+
+    var result = new List<Record>();
+    // minInclusive = false
+    await foreach (var item in tree.ScanAsync(min, false, max, false))
+    {
+      result.Add(item);
+    }
+
+    Assert.NotEmpty(result);
+    Assert.Equal("Bob", result.First().Values[0].ToString());
+    Assert.DoesNotContain(result, r => r.Values[0].ToString() == "Aaron");
+  }
+
+  [Fact]
+  public async Task ScanAsync_MinSmallerThanAllKeys_StartsAtFirstRecord()
+  {
+    // Case: User asks for >= "000" (Smaller than "Aaron")
+    // Should start at "Aaron".
+
+    var tree = await CreatePopulatedTree();
+    var min = CreateKey("000");
+    Key? max = null;
+
+    var result = new List<Record>();
+    await foreach (var item in tree.ScanAsync(min, true, max, false))
+    {
+      result.Add(item);
+    }
+
+    Assert.Equal(15, result.Count); // Should get everything
+    Assert.Equal("Aaron", result.First().Values[0].ToString());
+  }
+
+  [Fact]
+  public async Task ScanAsync_MinLargerThanAllKeys_ReturnsEmpty()
+  {
+    // Case: User asks for >= "Zzz" (Larger than "Kevin")
+    // Should return nothing.
+
+    var tree = await CreatePopulatedTree();
+    var min = CreateKey("Zzz");
+    Key? max = null;
+
+    var result = new List<Record>();
+    await foreach (var item in tree.ScanAsync(min, true, max, false))
+    {
+      result.Add(item);
+    }
+
+    Assert.Empty(result);
   }
 
   private Key CreateKey(string val)

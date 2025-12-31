@@ -131,7 +131,11 @@ internal sealed class BTree
     {
       var unconvertedStartIndex = currentLeaf.FindPrimaryKeySlotIndex(min);
       startIndex = unconvertedStartIndex < 0 ? ~unconvertedStartIndex : unconvertedStartIndex;
-      if (!minInclusive)
+      // If the min key is found and we are excluding it, we should bump the start index to the
+      // next key (TODO: Handle edge case in which the start index is the last key in the leaf).
+      // If the min key doesn't exist, then the insertion index will be the index
+      // of the next largest key which is where we want our start index.
+      if (!minInclusive && unconvertedStartIndex >= 0)
         startIndex += 1;
     }
 
