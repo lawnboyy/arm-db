@@ -259,6 +259,87 @@ public partial class BTreeTests
     Assert.Empty(result);
   }
 
+  [Fact]
+  public async Task ScanAsync_NonExistentMax_Inclusive_EndsAtPreviousValue()
+  {
+    // Case: User asks for <= "Al" (Between "Aaron" and "Bob")
+    // "Al" doesn't exist. Should return "Aaron" and stop before "Bob".
+
+    var tree = await CreatePopulatedTree();
+    Key? min = null;
+    var max = CreateKey("Al");
+
+    var result = new List<Record>();
+    // maxInclusive = true
+    await foreach (var item in tree.ScanAsync(min, false, max, true))
+    {
+      result.Add(item);
+    }
+
+    Assert.Single(result);
+    Assert.Equal("Aaron", result.First().Values[0].ToString());
+  }
+
+  [Fact]
+  public async Task ScanAsync_NonExistentMax_Exclusive_EndsAtPreviousValue()
+  {
+    // Case: User asks for < "Al" (Between "Aaron" and "Bob")
+    // Should return "Aaron" and stop before "Bob".
+
+    var tree = await CreatePopulatedTree();
+    Key? min = null;
+    var max = CreateKey("Al");
+
+    var result = new List<Record>();
+    // maxInclusive = false
+    await foreach (var item in tree.ScanAsync(min, false, max, false))
+    {
+      result.Add(item);
+    }
+
+    Assert.Single(result);
+    Assert.Equal("Aaron", result.First().Values[0].ToString());
+  }
+
+  [Fact]
+  public async Task ScanAsync_MaxSmallerThanAllKeys_ReturnsEmpty()
+  {
+    // Case: User asks for <= "000" (Smaller than "Aaron")
+    // Should return empty.
+
+    var tree = await CreatePopulatedTree();
+    Key? min = null;
+    var max = CreateKey("000");
+
+    var result = new List<Record>();
+    await foreach (var item in tree.ScanAsync(min, false, max, true))
+    {
+      result.Add(item);
+    }
+
+    Assert.Empty(result);
+  }
+
+  [Fact]
+  public async Task ScanAsync_MaxLargerThanAllKeys_ReturnsAll()
+  {
+    // Case: User asks for <= "Zzz" (Larger than "Kevin")
+    // Should return all records.
+
+    var tree = await CreatePopulatedTree();
+    Key? min = null;
+    var max = CreateKey("Zzz");
+
+    var result = new List<Record>();
+    await foreach (var item in tree.ScanAsync(min, false, max, true))
+    {
+      result.Add(item);
+    }
+
+    Assert.Equal(15, result.Count);
+    Assert.Equal("Kevin", result.Last().Values[0].ToString());
+  }
+
   private Key CreateKey(string val)
   {
     return new Key(new[] { DataValue.CreateString(val) });
