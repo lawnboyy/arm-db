@@ -272,5 +272,5 @@ internal sealed class DiskManager
     return _fileSystem.CombinePath(_baseDataDirectory, $"{tableId}{TableFileExtension}");
   }
 
-  // Add DeleteTableFileAsync later...
+  // TODO: Add DeleteTableFileAsync later...
 }

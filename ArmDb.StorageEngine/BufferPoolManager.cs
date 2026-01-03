@@ -28,10 +28,9 @@ internal sealed class BufferPoolManager : IAsyncDisposable
   private readonly Frame[] _frames;
 
   /// <summary>
-  /// Stores the actual byte arrays rented from the ArrayPool for each frame's data.
-  /// Needed to return the memory to the pool on dispose.
+  /// Stores the actual byte arrays for each frame's data. Each byte array is a cached page.
   /// </summary>
-  private readonly byte[][] _rentedBuffers;
+  private readonly byte[][] _dataBuffers;
 
   /// <summary>
   /// Maps a PageId (identifying a unique disk page) to the index of the frame
@@ -114,7 +113,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
 
     // Initialize core data structures
     _frames = new Frame[_poolSizeInPages];
-    _rentedBuffers = new byte[_poolSizeInPages][]; // To hold the actual rented arrays
+    _dataBuffers = new byte[_poolSizeInPages][];
     _pageTable = new ConcurrentDictionary<PageId, int>(_pageTableConcurrencyLevel, _poolSizeInPages); // Concurrency level, initial capacity
     _freeFrameIndices = new ConcurrentQueue<int>();
 
@@ -125,10 +124,9 @@ internal sealed class BufferPoolManager : IAsyncDisposable
     // Allocate memory for frames and initialize Frame objects
     for (int i = 0; i < _poolSizeInPages; i++)
     {
-      // Rent a buffer from the shared pool. It might be larger than Page.Size.
-      _rentedBuffers[i] = ArrayPool<byte>.Shared.Rent(Page.Size);
+      _dataBuffers[i] = new byte[Page.Size];
       // Create a Memory<byte> slice that is exactly Page.Size.
-      Memory<byte> frameMemory = new Memory<byte>(_rentedBuffers[i], 0, Page.Size);
+      Memory<byte> frameMemory = new Memory<byte>(_dataBuffers[i], 0, Page.Size);
 
       _frames[i] = new Frame(frameMemory); // Frame constructor calls Reset()
       _freeFrameIndices.Enqueue(i);        // Add the frame index to the free list
@@ -659,18 +657,6 @@ internal sealed class BufferPoolManager : IAsyncDisposable
 
     // Step 1: Ensure all modified data in the buffer pool is persisted.
     await FlushAllDirtyPagesAsync();
-
-    // Step 2: Return all rented buffers back to the shared ArrayPool.
-    if (_rentedBuffers != null)
-    {
-      for (int i = 0; i < _rentedBuffers.Length; i++)
-      {
-        if (_rentedBuffers[i] != null)
-        {
-          ArrayPool<byte>.Shared.Return(_rentedBuffers[i]);
-        }
-      }
-    }
 
     _logger.LogInformation("BufferPoolManager disposed successfully.");
     // No need to call GC.SuppressFinalize here because ValueTask-returning DisposeAsync
