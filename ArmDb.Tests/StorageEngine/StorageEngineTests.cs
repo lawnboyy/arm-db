@@ -4,6 +4,8 @@ using ArmDb.SchemaDefinition;
 using ArmDb.StorageEngine;
 using ArmDb.Common.Utils;
 using ArmDb.Common.Abstractions;
+using Record = ArmDb.DataModel.Record;
+using ArmDb.DataModel;
 
 namespace ArmDb.Server.Tests
 {
@@ -80,6 +82,40 @@ namespace ArmDb.Server.Tests
       Assert.Equal(tableName, retrievedDef.Name);
       Assert.Equal(2, retrievedDef.Columns.Count);
       Assert.Equal("Id", retrievedDef.Columns[0].Name);
+    }
+
+    [Fact]
+    public async Task InsertRecordAsync_PersistsData_And_CanBeScanned()
+    {
+      // Arrange
+      var tableName = "Products";
+      var tableDef = new TableDefinition(tableName);
+      tableDef.AddColumn(new ColumnDefinition("Id", new DataTypeInfo(PrimitiveDataType.Int), false));
+      tableDef.AddColumn(new ColumnDefinition("Name", new DataTypeInfo(PrimitiveDataType.Varchar, 50), false));
+      tableDef.AddConstraint(new PrimaryKeyConstraint("PK_Products", new[] { "Id" }));
+
+      await _storageEngine.CreateTableAsync(tableName, tableDef);
+
+      var record = new Record(
+          DataValue.CreateInteger(101),
+          DataValue.CreateString("Gadget")
+      );
+
+      // Act
+      await _storageEngine.InsertRowAsync(tableName, record);
+
+      // Assert
+      // We verify by scanning the table to see if the record comes back.
+      // This implies IEngine needs a ScanAsync method.
+      var results = new List<Record>();
+      await foreach (var row in _storageEngine.ScanAsync(tableName, null, false, null, false))
+      {
+        results.Add(row);
+      }
+
+      Assert.Single(results);
+      // Assuming Record.Equals() implements value equality (which your Record class does)
+      Assert.Equal(record, results[0]);
     }
   }
 }

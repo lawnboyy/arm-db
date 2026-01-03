@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using ArmDb.Common.Abstractions;
+using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
 using Microsoft.Extensions.Logging;
 
@@ -37,6 +39,25 @@ internal sealed class Engine : IStorageEngine
   public ValueTask DisposeAsync()
   {
     return new ValueTask();
+  }
+
+  public async Task InsertRowAsync(string tableName, Record row)
+  {
+    // Lookup the B-Tree for this table...
+    var btree = _tables[tableName];
+    // Insert the record...
+    await btree.InsertAsync(row);
+  }
+
+  public async IAsyncEnumerable<Record> ScanAsync(string tableName, Key? min = null, bool minInclusive = false, Key? max = null, bool maxInclusive = false)
+  {
+    // Lookup the table...
+    var btree = _tables[tableName];
+
+    await foreach (var row in btree.ScanAsync(min, minInclusive, max, maxInclusive))
+    {
+      yield return row;
+    }
   }
 }
 
