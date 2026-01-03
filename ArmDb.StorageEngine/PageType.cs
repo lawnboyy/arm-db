@@ -1,4 +1,4 @@
-namespace ArmDb.StorageEngine;
+namespace ArmDb.Storage;
 
 /// <summary>
 /// Defines the different types of pages used by the storage engine,

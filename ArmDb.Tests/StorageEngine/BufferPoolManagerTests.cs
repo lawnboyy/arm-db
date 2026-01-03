@@ -1,7 +1,7 @@
 using ArmDb.Common.Abstractions;
 using ArmDb.Common.Utils;
-using ArmDb.StorageEngine;
-using ArmDb.StorageEngine.Exceptions;
+using ArmDb.Storage;
+using ArmDb.Storage.Exceptions;
 using ArmDb.UnitTests.Server;
 using ArmDb.UnitTests.TestUtils;
 using Microsoft.Extensions.Logging;
@@ -36,7 +36,7 @@ public partial class BufferPoolManagerTests : IDisposable
     var loggerFactory = LoggerFactory.Create(builder =>
             {
               builder
-              .AddFilter("ArmDb.StorageEngine.BufferPoolManager", LogLevel.Trace) // Show Trace and above for BPM
+              .AddFilter("ArmDb.Storage.BufferPoolManager", LogLevel.Trace) // Show Trace and above for BPM
               .AddFilter("Default", LogLevel.Information) // Other categories at Information
                                                           // .AddConsole(); // Standard console logger
                                                           // For xUnit, a provider that writes to ITestOutputHelper is best.

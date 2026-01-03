@@ -1,5 +1,5 @@
-using ArmDb.StorageEngine;
-using ArmDb.StorageEngine.Exceptions;
+using ArmDb.Storage;
+using ArmDb.Storage.Exceptions;
 using ArmDb.UnitTests.TestUtils;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;

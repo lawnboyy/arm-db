@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using ArmDb.SchemaDefinition;
-using ArmDb.StorageEngine;
+using ArmDb.Storage;
 using ArmDb.Common.Utils;
 using ArmDb.Common.Abstractions;
 using Record = ArmDb.DataModel.Record;
@@ -11,7 +11,7 @@ namespace ArmDb.Server.Tests
 {
   public class StorageEngineTests : IDisposable
   {
-    private readonly Engine _storageEngine;
+    private readonly StorageEngine _storageEngine;
     private readonly BufferPoolManager _bpm;
     private readonly DiskManager _diskManager;
     private readonly IFileSystem _fileSystem;
@@ -37,7 +37,7 @@ namespace ArmDb.Server.Tests
       _bpm = new BufferPoolManager(Options.Create(bpmOptions), _diskManager, bpmLogger);
 
       // 2. Instantiate the System Under Test (SUT)
-      _storageEngine = new Engine(_bpm, NullLogger<Engine>.Instance);
+      _storageEngine = new StorageEngine(_bpm, NullLogger<StorageEngine>.Instance);
     }
 
     public void Dispose()

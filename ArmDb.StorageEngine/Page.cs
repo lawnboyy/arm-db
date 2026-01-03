@@ -1,4 +1,4 @@
-namespace ArmDb.StorageEngine;
+namespace ArmDb.Storage;
 
 /// <summary>
 /// Represents an in-memory copy of a fixed-size page from disk.

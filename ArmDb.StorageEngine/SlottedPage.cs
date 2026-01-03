@@ -1,4 +1,4 @@
-namespace ArmDb.StorageEngine;
+namespace ArmDb.Storage;
 
 /// <summary>
 /// A static helper class providing methods to manage the structure of a Slotted Page.

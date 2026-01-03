@@ -1,6 +1,6 @@
 using ArmDb.SchemaDefinition;
 using ArmDb.DataModel;
-using ArmDb.StorageEngine;
+using ArmDb.Storage;
 using System.Text;
 
 namespace ArmDb.UnitTests.StorageEngine;
@@ -588,8 +588,8 @@ public partial class RecordSerializerTests
 // 3. Create the static class `RecordSerializer` with a placeholder `Serialize` method, like so:
 
 /*
-// In ArmDb.StorageEngine/RecordSerializer.cs
-namespace ArmDb.StorageEngine;
+// In ArmDb.Storage/RecordSerializer.cs
+namespace ArmDb.Storage;
 using ArmDb.SchemaDefinition;
 using ArmDb.DataModel;
 

@@ -1,4 +1,4 @@
-namespace ArmDb.StorageEngine;
+namespace ArmDb.Storage;
 
 /// <summary>
 /// Configuration options for the BufferPoolManager.

@@ -1,4 +1,4 @@
-namespace ArmDb.StorageEngine.Exceptions;
+namespace ArmDb.Storage.Exceptions;
 
 [Serializable]
 internal class BTreeNodeFullException : Exception

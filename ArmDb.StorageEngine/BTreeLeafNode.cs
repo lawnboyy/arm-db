@@ -1,9 +1,9 @@
 using System.Text;
 using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
-using ArmDb.StorageEngine.Exceptions;
+using ArmDb.Storage.Exceptions;
 
-namespace ArmDb.StorageEngine;
+namespace ArmDb.Storage;
 
 /// <summary>
 /// Represents a leaf node of a B+Tree structure. Leaf nodes are slotted pages that store

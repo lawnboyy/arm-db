@@ -5,7 +5,7 @@ using ArmDb.Common.Utils;
 using ArmDb.SchemaDefinition;
 using ArmDb.Server.Bootstrap;
 using ArmDb.Common.Abstractions;
-using ArmDb.StorageEngine;
+using ArmDb.Storage;
 
 // Use default builder which sets up logging, config, DI
 var builder = Host.CreateApplicationBuilder(args);

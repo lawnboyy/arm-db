@@ -1,12 +1,12 @@
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
-using ArmDb.StorageEngine.Exceptions;
+using ArmDb.Storage.Exceptions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualBasic;
 
-namespace ArmDb.StorageEngine;
+namespace ArmDb.Storage;
 
 /// <summary>
 /// Manages a pool of in-memory page buffers (frames) to cache disk pages,

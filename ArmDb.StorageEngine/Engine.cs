@@ -5,17 +5,17 @@ using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
 using Microsoft.Extensions.Logging;
 
-namespace ArmDb.StorageEngine;
+namespace ArmDb.Storage;
 
-internal sealed class Engine : IStorageEngine
+internal sealed class StorageEngine : IStorageEngine
 {
   private readonly BufferPoolManager _bpm;
-  private readonly ILogger<Engine> _logger;
+  private readonly ILogger<StorageEngine> _logger;
   private readonly ConcurrentDictionary<string, BTree> _tables = new();
   private readonly ConcurrentDictionary<string, TableDefinition> _tableDefinitions = new();
 
 
-  internal Engine(BufferPoolManager bpm, ILogger<Engine> logger)
+  internal StorageEngine(BufferPoolManager bpm, ILogger<StorageEngine> logger)
   {
     _bpm = bpm;
     _logger = logger;

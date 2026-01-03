@@ -1,6 +1,6 @@
 using ArmDb.DataModel;
-using ArmDb.StorageEngine;
-using ArmDb.StorageEngine.Exceptions;
+using ArmDb.Storage;
+using ArmDb.Storage.Exceptions;
 using Record = ArmDb.DataModel.Record;
 
 namespace ArmDb.UnitTests.StorageEngine.BTreeTests;

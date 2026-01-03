@@ -1,6 +1,6 @@
 using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
-using ArmDb.StorageEngine; // The namespace where the extension method will live
+using ArmDb.Storage; // The namespace where the extension method will live
 
 namespace ArmDb.UnitTests.StorageEngine;
 

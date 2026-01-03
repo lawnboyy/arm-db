@@ -2,7 +2,7 @@ using System;
 using System.Reflection.Metadata.Ecma335;
 using System.Runtime.CompilerServices;
 
-namespace ArmDb.StorageEngine;
+namespace ArmDb.Storage;
 
 /// <summary>
 /// Represents a single frame within the Buffer Pool. Each frame holds one page of data

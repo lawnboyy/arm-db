@@ -6,7 +6,7 @@ using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
 using Record = ArmDb.DataModel.Record;
 
-namespace ArmDb.StorageEngine;
+namespace ArmDb.Storage;
 
 /// <summary>
 /// Serializer for data records for reading and writing to slotted page cells. The format of the data

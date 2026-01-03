@@ -1,5 +1,5 @@
 using System.Buffers.Binary; // Needed for direct byte verification
-using ArmDb.StorageEngine;
+using ArmDb.Storage;
 
 namespace ArmDb.UnitTests.StorageEngine;
 

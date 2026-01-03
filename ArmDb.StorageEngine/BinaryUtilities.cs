@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace ArmDb.StorageEngine;
+namespace ArmDb.Storage;
 
 public static class BinaryUtilities
 {

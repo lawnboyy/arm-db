@@ -1,9 +1,9 @@
 using System.Text;
 using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
-using ArmDb.StorageEngine.Exceptions;
+using ArmDb.Storage.Exceptions;
 
-namespace ArmDb.StorageEngine;
+namespace ArmDb.Storage;
 
 /// <summary>
 /// Represents an internal node in a B*Tree clustered index. Each internal node contains a separator

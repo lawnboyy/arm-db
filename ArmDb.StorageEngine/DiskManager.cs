@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using ArmDb.Common.Abstractions;
 using Microsoft.Extensions.Logging;
 
-namespace ArmDb.StorageEngine;
+namespace ArmDb.Storage;
 /// <summary>
 /// Manages the persistence of pages to disk files for specific tables.
 /// Assumes a file-per-table storage strategy where each table's data

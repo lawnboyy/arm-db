@@ -2,7 +2,7 @@ using ArmDb.DataModel;
 using ArmDb.DataModel.Exceptions;
 using ArmDb.SchemaDefinition;
 
-namespace ArmDb.StorageEngine;
+namespace ArmDb.Storage;
 
 internal abstract class BTreeNode
 {

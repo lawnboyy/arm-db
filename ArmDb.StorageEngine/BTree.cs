@@ -1,7 +1,7 @@
 using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
 
-namespace ArmDb.StorageEngine;
+namespace ArmDb.Storage;
 
 /// <summary>
 /// BTree class for orchestrating the operations of a clustered index.

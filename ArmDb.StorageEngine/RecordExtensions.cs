@@ -1,7 +1,7 @@
 using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
 
-namespace ArmDb.StorageEngine;
+namespace ArmDb.Storage;
 
 public static class RecordExtensions
 {

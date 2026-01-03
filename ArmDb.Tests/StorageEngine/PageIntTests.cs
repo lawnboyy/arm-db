@@ -1,5 +1,5 @@
 using System.Buffers.Binary;
-using ArmDb.StorageEngine; // Target namespace
+using ArmDb.Storage; // Target namespace
 
 namespace ArmDb.UnitTests.StorageEngine; // Test namespace
 

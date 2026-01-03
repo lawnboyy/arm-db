@@ -1,4 +1,4 @@
-namespace ArmDb.StorageEngine;
+namespace ArmDb.Storage;
 
 /// <summary>
 /// Represents a slot entry in the page's slot array.

@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 
-namespace ArmDb.StorageEngine;
+namespace ArmDb.Storage;
 
 /// <summary>
 /// A readonly ref struct that provides a strongly-typed view and structured access
