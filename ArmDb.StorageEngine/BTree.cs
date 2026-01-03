@@ -121,8 +121,8 @@ internal sealed class BTree
 
     // Case 1: If no min or max keys are provided, then we do a full table scan, starting with the absolute min in the table...
     BTreeLeafNode minLeaf = (min == null)
-      ? await GetLeftmostLeaf(_rootPageId)
-      : await FindLeafAsync(_rootPageId, min);
+      ? await GetLeftmostLeaf(_rootPageId) // Start at the absolute min value in the left most leaf
+      : await FindLeafAsync(_rootPageId, min); // Find the leaf that contains the min value
 
     var currentLeaf = minLeaf;
 

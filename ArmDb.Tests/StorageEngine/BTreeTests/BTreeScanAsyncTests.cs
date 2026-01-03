@@ -340,6 +340,39 @@ public partial class BTreeTests
     Assert.Equal("Kevin", result.Last().Values[0].ToString());
   }
 
+  [Fact]
+  public async Task ScanAsync_MinExists_Exclusive_TraversesToNextPageIfNeeded()
+  {
+    // Edge Case: Min exists and is Exclusive.
+    // Critical Scenario: The Min key is the *last* key on a leaf page.
+    // The scanner must follow the sibling pointer to the next page to find the first result.
+    // We iterate through adjacent pairs to guarantee hitting the page boundary condition.
+
+    var tree = await CreatePopulatedTree();
+    var users = GetUsers();
+
+    for (int i = 0; i < users.Count - 1; i++)
+    {
+      var currentUser = users[i];
+      var nextUser = users[i + 1];
+
+      // Request: > currentUser
+      var min = CreateKey(currentUser.Username);
+      Key? max = null;
+
+      // Act: minInclusive = false
+      var result = new List<Record>();
+      await foreach (var item in tree.ScanAsync(min, false, max, false))
+      {
+        result.Add(item);
+      }
+
+      Assert.NotEmpty(result);
+      // The first record returned must be the immediate next user
+      Assert.Equal(nextUser.Username, result.First().Values[0].ToString());
+    }
+  }
+
   private Key CreateKey(string val)
   {
     return new Key(new[] { DataValue.CreateString(val) });
@@ -364,12 +397,12 @@ public partial class BTreeTests
     foreach (var user in GetUsers())
     {
       var record = new Record(new List<DataValue>
-            {
-                DataValue.CreateString(user.Username),
-                DataValue.CreateString(user.Email),
-                DataValue.CreateDateTime(user.DoB),
-                DataValue.CreateString(largeString)
-            });
+      {
+        DataValue.CreateString(user.Username),
+        DataValue.CreateString(user.Email),
+        DataValue.CreateDateTime(user.DoB),
+        DataValue.CreateString(largeString)
+      });
       await btree.InsertAsync(record);
     }
     return btree;
