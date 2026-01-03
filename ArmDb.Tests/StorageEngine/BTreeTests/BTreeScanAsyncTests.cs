@@ -373,6 +373,70 @@ public partial class BTreeTests
     }
   }
 
+  [Fact]
+  public async Task ScanAsync_MaxExists_Exclusive_StopsCorrectlyAtPageBoundaries()
+  {
+    // Edge Case: Max exists and is Exclusive.
+    // Critical Scenario: The Max key is the *first* key on a new leaf page.
+    // The scanner must stop at the last key of the previous page and NOT include the Max key.
+    // We iterate through adjacent pairs to guarantee hitting the page boundary condition.
+
+    var tree = await CreatePopulatedTree();
+    var users = GetUsers();
+
+    for (int i = 1; i < users.Count; i++)
+    {
+      var prevUser = users[i - 1];
+      var currentUser = users[i];
+
+      // Request: < currentUser
+      // Should stop exactly at prevUser
+      Key? min = null;
+      var max = CreateKey(currentUser.Username);
+
+      var result = new List<Record>();
+      // maxInclusive = false
+      await foreach (var item in tree.ScanAsync(min, false, max, false))
+      {
+        result.Add(item);
+      }
+
+      Assert.Equal(prevUser.Username, result.Last().Values[0].ToString());
+      Assert.DoesNotContain(result, r => r.Values[0].ToString() == currentUser.Username);
+    }
+  }
+
+  [Fact]
+  public async Task ScanAsync_MinEqualsMax_EdgeCases()
+  {
+    // Edge Case: Min and Max are identical.
+    // We verify that flags correctly produce empty sets vs single-point lookups.
+
+    var tree = await CreatePopulatedTree();
+    var target = CreateKey("Bob");
+
+    // 1. Min Exclusive, Max Inclusive -> Empty ( Bob < x <= Bob is impossible )
+    var res1 = new List<Record>();
+    await foreach (var item in tree.ScanAsync(target, false, target, true)) res1.Add(item);
+    Assert.Empty(res1);
+
+    // 2. Min Inclusive, Max Exclusive -> Empty ( Bob <= x < Bob is impossible )
+    var res2 = new List<Record>();
+    await foreach (var item in tree.ScanAsync(target, true, target, false)) res2.Add(item);
+    Assert.Empty(res2);
+
+    // 3. Min Exclusive, Max Exclusive -> Empty
+    var res3 = new List<Record>();
+    await foreach (var item in tree.ScanAsync(target, false, target, false)) res3.Add(item);
+    Assert.Empty(res3);
+
+    // 4. Min Inclusive, Max Inclusive -> Single Record (Point Lookup via Scan)
+    var res4 = new List<Record>();
+    await foreach (var item in tree.ScanAsync(target, true, target, true)) res4.Add(item);
+    Assert.Single(res4);
+    Assert.Equal("Bob", res4.First().Values[0].ToString());
+  }
+
   private Key CreateKey(string val)
   {
     return new Key(new[] { DataValue.CreateString(val) });
