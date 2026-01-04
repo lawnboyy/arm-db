@@ -24,7 +24,7 @@ namespace ArmDb.Common.Abstractions
     /// <summary>
     /// Creates the physical storage structures for a new table based on its definition.
     /// </summary>
-    Task CreateTableAsync(string tableName, TableDefinition tableDefinition);
+    Task CreateTableAsync(int databaseId, string tableName, TableDefinition tableDefinition);
 
     /// <summary>
     /// Gets the schema definition for a table.
