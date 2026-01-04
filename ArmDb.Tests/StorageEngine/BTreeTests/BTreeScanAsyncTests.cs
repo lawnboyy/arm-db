@@ -8,6 +8,57 @@ namespace ArmDb.UnitTests.Storage.BTreeTests;
 public partial class BTreeTests
 {
   [Fact]
+  public async Task ScanAsync_WithColumnValuePredicate_NoMatches_ReturnsEmpty()
+  {
+    // Arrange
+    var tree = await CreatePopulatedTree();
+
+    // Act
+    // Scan for Email = "ghost@email.com" which does not exist in the populated tree
+    var results = new List<Record>();
+    await foreach (var row in tree.ScanAsync("Email", DataValue.CreateString("ghost@email.com")))
+    {
+      results.Add(row);
+    }
+
+    // Assert
+    Assert.Empty(results);
+  }
+
+  [Fact]
+  public async Task ScanAsync_WithInvalidColumnName_ThrowsException()
+  {
+    // Arrange
+    var tree = await CreatePopulatedTree();
+
+    // Act & Assert
+    await Assert.ThrowsAsync<ArgumentException>(async () =>
+    {
+      await foreach (var row in tree.ScanAsync("GhostColumn", DataValue.CreateString("value")))
+      {
+        // Should trigger exception before yielding
+      }
+    });
+  }
+
+  [Fact]
+  public async Task ScanAsync_WithDataTypeMismatch_ThrowsException()
+  {
+    // Arrange
+    var tree = await CreatePopulatedTree();
+
+    // Act & Assert
+    // "DoB" is defined as DateTime, but we are passing an Integer value.
+    await Assert.ThrowsAsync<ArgumentException>(async () =>
+    {
+      await foreach (var row in tree.ScanAsync("DoB", DataValue.CreateInteger(12345)))
+      {
+        // Should trigger exception validation before scanning
+      }
+    });
+  }
+
+  [Fact]
   public async Task ScanAsync_WithColumnValuePredicate_ReturnsMatchingRecords()
   {
     // Arrange

@@ -109,6 +109,15 @@ internal sealed class BTree
   /// <returns></returns>
   internal async IAsyncEnumerable<Record> ScanAsync(string columnName, DataValue value)
   {
+    // If there is no column by the given name, then throw an exception.
+    var columnDefinition = _tableDefinition.Columns.FirstOrDefault(c => c.Name == columnName);
+    if (columnDefinition == null)
+      throw new ArgumentException($"No column with name: {columnName} exists in the {_tableDefinition.Name} table!");
+
+    // Make sure the column data type matches the value's data type.
+    if (columnDefinition.DataType.PrimitiveType != value.DataType)
+      throw new ArgumentException($"Type mismatch: In table {_tableDefinition.Name}, the column definition data type for ${columnName} is {columnDefinition.DataType.PrimitiveType} but the given value's type is {value.DataType}!");
+
     // Determine the column index...    
     var colIndex = 0;
     foreach (var col in _tableDefinition.Columns)
