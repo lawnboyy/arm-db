@@ -59,6 +59,26 @@ public partial class BTreeTests
   }
 
   [Fact]
+  public async Task ScanAsync_WithDateTimePredicate_ReturnsMatchingRecords()
+  {
+    // Arrange
+    var tree = await CreatePopulatedTree();
+    // Bob's DoB from GetUsers() is new DateTime(1993, 2, 15)
+    var targetDate = new DateTime(1993, 2, 15);
+
+    // Act
+    var results = new List<Record>();
+    await foreach (var row in tree.ScanAsync("DoB", DataValue.CreateDateTime(targetDate)))
+    {
+      results.Add(row);
+    }
+
+    // Assert
+    Assert.Single(results);
+    Assert.Equal("Bob", results.First().Values[0].ToString());
+  }
+
+  [Fact]
   public async Task ScanAsync_WithColumnValuePredicate_ReturnsMatchingRecords()
   {
     // Arrange
