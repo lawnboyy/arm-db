@@ -79,6 +79,25 @@ public partial class BTreeTests
   }
 
   [Fact]
+  public async Task ScanAsync_WithPrimaryKeyPredicate_ReturnsSingleRecord()
+  {
+    // Arrange
+    var tree = await CreatePopulatedTree();
+
+    // Act
+    // "Username" is the PK. ScanAsync should find the single record via full scan.
+    var results = new List<Record>();
+    await foreach (var row in tree.ScanAsync("Username", DataValue.CreateString("Fabio")))
+    {
+      results.Add(row);
+    }
+
+    // Assert
+    Assert.Single(results);
+    Assert.Equal("Fabio", results.First().Values[0].ToString());
+  }
+
+  [Fact]
   public async Task ScanAsync_WithColumnValuePredicate_ReturnsMatchingRecords()
   {
     // Arrange
