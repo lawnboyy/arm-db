@@ -7,7 +7,7 @@ using ArmDb.Common.Abstractions;
 using Record = ArmDb.DataModel.Record;
 using ArmDb.DataModel;
 
-namespace ArmDb.Server.Tests;
+namespace ArmDb.UnitTests.Storage;
 
 public class StorageEngineTests : IDisposable
 {
@@ -59,6 +59,37 @@ public class StorageEngineTests : IDisposable
   }
 
   [Fact]
+  public async Task CreateDatabaseAsync_PersistsDatabase_InSystemCatalog()
+  {
+    // Arrange
+    var dbName = "Finance";
+
+    // Act
+    // This should trigger the bootstrap of system tables, then create the new database
+    var dbId = await _storageEngine.CreateDatabaseAsync(dbName);
+
+    // Assert
+    // 1. Scan sys_databases to verify the record exists
+    var sysDatabasesRows = new List<Record>();
+    await foreach (var row in _storageEngine.ScanAsync(StorageEngine.SYS_DATABASES_TABLE_NAME, null, false, null, false))
+    {
+      sysDatabasesRows.Add(row);
+    }
+
+    // 2. Verify we find the record matching the name
+    // Schema: [database_id, database_name, creation_date]
+    var dbRecord = sysDatabasesRows.FirstOrDefault(r => r.Values[1].ToString() == dbName);
+
+    Assert.NotNull(dbRecord);
+    Assert.Equal(dbId, dbRecord.Values[0].GetAs<int>());
+
+    // 3. Verify the "System" database (ID 0) also exists (side effect of bootstrap)
+    var systemRecord = sysDatabasesRows.FirstOrDefault(r => r.Values[0].GetAs<int>() == 0);
+    Assert.NotNull(systemRecord);
+    Assert.Equal("System", systemRecord.Values[1].ToString());
+  }
+
+  [Fact]
   public async Task CreateTableAsync_StoresTableDefinition_And_Retrievable()
   {
     // Arrange
@@ -70,7 +101,7 @@ public class StorageEngineTests : IDisposable
 
     // Act
     // Create the table physically via the engine. 
-    // This should create the underlying files on the real disk via DiskManager.
+    // We pass 0 (System Database) which is created automatically during bootstrap.
     await _storageEngine.CreateTableAsync(0, tableName, tableDef);
 
     // Attempt to retrieve the definition back
@@ -126,13 +157,16 @@ public class StorageEngineTests : IDisposable
     // When we create the first table, it should detect that sys_tables and sys_columns 
     // do not exist and automatically create/bootstrap them before registering the user table.
 
-    var testDatabaseId = 55;
+    // Update: We must create a valid database first, because CreateTableAsync now validates the DB ID.
+    // Calling CreateDatabaseAsync will trigger the bootstrap.
+    var testDatabaseId = await _storageEngine.CreateDatabaseAsync("TestDB");
+
     var customersDef = new TableDefinition("Customers", 100);
     customersDef.AddColumn(new ColumnDefinition("Id", new DataTypeInfo(PrimitiveDataType.Int), false));
     customersDef.AddColumn(new ColumnDefinition("Email", new DataTypeInfo(PrimitiveDataType.Varchar, 100), false));
     customersDef.AddConstraint(new PrimaryKeyConstraint("PK_Customers", new[] { "Id" }));
 
-    // This single call should trigger the creation of sys_tables, sys_columns, and Customers
+    // This single call should register the user table
     await _storageEngine.CreateTableAsync(testDatabaseId, "Customers", customersDef);
 
     // 2. Assert: Verify metadata was automatically inserted into sys_tables
@@ -162,11 +196,13 @@ public class StorageEngineTests : IDisposable
     }
 
     // Verify columns for Customers exist
+    // Schema for sys_columns varies, usually: [column_id, table_id, column_name, ...]
+    // Checking column_name at index 2 (based on StorageEngine implementation)
     Assert.Contains(sysColumnsRows, r => r.Values[2].ToString() == "Email");
     Assert.Contains(sysColumnsRows, r => r.Values[2].ToString() == "Id");
 
     // Verify columns for system tables also exist (proving complete bootstrap)
     Assert.Contains(sysColumnsRows, r => r.Values[2].ToString() == "table_name"); // from sys_tables
-    Assert.Contains(sysColumnsRows, r => r.Values[2].ToString() == "data_type");  // from sys_columns
+    Assert.Contains(sysColumnsRows, r => r.Values[2].ToString() == "data_type");  // from sys_columns (actually defined as 'data_type' in your latest code)
   }
 }

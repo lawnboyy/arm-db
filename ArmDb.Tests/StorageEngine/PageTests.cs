@@ -1,6 +1,6 @@
 using ArmDb.Storage; // Target namespace
 
-namespace ArmDb.UnitTests.StorageEngine; // Test namespace
+namespace ArmDb.UnitTests.Storage; // Test namespace
 
 public partial class PageTests
 {

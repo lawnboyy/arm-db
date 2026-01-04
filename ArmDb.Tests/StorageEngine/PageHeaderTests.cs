@@ -1,7 +1,7 @@
 using System.Buffers.Binary; // Needed for direct byte verification
 using ArmDb.Storage;
 
-namespace ArmDb.UnitTests.StorageEngine;
+namespace ArmDb.UnitTests.Storage;
 
 public class PageHeaderTests
 {

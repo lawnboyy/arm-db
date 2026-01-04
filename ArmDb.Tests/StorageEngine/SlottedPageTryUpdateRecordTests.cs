@@ -1,7 +1,7 @@
 using System.Text;
 using ArmDb.Storage;
 
-namespace ArmDb.UnitTests.StorageEngine;
+namespace ArmDb.UnitTests.Storage;
 
 public partial class SlottedPageTests
 {

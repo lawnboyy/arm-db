@@ -3,7 +3,7 @@ using ArmDb.Common.Utils;
 using ArmDb.Storage;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace ArmDb.UnitTests.StorageEngine; // Your test project's namespace
+namespace ArmDb.UnitTests.Storage; // Your test project's namespace
 
 // Note: These are integration tests hitting the real file system.
 public partial class DiskManagerTests : IDisposable

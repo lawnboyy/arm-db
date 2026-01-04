@@ -32,6 +32,38 @@ internal sealed class StorageEngine : IStorageEngine
     _logger = logger;
   }
 
+  /// <summary>
+  /// Creates a new database and captures the information in the sys_databases table.
+  /// </summary>
+  /// <param name="databaseName">The name of the database to create</param>
+  /// <returns>A task that will return the newly created database ID</returns>
+  /// <exception cref="NotImplementedException"></exception>
+  public async Task<int> CreateDatabaseAsync(string databaseName)
+  {
+    // This is the bootstrapping, lazy initialization of the system database for
+    // capturing metadata about databases, tables, columns, and constraints. If it
+    // does not exist, then they will be created.
+    await CreateSystemTablesAsync();
+
+    // TODO: Ensure that the database doesn't already exist...
+
+    // Get the sys_databases table...
+    var sysDatabasesBTree = _tables[SYS_DATABASES_TABLE_NAME];
+
+    // TODO: Extract the largest key and increment it for the new database ID
+    var databaseId = 1;
+
+    // Insert the new database metadata into the sys_databases table...
+    var newDatabaseRow = new Record(
+        DataValue.CreateInteger(databaseId),
+        DataValue.CreateString(databaseName),
+        DataValue.CreateDateTime(DateTime.UtcNow)
+    );
+    await sysDatabasesBTree.InsertAsync(newDatabaseRow);
+
+    return databaseId;
+  }
+
   public async Task CreateTableAsync(int databaseId, string tableName, TableDefinition tableDef)
   {
     // Check if the system tables exist; create them if they are not present...
@@ -124,6 +156,11 @@ internal sealed class StorageEngine : IStorageEngine
     }
   }
 
+  /// <summary>
+  /// This is the bootstrapping method that creates the system database that contains
+  /// tables that capture metadata for all databases, tables, columns, and constraints.
+  /// </summary>
+  /// <returns>An awaitable task</returns>
   private async Task CreateSystemTablesAsync()
   {
     // Assume that if the sys_tables table exists, then all the system tables exist...

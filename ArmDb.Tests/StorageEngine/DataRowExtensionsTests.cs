@@ -2,7 +2,7 @@ using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
 using ArmDb.Storage; // The namespace where the extension method will live
 
-namespace ArmDb.UnitTests.StorageEngine;
+namespace ArmDb.UnitTests.Storage;
 
 public class DataRowExtensionsTests
 {

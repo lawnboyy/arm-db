@@ -4,7 +4,7 @@ using ArmDb.UnitTests.TestUtils;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
-namespace ArmDb.UnitTests.StorageEngine;
+namespace ArmDb.UnitTests.Storage;
 
 public partial class BufferPoolManagerTests : IDisposable
 {

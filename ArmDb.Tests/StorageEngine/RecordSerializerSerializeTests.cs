@@ -3,7 +3,7 @@ using ArmDb.DataModel;
 using ArmDb.Storage;
 using System.Text;
 
-namespace ArmDb.UnitTests.StorageEngine;
+namespace ArmDb.UnitTests.Storage;
 
 public partial class RecordSerializerTests
 {

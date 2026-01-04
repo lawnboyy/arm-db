@@ -4,7 +4,7 @@ using System.Linq;
 using Xunit;
 using ArmDb.Storage;
 
-namespace ArmDb.UnitTests.StorageEngine;
+namespace ArmDb.UnitTests.Storage;
 
 public partial class SlottedPageTests // Use partial to extend the existing SlottedPageTests class
 {

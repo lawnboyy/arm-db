@@ -8,9 +8,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit.Abstractions;
-using static ArmDb.UnitTests.StorageEngine.StorageEngineTestHelper;
+using static ArmDb.UnitTests.Storage.StorageEngineTestHelper;
 
-namespace ArmDb.UnitTests.StorageEngine;
+namespace ArmDb.UnitTests.Storage;
 
 public partial class BufferPoolManagerTests : IDisposable
 {

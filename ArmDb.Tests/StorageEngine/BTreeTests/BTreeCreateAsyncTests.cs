@@ -5,7 +5,7 @@ using ArmDb.UnitTests.Server;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
-namespace ArmDb.UnitTests.StorageEngine.BTreeTests;
+namespace ArmDb.UnitTests.Storage.BTreeTests;
 
 public partial class BTreeTests : IDisposable
 {

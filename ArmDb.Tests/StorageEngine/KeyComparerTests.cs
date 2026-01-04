@@ -1,7 +1,7 @@
 using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
 
-namespace ArmDb.UnitTests.StorageEngine;
+namespace ArmDb.UnitTests.Storage;
 
 public class KeyComparerTests
 {

@@ -3,7 +3,7 @@ using ArmDb.SchemaDefinition;
 using ArmDb.Storage;
 using Record = ArmDb.DataModel.Record;
 
-namespace ArmDb.UnitTests.StorageEngine.BTreeTests;
+namespace ArmDb.UnitTests.Storage.BTreeTests;
 
 public partial class BTreeLeafNodeTests
 {

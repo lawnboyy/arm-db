@@ -1,9 +1,9 @@
 using ArmDb.Storage;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using static ArmDb.UnitTests.StorageEngine.StorageEngineTestHelper;
+using static ArmDb.UnitTests.Storage.StorageEngineTestHelper;
 
-namespace ArmDb.UnitTests.StorageEngine;
+namespace ArmDb.UnitTests.Storage;
 
 public partial class BufferPoolManagerTests
 {

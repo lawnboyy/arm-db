@@ -3,7 +3,7 @@ using ArmDb.DataModel;
 using ArmDb.Storage;
 using ArmDb.Storage.Exceptions;
 
-namespace ArmDb.UnitTests.StorageEngine.BTreeTests;
+namespace ArmDb.UnitTests.Storage.BTreeTests;
 
 public partial class BTreeLeafNodeTests
 {

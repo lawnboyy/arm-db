@@ -3,7 +3,7 @@ using ArmDb.Common.Utils;
 using ArmDb.Storage;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace ArmDb.UnitTests.StorageEngine;
+namespace ArmDb.UnitTests.Storage;
 
 public partial class DiskManagerTests : IDisposable
 {

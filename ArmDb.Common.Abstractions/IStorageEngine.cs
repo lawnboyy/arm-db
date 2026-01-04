@@ -10,16 +10,11 @@ namespace ArmDb.Common.Abstractions
   public interface IStorageEngine : IAsyncDisposable
   {
     /// <summary>
-    /// Initializes the storage engine, setting the root data directory,
-    /// initializing the buffer pool, and preparing necessary resources.
-    /// Must be called once before other operations.
+    /// Creates a new database by storing database metadata in the sys_databases table.
     /// </summary>
-    // Task InitializeAsync(string dataDirectoryPath, bool ensureDirectoryExists = true);
-
-    /// <summary>
-    /// Checks if the physical storage artifacts for a table with the given name exist.
-    /// </summary>
-    // Task<bool> TableExistsAsync(string tableName);
+    /// <param name="databaseName">The name of the new database</param>
+    /// <returns>The ID of the new database</returns>
+    Task<int> CreateDatabaseAsync(string databaseName);
 
     /// <summary>
     /// Creates the physical storage structures for a new table based on its definition.

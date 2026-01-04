@@ -1,7 +1,7 @@
 using ArmDb.Storage;
-using static ArmDb.UnitTests.StorageEngine.StorageEngineTestHelper;
+using static ArmDb.UnitTests.Storage.StorageEngineTestHelper;
 
-namespace ArmDb.UnitTests.StorageEngine; // Your test project's namespace
+namespace ArmDb.UnitTests.Storage; // Your test project's namespace
 
 // Note: These are integration tests hitting the real file system.
 public partial class DiskManagerTests : IDisposable
