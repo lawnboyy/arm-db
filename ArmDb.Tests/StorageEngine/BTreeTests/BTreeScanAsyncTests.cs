@@ -8,6 +8,42 @@ namespace ArmDb.UnitTests.Storage.BTreeTests;
 public partial class BTreeTests
 {
   [Fact]
+  public async Task ScanAsync_WithColumnValuePredicate_ReturnsMatchingRecords()
+  {
+    // Arrange
+    var tree = await CreatePopulatedTree();
+
+    // Insert a record with a shared value in a non-PK column to verify filtering.
+    // Existing data: Bob has email "bob@email.com".
+    // Let's insert "Bob2" with the same email to ensure we get both matches.
+    // Schema: Username(0), Email(1), DoB(2), Bio(3)
+    var largeString = new string('x', 2000);
+    var bob2 = new Record(new List<DataValue>
+    {
+        DataValue.CreateString("Bob2"),
+        DataValue.CreateString("bob@email.com"),
+        DataValue.CreateDateTime(DateTime.UtcNow),
+        DataValue.CreateString(largeString)
+    });
+    await tree.InsertAsync(bob2);
+
+    // Act
+    // Scan for Email = "bob@email.com" (Column Index 1)
+    var results = new List<Record>();
+    // This assumes the BTree has an overload ScanAsync(int columnIndex, DataValue value)
+    await foreach (var row in tree.ScanAsync("Email", DataValue.CreateString("bob@email.com")))
+    {
+      results.Add(row);
+    }
+
+    // Assert
+    Assert.Equal(2, results.Count);
+    Assert.Contains(results, r => r.Values[0].ToString() == "Bob");
+    Assert.Contains(results, r => r.Values[0].ToString() == "Bob2");
+    Assert.DoesNotContain(results, r => r.Values[0].ToString() == "Aaron");
+  }
+
+  [Fact]
   public async Task ScanAsync_MinExclusive_ReturnsCorrectRange()
   {
     // Query: Username > "Aaron" (Exclusive)

@@ -45,10 +45,10 @@ internal sealed class StorageEngine : IStorageEngine
     // does not exist, then they will be created.
     await CreateSystemTablesAsync();
 
-    // TODO: Ensure that the database doesn't already exist...
-
     // Get the sys_databases table...
     var sysDatabasesBTree = _tables[SYS_DATABASES_TABLE_NAME];
+
+    // TODO: Ensure that the database doesn't already exist...
 
     // TODO: Extract the largest key and increment it for the new database ID
     var databaseId = 1;

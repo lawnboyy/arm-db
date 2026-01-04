@@ -89,6 +89,20 @@ public class StorageEngineTests : IDisposable
     Assert.Equal("System", systemRecord.Values[1].ToString());
   }
 
+  // [Fact]
+  // public async Task CreateDatabaseAsync_ThrowsException_OnDuplicateName()
+  // {
+  //   // Arrange
+  //   var dbName = "DuplicateDB";
+  //   await _storageEngine.CreateDatabaseAsync(dbName);
+
+  //   // Act & Assert
+  //   await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+  //   {
+  //     await _storageEngine.CreateDatabaseAsync(dbName);
+  //   });
+  // }
+
   [Fact]
   public async Task CreateTableAsync_StoresTableDefinition_And_Retrievable()
   {

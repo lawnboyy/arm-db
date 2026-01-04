@@ -102,6 +102,47 @@ internal sealed class BTree
   }
 
   /// <summary>
+  /// Scan the table for a specific column value and return all the results.
+  /// </summary>
+  /// <param name="columnName"></param>
+  /// <param name="value"></param>
+  /// <returns></returns>
+  internal async IAsyncEnumerable<Record> ScanAsync(string columnName, DataValue value)
+  {
+    // Determine the column index...    
+    var colIndex = 0;
+    foreach (var col in _tableDefinition.Columns)
+    {
+      if (col.Name == columnName)
+        break;
+      colIndex++;
+    }
+
+    // This is a full table scan, so we start at the leftmost leaf.
+    BTreeLeafNode minLeaf = await GetLeftmostLeaf(_rootPageId);
+
+    var currentLeaf = minLeaf;
+
+    while (currentLeaf != null)
+    {
+      var rawRecords = currentLeaf.GetAllRawRecords();
+
+      for (int i = 0; i < currentLeaf.ItemCount; i++)
+      {
+        var record = RecordSerializer.Deserialize(_tableDefinition.Columns, rawRecords[i]);
+        if (record.Values[colIndex] == value)
+          yield return record;
+      }
+
+      var nextLeafPage = (currentLeaf.NextPageIndex == PageHeader.INVALID_PAGE_INDEX)
+        ? null
+        : await _bpm.FetchPageAsync(new PageId(_tableDefinition.TableId, currentLeaf.NextPageIndex));
+
+      currentLeaf = nextLeafPage == null ? null : new BTreeLeafNode(nextLeafPage, _tableDefinition);
+    }
+  }
+
+  /// <summary>
   /// Performs a seek and scan for all values between the minimum and maximum key provided. If no
   /// key boundaries are given, then a full table scan is performed.
   /// </summary>
@@ -160,7 +201,6 @@ internal sealed class BTree
           }
         }
 
-        RecordSerializer.DeserializePrimaryKey(_tableDefinition, rawRecords[i]);
         yield return record;
       }
 
@@ -308,7 +348,7 @@ internal sealed class BTree
       var childPageId = internalNode.LookupChildPage(key);
 
       // Recursively call this search method...
-      SplitResult? result = null;
+      SplitResult? result;
       try
       {
         result = await InsertRecursiveAsync(childPageId, record, key, internalNode);
