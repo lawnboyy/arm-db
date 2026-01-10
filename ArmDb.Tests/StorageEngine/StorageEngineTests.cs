@@ -125,6 +125,38 @@ public class StorageEngineTests : IDisposable
   }
 
   [Fact]
+  public async Task CreateTableAsync_RegistersConstraints_InSysConstraints()
+  {
+    // Arrange
+    var dbId = await _storageEngine.CreateDatabaseAsync("ConstraintTestDB");
+    var tableName = "ConstrainedTable";
+    var tableDef = new TableDefinition(tableName);
+    tableDef.AddColumn(new ColumnDefinition("Id", new DataTypeInfo(PrimitiveDataType.Int), false));
+    tableDef.AddConstraint(new PrimaryKeyConstraint("PK_Test_Table", new[] { "Id" }, "PK_Test"));
+
+    // Act
+    await _storageEngine.CreateTableAsync(dbId, tableName, tableDef);
+
+    // Assert
+    var sysConstraintsRows = new List<Record>();
+    await foreach (var row in _storageEngine.ScanAsync(StorageEngine.SYS_CONSTRAINTS_TABLE_NAME))
+    {
+      sysConstraintsRows.Add(row);
+    }
+
+    // Verify the PK constraint exists
+    // Schema: [constraint_id, table_id, constraint_name, constraint_type, definition, creation_date]
+    // Index 2: constraint_name
+    // Index 3: constraint_type
+    // Index 4: definition
+    var constraintRecord = sysConstraintsRows.FirstOrDefault(r => r.Values[2].ToString() == "PK_Test");
+
+    Assert.NotNull(constraintRecord);
+    Assert.Equal("PrimaryKeyConstraint", constraintRecord.Values[3].ToString());
+    Assert.Contains("PRIMARY KEY (Id)", constraintRecord.Values[4].ToString());
+  }
+
+  [Fact]
   public async Task CreateTableAsync_StoresTableDefinition_And_Retrievable()
   {
     // Arrange
