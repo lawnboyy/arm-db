@@ -21,10 +21,14 @@ internal sealed class StorageEngine : IStorageEngine
   private int _constraintId = 1;
   private int _systemDatabaseId = 0;
 
+  // System Table names
   public static readonly string SYS_COLUMNS_TABLE_NAME = "sys_columns";
   public static readonly string SYS_CONSTRAINTS_TABLE_NAME = "sys_constraints";
   public static readonly string SYS_DATABASES_TABLE_NAME = "sys_databases";
   public static readonly string SYS_TABLES_TABLE_NAME = "sys_tables";
+
+  // System Table Column names
+  public static readonly string SYS_DATABASES_TABLE_DATABASE_NAME_COLUMN_NAME = "database_name";
 
   internal StorageEngine(BufferPoolManager bpm, ILogger<StorageEngine> logger)
   {
@@ -49,6 +53,11 @@ internal sealed class StorageEngine : IStorageEngine
     var sysDatabasesBTree = _tables[SYS_DATABASES_TABLE_NAME];
 
     // TODO: Ensure that the database doesn't already exist...
+    var databaseExists = await DatabaseExists(databaseName);
+    if (databaseExists)
+    {
+      throw new InvalidOperationException($"Database with name {databaseName} already exists!");
+    }
 
     // TODO: Extract the largest key and increment it for the new database ID
     var databaseId = 1;
@@ -68,6 +77,12 @@ internal sealed class StorageEngine : IStorageEngine
   {
     // Check if the system tables exist; create them if they are not present...
     await CreateSystemTablesAsync();
+
+    // Ensure the database exists before we attempt to create the table.
+    if (!await DatabaseExists(databaseId))
+    {
+      throw new InvalidOperationException($"Database with ID {databaseId} does not exist!");
+    }
 
     if (_tables.ContainsKey(tableName))
     {
@@ -154,6 +169,28 @@ internal sealed class StorageEngine : IStorageEngine
     {
       yield return row;
     }
+  }
+
+  private async Task<bool> DatabaseExists(int databaseId)
+  {
+    // Lookup the table...
+    var sysDatabasesBTree = _tables[SYS_DATABASES_TABLE_NAME];
+    var result = await sysDatabasesBTree.SearchAsync(Key.CreateKey(databaseId));
+    return result != null;
+  }
+
+  private async Task<bool> DatabaseExists(string databaseName)
+  {
+    // Lookup the table...
+    var sysDatabasesBTree = _tables[SYS_DATABASES_TABLE_NAME];
+    var results = new List<Record>();
+    await foreach (var row in sysDatabasesBTree.ScanAsync(SYS_DATABASES_TABLE_DATABASE_NAME_COLUMN_NAME, DataValue.CreateString(databaseName)))
+    {
+      results.Add(row);
+      break;
+    }
+
+    return results.Count > 0;
   }
 
   /// <summary>
@@ -272,7 +309,7 @@ internal sealed class StorageEngine : IStorageEngine
     var tableDef = new TableDefinition(SYS_DATABASES_TABLE_NAME, 3);
 
     var dbId = new ColumnDefinition("database_id", new DataTypeInfo(PrimitiveDataType.Int), false);
-    var dbName = new ColumnDefinition("database_name", new DataTypeInfo(PrimitiveDataType.Varchar, 128), false);
+    var dbName = new ColumnDefinition(SYS_DATABASES_TABLE_DATABASE_NAME_COLUMN_NAME, new DataTypeInfo(PrimitiveDataType.Varchar, 128), false);
     var creationDate = new ColumnDefinition("creation_date", new DataTypeInfo(PrimitiveDataType.DateTime), false);
 
     tableDef.AddColumn(dbId);

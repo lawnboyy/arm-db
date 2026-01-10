@@ -8,6 +8,166 @@ namespace ArmDb.UnitTests.Storage.BTreeTests;
 public partial class BTreeTests
 {
   [Fact]
+  public async Task ScanAsync_SameValueDifferentColumns_ChecksCorrectColumn()
+  {
+    // Arrange
+    var tableDef = new TableDefinition("ColumnConfusionSchema");
+    tableDef.AddColumn(new ColumnDefinition("Id", new DataTypeInfo(PrimitiveDataType.Int), false));
+    tableDef.AddColumn(new ColumnDefinition("ColA", new DataTypeInfo(PrimitiveDataType.Varchar, 50), false));
+    tableDef.AddColumn(new ColumnDefinition("ColB", new DataTypeInfo(PrimitiveDataType.Varchar, 50), false));
+    tableDef.AddConstraint(new PrimaryKeyConstraint("PK_Id", ["Id"]));
+
+    var tree = await BTree.CreateAsync(_bpm, tableDef);
+
+    // Insert records with overlapping values in different columns
+    // Record 1: Matches on ColA only
+    await tree.InsertAsync(new Record(DataValue.CreateInteger(1), DataValue.CreateString("Target"), DataValue.CreateString("Other")));
+    // Record 2: Matches on ColB only
+    await tree.InsertAsync(new Record(DataValue.CreateInteger(2), DataValue.CreateString("Other"), DataValue.CreateString("Target")));
+    // Record 3: Matches on both
+    await tree.InsertAsync(new Record(DataValue.CreateInteger(3), DataValue.CreateString("Target"), DataValue.CreateString("Target")));
+
+    // Act 1: Scan ColA for "Target"
+    var resultsA = new List<Record>();
+    await foreach (var row in tree.ScanAsync("ColA", DataValue.CreateString("Target")))
+    {
+      resultsA.Add(row);
+    }
+
+    // Assert 1
+    Assert.Equal(2, resultsA.Count);
+    Assert.Contains(resultsA, r => r.Values[0].GetAs<int>() == 1);
+    Assert.Contains(resultsA, r => r.Values[0].GetAs<int>() == 3);
+    Assert.DoesNotContain(resultsA, r => r.Values[0].GetAs<int>() == 2);
+
+    // Act 2: Scan ColB for "Target"
+    var resultsB = new List<Record>();
+    await foreach (var row in tree.ScanAsync("ColB", DataValue.CreateString("Target")))
+    {
+      resultsB.Add(row);
+    }
+
+    // Assert 2
+    Assert.Equal(2, resultsB.Count);
+    Assert.Contains(resultsB, r => r.Values[0].GetAs<int>() == 2);
+    Assert.Contains(resultsB, r => r.Values[0].GetAs<int>() == 3);
+    Assert.DoesNotContain(resultsB, r => r.Values[0].GetAs<int>() == 1);
+  }
+
+  [Fact]
+  public async Task ScanAsync_PredicateOnLargeColumn_MatchesCorrectly()
+  {
+    // Arrange
+    var tree = await CreatePopulatedTree();
+    var uniqueLargeBio = new string('y', 2000); // 2KB string
+
+    // Insert a new record with a unique large value in the Bio column
+    // (Existing records have 2000 'x's)
+    await tree.InsertAsync(new Record(new List<DataValue>
+    {
+        DataValue.CreateString("Zack"),
+        DataValue.CreateString("zack@email.com"),
+        DataValue.CreateDateTime(DateTime.UtcNow),
+        DataValue.CreateString(uniqueLargeBio)
+    }));
+
+    // Act
+    // Scan for Bio = uniqueLargeBio
+    var results = new List<Record>();
+    await foreach (var row in tree.ScanAsync("Bio", DataValue.CreateString(uniqueLargeBio)))
+    {
+      results.Add(row);
+    }
+
+    // Assert
+    Assert.Single(results);
+    Assert.Equal("Zack", results.First().Values[0].ToString());
+  }
+
+  [Fact]
+  public async Task ScanAsync_SearchingForNull_ReturnsRecordsWithNulls()
+  {
+    // Arrange
+    var tableDef = new TableDefinition("NullSchema");
+    tableDef.AddColumn(new ColumnDefinition("Id", new DataTypeInfo(PrimitiveDataType.Int), false));
+    tableDef.AddColumn(new ColumnDefinition("NullableCol", new DataTypeInfo(PrimitiveDataType.Varchar, 50), true)); // Nullable
+    tableDef.AddConstraint(new PrimaryKeyConstraint("PK_Id", ["Id"]));
+
+    var tree = await BTree.CreateAsync(_bpm, tableDef);
+
+    // Insert records: IDs 2 and 3 have NULL in NullableCol
+    await tree.InsertAsync(new Record(DataValue.CreateInteger(1), DataValue.CreateString("NotNull")));
+    await tree.InsertAsync(new Record(DataValue.CreateInteger(2), DataValue.CreateNull(PrimitiveDataType.Varchar)));
+    await tree.InsertAsync(new Record(DataValue.CreateInteger(3), DataValue.CreateNull(PrimitiveDataType.Varchar)));
+    await tree.InsertAsync(new Record(DataValue.CreateInteger(4), DataValue.CreateString("AlsoNotNull")));
+
+    // Act
+    // Scan for NullableCol = NULL
+    var results = new List<Record>();
+    await foreach (var row in tree.ScanAsync("NullableCol", DataValue.CreateNull(PrimitiveDataType.Varchar)))
+    {
+      results.Add(row);
+    }
+
+    // Assert
+    Assert.Equal(2, results.Count);
+    Assert.Contains(results, r => r.Values[0].GetAs<int>() == 2);
+    Assert.Contains(results, r => r.Values[0].GetAs<int>() == 3);
+    Assert.DoesNotContain(results, r => r.Values[0].GetAs<int>() == 1);
+  }
+
+  [Fact]
+  public async Task ScanAsync_OnEmptyTree_WithPredicate_ReturnsEmpty()
+  {
+    // Arrange
+    var tableDef = new TableDefinition("EmptySchema");
+    tableDef.AddColumn(new ColumnDefinition("Username", new DataTypeInfo(PrimitiveDataType.Varchar, 50), false));
+    tableDef.AddConstraint(new PrimaryKeyConstraint("PK_User", ["Username"]));
+
+    // Create an empty BTree
+    var tree = await BTree.CreateAsync(_bpm, tableDef);
+
+    // Act
+    var results = new List<Record>();
+    // Scan using the column name overload on an empty tree
+    await foreach (var row in tree.ScanAsync("Username", DataValue.CreateString("NonExistent")))
+    {
+      results.Add(row);
+    }
+
+    // Assert
+    Assert.Empty(results);
+  }
+
+  [Fact]
+  public async Task ScanAsync_TargetingFirstAndLastRecords_ReturnsMatches()
+  {
+    // Arrange
+    var tree = await CreatePopulatedTree();
+
+    // Act 1: Scan for the very first record ("Aaron") by Username (PK)
+    var firstResults = new List<Record>();
+    await foreach (var row in tree.ScanAsync("Username", DataValue.CreateString("Aaron")))
+    {
+      firstResults.Add(row);
+    }
+
+    // Act 2: Scan for the very last record ("Kevin") by Username (PK)
+    var lastResults = new List<Record>();
+    await foreach (var row in tree.ScanAsync("Username", DataValue.CreateString("Kevin")))
+    {
+      lastResults.Add(row);
+    }
+
+    // Assert
+    Assert.Single(firstResults);
+    Assert.Equal("Aaron", firstResults.First().Values[0].ToString());
+
+    Assert.Single(lastResults);
+    Assert.Equal("Kevin", lastResults.First().Values[0].ToString());
+  }
+
+  [Fact]
   public async Task ScanAsync_WithColumnValuePredicate_NoMatches_ReturnsEmpty()
   {
     // Arrange

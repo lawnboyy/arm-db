@@ -13,6 +13,11 @@ public sealed record class Key : IEquatable<Key>
     Values = values;
   }
 
+  public static Key CreateKey(int keyValue)
+  {
+    return new Key([DataValue.CreateInteger(keyValue)]);
+  }
+
   // Override Equals to use sequence equality for the list
   public bool Equals(Key? other)
   {

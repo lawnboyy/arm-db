@@ -179,7 +179,7 @@ internal static class RecordSerializer
   /// <param name="tableDef"></param>
   /// <param name="recordData"></param>
   /// <returns></returns>
-  /// <exception cref="Exception"></exception>
+  /// <exception cref="InvalidDataException">Thrown if a null value is found for a non-nullable column</exception>
   public static Record Deserialize(IReadOnlyList<ColumnDefinition> columns, ReadOnlySpan<byte> recordData)
   {
     var columnCount = columns.Count();

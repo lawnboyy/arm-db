@@ -109,6 +109,12 @@ internal sealed class BTree
   /// <returns></returns>
   internal async IAsyncEnumerable<Record> ScanAsync(string columnName, DataValue value)
   {
+    // TODO: This method assumes that the column is not indexed, but we should check to see if the column matches the
+    // primary key. If it does, we don't need a full table scan.
+
+    // TODO: If the column matches a unique key constraint, then we can assume there is only one match at most and 
+    // early out if we find it.
+
     // If there is no column by the given name, then throw an exception.
     var columnDefinition = _tableDefinition.Columns.FirstOrDefault(c => c.Name == columnName);
     if (columnDefinition == null)

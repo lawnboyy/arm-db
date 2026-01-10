@@ -89,19 +89,40 @@ public class StorageEngineTests : IDisposable
     Assert.Equal("System", systemRecord.Values[1].ToString());
   }
 
-  // [Fact]
-  // public async Task CreateDatabaseAsync_ThrowsException_OnDuplicateName()
-  // {
-  //   // Arrange
-  //   var dbName = "DuplicateDB";
-  //   await _storageEngine.CreateDatabaseAsync(dbName);
+  [Fact]
+  public async Task CreateDatabaseAsync_ThrowsException_OnDuplicateName()
+  {
+    // Arrange
+    var dbName = "DuplicateDB";
+    await _storageEngine.CreateDatabaseAsync(dbName);
 
-  //   // Act & Assert
-  //   await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-  //   {
-  //     await _storageEngine.CreateDatabaseAsync(dbName);
-  //   });
-  // }
+    // Act & Assert
+    await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+    {
+      await _storageEngine.CreateDatabaseAsync(dbName);
+    });
+  }
+
+  [Fact]
+  public async Task CreateTableAsync_ThrowsException_IfDatabaseDoesNotExist()
+  {
+    // Arrange
+    // We must ensure the engine is bootstrapped so we know sys_databases actually exists to query against.
+    // Creating the System database/tables via the first call usually handles this.
+    await _storageEngine.CreateDatabaseAsync("ValidDB");
+
+    var invalidDatabaseId = 9999;
+    var tableName = "OrphanTable";
+    var tableDef = new TableDefinition(tableName);
+    tableDef.AddColumn(new ColumnDefinition("Id", new DataTypeInfo(PrimitiveDataType.Int), false));
+    tableDef.AddConstraint(new PrimaryKeyConstraint("PK_Orphan", ["Id"]));
+
+    // Act & Assert
+    await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+    {
+      await _storageEngine.CreateTableAsync(invalidDatabaseId, tableName, tableDef);
+    });
+  }
 
   [Fact]
   public async Task CreateTableAsync_StoresTableDefinition_And_Retrievable()
