@@ -20,7 +20,7 @@
       "DefaultValueExpression": null
     },
     {
-      "Name": "data_type_info_json",
+      "Name": "data_type_info",
       "DataType": { "PrimitiveType": "Varchar", "MaxLength": 512 },
       "IsNullable": false,
       "DefaultValueExpression": null

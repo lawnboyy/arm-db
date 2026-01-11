@@ -18,6 +18,12 @@ public sealed class ColumnDefinition
   public DataTypeInfo DataType { get; init; }
 
   /// <summary>
+  /// Gets position of this column in the ordered sequence of columns for
+  /// the table definition.
+  /// </summary>
+  public int OrdinalPosition { get; init; }
+
+  /// <summary>
   /// Gets a value indicating whether the column allows NULL values.
   /// Defaults to true, aligning with common SQL behavior.
   /// </summary>
@@ -39,7 +45,7 @@ public sealed class ColumnDefinition
   /// <param name="defaultValueExpression">Optional default value expression string. Can be null, but not empty or just whitespace if provided.</param>
   /// <exception cref="ArgumentException">Thrown if name is null or whitespace, or if defaultValueExpression is empty or whitespace.</exception>
   /// <exception cref="ArgumentNullException">Thrown if dataType is null.</exception>
-  public ColumnDefinition(string name, DataTypeInfo dataType, bool isNullable = true, string? defaultValueExpression = null)
+  public ColumnDefinition(string name, DataTypeInfo dataType, bool isNullable = true, /* TODO: Remove the default here */int ordinalPosition = 0, string? defaultValueExpression = null)
   {
     // Validate mandatory parameters
     if (string.IsNullOrWhiteSpace(name))
@@ -59,6 +65,7 @@ public sealed class ColumnDefinition
     Name = name.Trim(); // Trim valid name
     DataType = dataType;
     IsNullable = isNullable;
+    OrdinalPosition = ordinalPosition;
     // Trim valid expression, or keep null
     DefaultValueExpression = string.IsNullOrWhiteSpace(defaultValueExpression) ? null : defaultValueExpression.Trim();
   }

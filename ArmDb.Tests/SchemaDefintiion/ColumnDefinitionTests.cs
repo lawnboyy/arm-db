@@ -40,7 +40,7 @@ public class ColumnDefinitionTests
     string defaultValue = "'Default Product'";
 
     // Act
-    var columnDef = new ColumnDefinition(columnName, dataType, isNullable, defaultValue);
+    var columnDef = new ColumnDefinition(columnName, dataType, isNullable, 0, defaultValue);
 
     // Assert
     Assert.Equal(columnName, columnDef.Name);
@@ -60,7 +60,7 @@ public class ColumnDefinitionTests
     string expectedDefaultValue = "'N/A'";
 
     // Act
-    var columnDef = new ColumnDefinition(columnNameWithSpaces, dataType, true, defaultValueWithSpaces);
+    var columnDef = new ColumnDefinition(columnNameWithSpaces, dataType, true, 0, defaultValueWithSpaces);
 
     // Assert
     Assert.Equal(expectedName, columnDef.Name);
@@ -75,7 +75,7 @@ public class ColumnDefinitionTests
     var dataType = new DataTypeInfo(PrimitiveDataType.DateTime);
 
     // Act
-    var columnDef = new ColumnDefinition(columnName, dataType, false, null); // Explicitly pass null
+    var columnDef = new ColumnDefinition(columnName, dataType, false, 0, null); // Explicitly pass null
 
     // Assert
     Assert.Equal(columnName, columnDef.Name);
@@ -126,7 +126,7 @@ public class ColumnDefinitionTests
     var dataType = IntType;
 
     // Act & Assert
-    var ex = Assert.Throws<ArgumentException>("defaultValueExpression", () => new ColumnDefinition(columnName, dataType, true, invalidDefaultExpr));
+    var ex = Assert.Throws<ArgumentException>("defaultValueExpression", () => new ColumnDefinition(columnName, dataType, true, 0, invalidDefaultExpr));
     Assert.Contains("cannot be empty or whitespace", ex.Message);
   }
 }
