@@ -216,6 +216,13 @@ internal abstract class BTreeNode
     return ~low;
   }
 
+  internal Key GetMaxKey()
+  {
+    var recordData = SlottedPage.GetRawRecord(_page, ItemCount - 1);
+    var key = RecordSerializer.DeserializePrimaryKey(_tableDefinition, recordData);
+    return key;
+  }
+
   protected void Repopulate(List<byte[]> rawRecords, PageType pageType)
   {
     if (rawRecords == null)

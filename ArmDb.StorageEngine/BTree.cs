@@ -1,5 +1,6 @@
 using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
+using ArmDb.Storage.Exceptions;
 
 namespace ArmDb.Storage;
 
@@ -71,6 +72,27 @@ internal sealed class BTree
       // Return a new BTree instance...
       return new BTree(bpm, tableDef, rootPage.Id, metadataPage);
     }
+  }
+
+  internal static async Task<BTree> LoadAsync(BufferPoolManager bpm, TableDefinition tableDef)
+  {
+    // First fetch the metadata page, for which the page index will 0.
+    var metadataPageId = new PageId(tableDef.TableId, 0);
+    var metadataPage = await bpm.FetchPageAsync(metadataPageId);
+
+    if (metadataPage == null)
+    {
+      // This table does not exist on disk, so we have an error condition...
+      throw new TableDoesNotExistOnDiskException($"Could not find table with name {tableDef.Name} on disk.");
+    }
+
+    // Now extract the root page ID from the metadata page header.
+    var tableHeader = new PageHeader(metadataPage);
+    var rootPageIndex = tableHeader.RootPageIndex;
+    var rootPageId = new PageId(tableDef.TableId, rootPageIndex);
+
+    // Now we can instantiate our B-Tree and return it...
+    return new BTree(bpm, tableDef, rootPageId, metadataPage);
   }
 
   /// <summary>
@@ -241,6 +263,13 @@ internal sealed class BTree
   {
     ArgumentNullException.ThrowIfNull(key, nameof(key));
     return await SearchRecursiveAsync(_rootPageId, key);
+  }
+
+  internal async Task<Key> GetMaxKey()
+  {
+    var rightmostLeaf = await GetRightmostLeaf(_rootPageId);
+    var maxKey = rightmostLeaf.GetMaxKey();
+    return maxKey;
   }
 
   private async Task<SplitResult?> InsertRecursiveAsync(PageId pageId, Record record, Key key, BTreeInternalNode? parentNode = null)
@@ -641,6 +670,38 @@ internal sealed class BTree
     }
 
     throw new InvalidDataException("Found invalud B-Tree Node type attempting to traverse the leftmost path!");
+  }
+
+  private async Task<BTreeLeafNode> GetRightmostLeaf(PageId pageId)
+  {
+    // Start at the root and traverse the leftmost child recursively until we hit the leftmost leaf node...
+    // Fetch the page (this will pin the page)...
+    var page = await _bpm.FetchPageAsync(pageId);
+
+    // Pull the page header and check the type...
+    var header = new PageHeader(page);
+
+    // If we have reached a leaf node then return it...
+    if (header.PageType == PageType.LeafNode)
+    {
+      var leafNode = new BTreeLeafNode(page, _tableDefinition);
+      return leafNode;
+    }
+    else if (header.PageType == PageType.InternalNode)
+    {
+      var internalNode = new BTreeInternalNode(page, _tableDefinition);
+
+      // First, check if there is a rightmost child pointer...
+      var rightmostChildPageId = internalNode.GetRightmostChildPointer();
+
+      // Unpin the page now that we are done with it...
+      _bpm.UnpinPage(pageId, false);
+
+      // Recursively call this search method...
+      return await GetRightmostLeaf(rightmostChildPageId);
+    }
+
+    throw new InvalidDataException("Found invalud B-Tree Node type attempting to traverse the rightmost path!");
   }
 
 #if DEBUG

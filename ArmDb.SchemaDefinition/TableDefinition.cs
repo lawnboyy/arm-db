@@ -56,6 +56,30 @@ public sealed class TableDefinition
   }
 
   /// <summary>
+  /// Creates a deep copy of the current TableDefinition with a new Table ID.
+  /// </summary>
+  /// <param name="newId">The new Table ID to assign.</param>
+  /// <returns>A new TableDefinition instance with the specified ID.</returns>
+  public TableDefinition WithId(int newId)
+  {
+    var clone = new TableDefinition(Name, newId);
+
+    // Add columns (Columns are immutable value objects, so safe to share references in "clone")
+    foreach (var column in _columns)
+    {
+      clone.AddColumn(column);
+    }
+
+    // Add constraints
+    foreach (var constraint in _constraints)
+    {
+      clone.AddConstraint(constraint);
+    }
+
+    return clone;
+  }
+
+  /// <summary>
   /// Adds a column definition to the table.
   /// </summary>
   /// <param name="column">The column definition to add. Cannot be null.</param>

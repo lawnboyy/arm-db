@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Data;
+using System.Threading.Tasks;
 using ArmDb.Common.Abstractions;
 using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
@@ -20,6 +21,9 @@ internal sealed class StorageEngine : IStorageEngine
   private int _columnId = 1;
   private int _constraintId = 1;
   private int _systemDatabaseId = 0;
+  private int _systemDatabasesTableId = 0;
+  private int _userTablesStartingId = 100;
+  private int _nextUserTableId = -1;
 
   // System Table names
   public static readonly string SYS_COLUMNS_TABLE_NAME = "sys_columns";
@@ -29,11 +33,24 @@ internal sealed class StorageEngine : IStorageEngine
 
   // System Table Column names
   public static readonly string SYS_DATABASES_TABLE_DATABASE_NAME_COLUMN_NAME = "database_name";
+  public static readonly string SYS_TABLES_TABLE_TABLE_NAME_COLUMN_NAME = "table_name";
+  public static readonly string SYS_COLUMNS_TABLE_TABLE_ID_COLUMN_NAME = "table_id";
+  public static readonly string SYS_CONSTRAINTS_TABLE_TABLE_ID_COLUMN_NAME = "table_id";
 
-  internal StorageEngine(BufferPoolManager bpm, ILogger<StorageEngine> logger)
+  private StorageEngine(BufferPoolManager bpm, ILogger<StorageEngine> logger)
   {
     _bpm = bpm;
     _logger = logger;
+  }
+
+  public static async Task<IStorageEngine> CreateStorageEngineAsync(BufferPoolManager bpm, ILogger<StorageEngine> logger)
+  {
+    var storageEngine = new StorageEngine(bpm, logger);
+    // This is the bootstrapping initialization of the system database for
+    // capturing metadata about databases, tables, columns, and constraints.
+    await storageEngine.LoadSystemTablesAsync();
+
+    return storageEngine;
   }
 
   /// <summary>
@@ -47,7 +64,7 @@ internal sealed class StorageEngine : IStorageEngine
     // This is the bootstrapping, lazy initialization of the system database for
     // capturing metadata about databases, tables, columns, and constraints. If it
     // does not exist, then they will be created.
-    await CreateSystemTablesAsync();
+    // await LoadSystemTablesAsync();
 
     // Get the sys_databases table...
     var sysDatabasesBTree = _tables[SYS_DATABASES_TABLE_NAME];
@@ -73,10 +90,10 @@ internal sealed class StorageEngine : IStorageEngine
     return databaseId;
   }
 
-  public async Task CreateTableAsync(int databaseId, string tableName, TableDefinition tableDef)
+  public async Task CreateTableAsync(int databaseId, string tableName, TableDefinition tableDefIn)
   {
-    // Check if the system tables exist; create them if they are not present...
-    await CreateSystemTablesAsync();
+    // First assign a table ID to this new table...
+    var tableDef = tableDefIn.WithId(_nextUserTableId++);
 
     // Ensure the database exists before we attempt to create the table.
     if (!await DatabaseExists(databaseId))
@@ -142,9 +159,49 @@ internal sealed class StorageEngine : IStorageEngine
     }
   }
 
-  public async Task<TableDefinition> GetTableDefinitionAsync(string tableName)
+  /// <summary>
+  /// Get the table definition for the given table name if it exists. If it does not
+  /// exist, it will return null.
+  /// </summary>
+  /// <param name="tableName">The name of the table of which to retrieve the definition.</param>
+  /// <returns>The table definition if it exists, otherwise, null.</returns>
+  public async Task<TableDefinition?> GetTableDefinitionAsync(string tableName)
   {
-    return _tableDefinitions[tableName];
+    if (_tableDefinitions.ContainsKey(tableName))
+      return _tableDefinitions[tableName];
+
+    // The table definition has not been loaded yet, so look up the table definition in the system tables.
+    var sysTables = _tables[SYS_TABLES_TABLE_NAME];
+    Record? result = null;
+    await foreach (var row in sysTables.ScanAsync(SYS_TABLES_TABLE_TABLE_NAME_COLUMN_NAME, DataValue.CreateString(tableName)))
+    {
+      result = row;
+      break;
+    }
+
+    if (result != null)
+    {
+      var tableId = result[0].GetAs<int>();
+      // var databaseId = result[1];
+      var tableDefinition = new TableDefinition(tableName, tableId);
+      // Now look up the column and constration information to hydrate the table definition.
+      var columns = await GetColumnDefinitions(tableId);
+      foreach (var col in columns)
+      {
+        tableDefinition.AddColumn(col);
+      }
+
+      // TODO: Now add the constraints...
+      // var constraints = await GetConstraints(tableId);
+      // foreach (var constraint in constraints)
+      // {
+      //   tableDefinition.AddConstraint(constraint);
+      // }
+
+      return tableDefinition;
+    }
+
+    return null;
   }
 
   public ValueTask DisposeAsync()
@@ -193,18 +250,138 @@ internal sealed class StorageEngine : IStorageEngine
     return results.Count > 0;
   }
 
+  private async Task<bool> SystemDatabaseExistsOnDisk()
+  {
+    // Fetch the metadata page, for which the page index will 0.
+    try
+    {
+      var metadataPageId = new PageId(_systemDatabasesTableId, 0);
+      var metadataPage = await _bpm.FetchPageAsync(metadataPageId);
+      return metadataPage != null;
+    }
+    catch (CouldNotLoadPageFromDiskException)
+    {
+      return false;
+    }
+  }
+
+  private async Task<int> GetMaxUserTableId()
+  {
+    var sysTables = _tables[SYS_TABLES_TABLE_NAME];
+    var maxKey = await sysTables.GetMaxKey();
+    var maxTableId = maxKey.Values[0].GetAs<int>();
+    return maxTableId;
+  }
+
+  private async Task<IReadOnlyList<ColumnDefinition>> GetColumnDefinitions(int tableId)
+  {
+    // Look up the columns for this table...
+    var sysColumnsTable = _tables[SYS_COLUMNS_TABLE_NAME];
+    List<ColumnDefinition> columns = new();
+    await foreach (var row in sysColumnsTable.ScanAsync(SYS_COLUMNS_TABLE_TABLE_ID_COLUMN_NAME, DataValue.CreateInteger(tableId)))
+    {
+      var colName = row.Values[2].GetAs<string>();
+      var colDataTypeInfoStr = row.Values[3].GetAs<string>();
+      var colDataTypeInfo = DataTypeInfo.FromString(colDataTypeInfoStr);
+      var ordinalPosition = row.Values[4].GetAs<int>();
+      var isNullable = row.Values[5].GetAs<bool>();
+      var column = new ColumnDefinition(colName, colDataTypeInfo, isNullable, ordinalPosition /* TODO: Handle default value expressions */);
+      columns.Add(column);
+    }
+
+    // Sort the columns by ordinal position...
+    columns.Sort((col1, col2) =>
+    {
+      if (col1.OrdinalPosition > col2.OrdinalPosition) return 1;
+      if (col1.OrdinalPosition < col2.OrdinalPosition) return -1;
+
+      return 0;
+    });
+
+    return columns;
+  }
+
+  // TODO: Implement this method to hydrate constraints from sys_constraints table...
+  // private async Task<IReadOnlyList<Constraint>> GetConstraints(TableDefinition tableDef)
+  // {
+  //   // Look up the columns for this table...
+  //   var sysConstraintsTable = _tables[SYS_CONSTRAINTS_TABLE_NAME];
+  //   List<Constraint> constraints = new();
+  //   await foreach (var row in sysConstraintsTable.ScanAsync(SYS_CONSTRAINTS_TABLE_TABLE_ID_COLUMN_NAME, DataValue.CreateInteger(tableId)))
+  //   {
+  //     // First get the constraint type...
+  //     var constraintType = row.Values[3].GetAs<string>();
+  //     Constraint constraint = null;
+  //     switch (constraintType)
+  //     {
+  //       case "PrimaryKeyConstraint":
+  //         constraint = new PrimaryKeyConstraint(tableDef.Name, )
+  //         break;
+  //     }
+
+  //     var name = row.Values[2].GetAs<string>();
+  //     var colDataTypeInfoStr = row.Values[3].GetAs<string>();
+  //     var colDataTypeInfo = DataTypeInfo.FromString(colDataTypeInfoStr);
+  //     var ordinalPosition = row.Values[4].GetAs<int>();
+  //     var isNullable = row.Values[5].GetAs<bool>();
+  //     var column = new Constraint();
+  //     constraints.Add(column);
+  //   }
+
+  //   return constraints;
+  // }
+
   /// <summary>
-  /// This is the bootstrapping method that creates the system database that contains
-  /// tables that capture metadata for all databases, tables, columns, and constraints.
+  /// Loads the system database tables from disk if they exist. If they don't exist yet, 
+  /// they will be created.
   /// </summary>
   /// <returns>An awaitable task</returns>
-  private async Task CreateSystemTablesAsync()
+  private async Task LoadSystemTablesAsync()
   {
-    // Assume that if the sys_tables table exists, then all the system tables exist...
-    // TODO: We'll need to load the system tables into the Storage Engine at boot up...
-    if (_tables.ContainsKey(SYS_TABLES_TABLE_NAME))
-      return;
+    // Check to see if the system database exists yet...
+    if (await SystemDatabaseExistsOnDisk())
+    {
+      await LoadSystemDatabase();
+    }
+    else
+    {
+      await CreateSystemDatabase();
+    }
 
+    // Set the max user table ID...
+    var maxTableId = await GetMaxUserTableId();
+    _nextUserTableId = (maxTableId < _userTablesStartingId) ? _userTablesStartingId : ++maxTableId;
+  }
+
+  private async Task LoadSystemDatabase()
+  {
+    // Load sys_databases table
+    var sysDatabasesDef = GetSysDatabasesTableDefinition();
+    await LoadTableAsync(sysDatabasesDef);
+
+    // Load sys_tables table
+    var sysTablesDef = GetSysTablesTableDefinition();
+    await LoadTableAsync(sysTablesDef);
+
+    // Load sys_columns table
+    var sysColumnsDef = GetSysColumnsTableDefinition();
+    await LoadTableAsync(sysColumnsDef);
+
+    // Load the sys_constraints table
+    var sysConstraintsDef = GetSysConstraintsTableDefinition();
+    await LoadTableAsync(sysConstraintsDef);
+  }
+
+  private async Task LoadTableAsync(TableDefinition tableDef)
+  {
+    var table = await BTree.LoadAsync(_bpm, tableDef);
+    // Load the table and definition into the lookup...
+    _tables[tableDef.Name] = table;
+    _tableDefinitions[tableDef.Name] = tableDef;
+  }
+
+  private async Task CreateSystemDatabase()
+  {
     var systemTableDefinitions = new List<TableDefinition>();
 
     // 1. Initialize sys_databases
@@ -306,7 +483,7 @@ internal sealed class StorageEngine : IStorageEngine
 
   private TableDefinition GetSysDatabasesTableDefinition()
   {
-    var tableDef = new TableDefinition(SYS_DATABASES_TABLE_NAME, 3);
+    var tableDef = new TableDefinition(SYS_DATABASES_TABLE_NAME, _systemDatabasesTableId++);
 
     var dbId = new ColumnDefinition("database_id", new DataTypeInfo(PrimitiveDataType.Int), false);
     var dbName = new ColumnDefinition(SYS_DATABASES_TABLE_DATABASE_NAME_COLUMN_NAME, new DataTypeInfo(PrimitiveDataType.Varchar, 128), false);
@@ -323,7 +500,7 @@ internal sealed class StorageEngine : IStorageEngine
 
   private TableDefinition GetSysTablesTableDefinition()
   {
-    var tableDef = new TableDefinition(SYS_TABLES_TABLE_NAME, 1);
+    var tableDef = new TableDefinition(SYS_TABLES_TABLE_NAME, _systemDatabasesTableId++);
 
     var tableIdCol = new ColumnDefinition("table_id", new DataTypeInfo(PrimitiveDataType.Int), false);
     var databaseIdCol = new ColumnDefinition("database_id", new DataTypeInfo(PrimitiveDataType.Int), false);
@@ -342,7 +519,7 @@ internal sealed class StorageEngine : IStorageEngine
 
   private TableDefinition GetSysColumnsTableDefinition()
   {
-    var tableDef = new TableDefinition(SYS_COLUMNS_TABLE_NAME, 2);
+    var tableDef = new TableDefinition(SYS_COLUMNS_TABLE_NAME, _systemDatabasesTableId++);
 
     var columnIdCol = new ColumnDefinition("column_id", new DataTypeInfo(PrimitiveDataType.Int), false);
     var tableIdCol = new ColumnDefinition("table_id", new DataTypeInfo(PrimitiveDataType.Int), false);
@@ -367,7 +544,7 @@ internal sealed class StorageEngine : IStorageEngine
 
   private TableDefinition GetSysConstraintsTableDefinition()
   {
-    var tableDef = new TableDefinition(SYS_CONSTRAINTS_TABLE_NAME, 4);
+    var tableDef = new TableDefinition(SYS_CONSTRAINTS_TABLE_NAME, _systemDatabasesTableId++);
 
     var constId = new ColumnDefinition("constraint_id", new DataTypeInfo(PrimitiveDataType.Int), false);
     var tableId = new ColumnDefinition("table_id", new DataTypeInfo(PrimitiveDataType.Int), false);

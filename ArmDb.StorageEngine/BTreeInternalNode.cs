@@ -51,6 +51,25 @@ internal sealed class BTreeInternalNode : BTreeNode
   }
 
   /// <summary>
+  /// Returns the rightmost valid child pointer. This might be the rightmost pointer if it is a valid pointer,
+  /// otherwise, it will be the child pointer of the largest separator key.
+  /// </summary>
+  /// <returns>PageId of the rightmost valid child pointer.</returns>
+  internal PageId GetRightmostChildPointer()
+  {
+    if (RightmostChildIndex == -1)
+    {
+      var recordData = SlottedPage.GetRawRecord(_page, ItemCount - 1);
+      var (__, childPageId) = DeserializeSeparatorKey(_tableDefinition, recordData);
+      return childPageId;
+    }
+    else
+    {
+      return new PageId(_tableDefinition.TableId, RightmostChildIndex);
+    }
+  }
+
+  /// <summary>
   /// Use the given key to find the corresponding child pointer. We need to do a binary
   /// search across the interal node's records and find the smallest separator key that
   /// is larger than the given key. If such a key exists, return the corresponding child

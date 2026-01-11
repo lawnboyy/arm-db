@@ -26,7 +26,7 @@ namespace ArmDb.Common.Abstractions
     /// </summary>
     /// <param name="tableName"></param>
     /// <returns></returns>
-    Task<TableDefinition> GetTableDefinitionAsync(string tableName);
+    Task<TableDefinition?> GetTableDefinitionAsync(string tableName);
 
     /// <summary>
     /// Inserts a single row of data into the specified table.

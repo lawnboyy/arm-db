@@ -11,7 +11,6 @@ namespace ArmDb.UnitTests.Storage;
 
 public class StorageEngineTests : IDisposable
 {
-  private readonly StorageEngine _storageEngine;
   private readonly BufferPoolManager _bpm;
   private readonly DiskManager _diskManager;
   private readonly IFileSystem _fileSystem;
@@ -35,9 +34,6 @@ public class StorageEngineTests : IDisposable
     };
     var bpmLogger = NullLogger<BufferPoolManager>.Instance;
     _bpm = new BufferPoolManager(Options.Create(bpmOptions), _diskManager, bpmLogger);
-
-    // 2. Instantiate the System Under Test (SUT)
-    _storageEngine = new StorageEngine(_bpm, NullLogger<StorageEngine>.Instance);
   }
 
   public void Dispose()
@@ -62,16 +58,18 @@ public class StorageEngineTests : IDisposable
   public async Task CreateDatabaseAsync_PersistsDatabase_InSystemCatalog()
   {
     // Arrange
+    // This should bootstrap the system tables
+    var storageEngine = await StorageEngine.CreateStorageEngineAsync(_bpm, NullLogger<StorageEngine>.Instance);
     var dbName = "Finance";
 
     // Act
-    // This should trigger the bootstrap of system tables, then create the new database
-    var dbId = await _storageEngine.CreateDatabaseAsync(dbName);
+    // Create the new database
+    var dbId = await storageEngine.CreateDatabaseAsync(dbName);
 
     // Assert
     // 1. Scan sys_databases to verify the record exists
     var sysDatabasesRows = new List<Record>();
-    await foreach (var row in _storageEngine.ScanAsync(StorageEngine.SYS_DATABASES_TABLE_NAME, null, false, null, false))
+    await foreach (var row in storageEngine.ScanAsync(StorageEngine.SYS_DATABASES_TABLE_NAME, null, false, null, false))
     {
       sysDatabasesRows.Add(row);
     }
@@ -93,13 +91,14 @@ public class StorageEngineTests : IDisposable
   public async Task CreateDatabaseAsync_ThrowsException_OnDuplicateName()
   {
     // Arrange
+    var storageEngine = await StorageEngine.CreateStorageEngineAsync(_bpm, NullLogger<StorageEngine>.Instance);
     var dbName = "DuplicateDB";
-    await _storageEngine.CreateDatabaseAsync(dbName);
+    await storageEngine.CreateDatabaseAsync(dbName);
 
     // Act & Assert
     await Assert.ThrowsAsync<InvalidOperationException>(async () =>
     {
-      await _storageEngine.CreateDatabaseAsync(dbName);
+      await storageEngine.CreateDatabaseAsync(dbName);
     });
   }
 
@@ -107,9 +106,10 @@ public class StorageEngineTests : IDisposable
   public async Task CreateTableAsync_ThrowsException_IfDatabaseDoesNotExist()
   {
     // Arrange
+    var storageEngine = await StorageEngine.CreateStorageEngineAsync(_bpm, NullLogger<StorageEngine>.Instance);
     // We must ensure the engine is bootstrapped so we know sys_databases actually exists to query against.
     // Creating the System database/tables via the first call usually handles this.
-    await _storageEngine.CreateDatabaseAsync("ValidDB");
+    await storageEngine.CreateDatabaseAsync("ValidDB");
 
     var invalidDatabaseId = 9999;
     var tableName = "OrphanTable";
@@ -120,7 +120,7 @@ public class StorageEngineTests : IDisposable
     // Act & Assert
     await Assert.ThrowsAsync<InvalidOperationException>(async () =>
     {
-      await _storageEngine.CreateTableAsync(invalidDatabaseId, tableName, tableDef);
+      await storageEngine.CreateTableAsync(invalidDatabaseId, tableName, tableDef);
     });
   }
 
@@ -128,18 +128,19 @@ public class StorageEngineTests : IDisposable
   public async Task CreateTableAsync_RegistersConstraints_InSysConstraints()
   {
     // Arrange
-    var dbId = await _storageEngine.CreateDatabaseAsync("ConstraintTestDB");
+    var storageEngine = await StorageEngine.CreateStorageEngineAsync(_bpm, NullLogger<StorageEngine>.Instance);
+    var dbId = await storageEngine.CreateDatabaseAsync("ConstraintTestDB");
     var tableName = "ConstrainedTable";
     var tableDef = new TableDefinition(tableName);
     tableDef.AddColumn(new ColumnDefinition("Id", new DataTypeInfo(PrimitiveDataType.Int), false));
     tableDef.AddConstraint(new PrimaryKeyConstraint("PK_Test_Table", new[] { "Id" }, "PK_Test"));
 
     // Act
-    await _storageEngine.CreateTableAsync(dbId, tableName, tableDef);
+    await storageEngine.CreateTableAsync(dbId, tableName, tableDef);
 
     // Assert
     var sysConstraintsRows = new List<Record>();
-    await foreach (var row in _storageEngine.ScanAsync(StorageEngine.SYS_CONSTRAINTS_TABLE_NAME))
+    await foreach (var row in storageEngine.ScanAsync(StorageEngine.SYS_CONSTRAINTS_TABLE_NAME))
     {
       sysConstraintsRows.Add(row);
     }
@@ -157,9 +158,81 @@ public class StorageEngineTests : IDisposable
   }
 
   [Fact]
+  public async Task CreateTableAsync_ThrowsException_IfTableAlreadyExists()
+  {
+    // Arrange
+    var storageEngine = await StorageEngine.CreateStorageEngineAsync(_bpm, NullLogger<StorageEngine>.Instance);
+    var dbId = await storageEngine.CreateDatabaseAsync("DuplicateTableDB");
+    var tableName = "ExistingTable";
+    var tableDef = new TableDefinition(tableName);
+    tableDef.AddColumn(new ColumnDefinition("Id", new DataTypeInfo(PrimitiveDataType.Int), false));
+    tableDef.AddConstraint(new PrimaryKeyConstraint("PK_Existing", new[] { "Id" }));
+
+    // Create the table once
+    await storageEngine.CreateTableAsync(dbId, tableName, tableDef);
+
+    // Act & Assert
+    // Try creating it again with the same name
+    await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+    {
+      await storageEngine.CreateTableAsync(dbId, tableName, tableDef);
+    });
+  }
+
+  [Fact]
+  public async Task GetTableDefinitionAsync_ReturnsNull_ForNonExistentTable()
+  {
+    // Arrange
+    var storageEngine = await StorageEngine.CreateStorageEngineAsync(_bpm, NullLogger<StorageEngine>.Instance);
+    // Ensure the system is initialized (optional but safe)
+    await storageEngine.CreateDatabaseAsync("SetupDB");
+
+    // Act
+    var result = await storageEngine.GetTableDefinitionAsync("GhostTable");
+
+    // Assert
+    Assert.Null(result);
+  }
+
+  [Fact]
+  public async Task GetTableDefinition_ReturnsDefinition_AfterRestart()
+  {
+    // Arrange
+    var dbName = "RestartDB";
+    var tableName = "PersistentTable";
+    var tableDef = new TableDefinition(tableName);
+    tableDef.AddColumn(new ColumnDefinition("Id", new DataTypeInfo(PrimitiveDataType.Int), false));
+    tableDef.AddConstraint(new PrimaryKeyConstraint("PK_Persist", ["Id"]));
+
+    // 1. Create DB and Table in the primary engine (simulating initial run)
+    var storageEngine = await StorageEngine.CreateStorageEngineAsync(_bpm, NullLogger<StorageEngine>.Instance);
+
+    var dbId = await storageEngine.CreateDatabaseAsync(dbName);
+    await storageEngine.CreateTableAsync(dbId, tableName, tableDef);
+
+    // 2. Simulate a Restart: Create a NEW StorageEngine instance 
+    // It shares the same BufferPool and DiskManager (so data persists), 
+    // but its internal _tableDefinitions cache is empty.
+    var newEngineLogger = NullLogger<StorageEngine>.Instance;
+    // Use factory for the second instance as well
+    var restartEngine = await StorageEngine.CreateStorageEngineAsync(_bpm, newEngineLogger);
+
+    // Act
+    // This call should fail if Lazy Loading is not implemented, 
+    // because "PersistentTable" is not in restartEngine's memory.
+    var retrievedDef = await restartEngine.GetTableDefinitionAsync(tableName);
+
+    // Assert
+    Assert.NotNull(retrievedDef);
+    Assert.Equal(tableName, retrievedDef.Name);
+    Assert.Equal("Id", retrievedDef.Columns[0].Name);
+  }
+
+  [Fact]
   public async Task CreateTableAsync_StoresTableDefinition_And_Retrievable()
   {
     // Arrange
+    var storageEngine = await StorageEngine.CreateStorageEngineAsync(_bpm, NullLogger<StorageEngine>.Instance);
     var tableName = "Users";
     var tableDef = new TableDefinition(tableName);
     tableDef.AddColumn(new ColumnDefinition("Id", new DataTypeInfo(PrimitiveDataType.Int), false));
@@ -169,11 +242,11 @@ public class StorageEngineTests : IDisposable
     // Act
     // Create the table physically via the engine. 
     // We pass 0 (System Database) which is created automatically during bootstrap.
-    await _storageEngine.CreateTableAsync(0, tableName, tableDef);
+    await storageEngine.CreateTableAsync(0, tableName, tableDef);
 
     // Attempt to retrieve the definition back
     // In a real implementation, this checks the internal map or system catalog.
-    var retrievedDef = await _storageEngine.GetTableDefinitionAsync(tableName);
+    var retrievedDef = await storageEngine.GetTableDefinitionAsync(tableName);
 
     // Assert
     Assert.NotNull(retrievedDef);
@@ -186,13 +259,14 @@ public class StorageEngineTests : IDisposable
   public async Task InsertRecordAsync_PersistsData_And_CanBeScanned()
   {
     // Arrange
+    var storageEngine = await StorageEngine.CreateStorageEngineAsync(_bpm, NullLogger<StorageEngine>.Instance);
     var tableName = "Products";
     var tableDef = new TableDefinition(tableName);
     tableDef.AddColumn(new ColumnDefinition("Id", new DataTypeInfo(PrimitiveDataType.Int), false));
     tableDef.AddColumn(new ColumnDefinition("Name", new DataTypeInfo(PrimitiveDataType.Varchar, 50), false));
     tableDef.AddConstraint(new PrimaryKeyConstraint("PK_Products", ["Id"]));
 
-    await _storageEngine.CreateTableAsync(0, tableName, tableDef);
+    await storageEngine.CreateTableAsync(0, tableName, tableDef);
 
     var record = new Record(
         DataValue.CreateInteger(101),
@@ -200,13 +274,13 @@ public class StorageEngineTests : IDisposable
     );
 
     // Act
-    await _storageEngine.InsertRowAsync(tableName, record);
+    await storageEngine.InsertRowAsync(tableName, record);
 
     // Assert
     // We verify by scanning the table to see if the record comes back.
     // This implies IEngine needs a ScanAsync method.
     var results = new List<Record>();
-    await foreach (var row in _storageEngine.ScanAsync(tableName, null, false, null, false))
+    await foreach (var row in storageEngine.ScanAsync(tableName, null, false, null, false))
     {
       results.Add(row);
     }
@@ -219,6 +293,9 @@ public class StorageEngineTests : IDisposable
   [Fact]
   public async Task CreateTableAsync_BootstrapsSystemTables_And_RegistersMetadata()
   {
+    // Arrange
+    var storageEngine = await StorageEngine.CreateStorageEngineAsync(_bpm, NullLogger<StorageEngine>.Instance);
+
     // 1. Arrange & Act: Create a User Table ("Customers")
     // We assume the StorageEngine handles the "Chicken and Egg" problem internally.
     // When we create the first table, it should detect that sys_tables and sys_columns 
@@ -226,7 +303,7 @@ public class StorageEngineTests : IDisposable
 
     // Update: We must create a valid database first, because CreateTableAsync now validates the DB ID.
     // Calling CreateDatabaseAsync will trigger the bootstrap.
-    var testDatabaseId = await _storageEngine.CreateDatabaseAsync("TestDB");
+    var testDatabaseId = await storageEngine.CreateDatabaseAsync("TestDB");
 
     var customersDef = new TableDefinition("Customers", 100);
     customersDef.AddColumn(new ColumnDefinition("Id", new DataTypeInfo(PrimitiveDataType.Int), false));
@@ -234,11 +311,11 @@ public class StorageEngineTests : IDisposable
     customersDef.AddConstraint(new PrimaryKeyConstraint("PK_Customers", new[] { "Id" }));
 
     // This single call should register the user table
-    await _storageEngine.CreateTableAsync(testDatabaseId, "Customers", customersDef);
+    await storageEngine.CreateTableAsync(testDatabaseId, "Customers", customersDef);
 
     // 2. Assert: Verify metadata was automatically inserted into sys_tables
     var sysTablesRows = new List<Record>();
-    await foreach (var row in _storageEngine.ScanAsync("sys_tables", null, false, null, false))
+    await foreach (var row in storageEngine.ScanAsync("sys_tables", null, false, null, false))
     {
       sysTablesRows.Add(row);
     }
@@ -252,12 +329,12 @@ public class StorageEngineTests : IDisposable
     // Verify the "Customers" user table was registered
     // Schema: [table_id, database_id, table_name]
     Assert.Contains(sysTablesRows, r => r.Values[2].ToString() == "Customers"
-                                     && r.Values[1].GetAs<int>() == testDatabaseId
-                                     && r.Values[0].GetAs<int>() == 100);
+                                        && r.Values[1].GetAs<int>() == testDatabaseId
+                                        && r.Values[0].GetAs<int>() == 100);
 
     // 3. Assert: Verify metadata was automatically inserted into sys_columns
     var sysColumnsRows = new List<Record>();
-    await foreach (var row in _storageEngine.ScanAsync("sys_columns", null, false, null, false))
+    await foreach (var row in storageEngine.ScanAsync("sys_columns", null, false, null, false))
     {
       sysColumnsRows.Add(row);
     }
