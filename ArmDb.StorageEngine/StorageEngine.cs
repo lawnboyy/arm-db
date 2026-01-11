@@ -93,7 +93,9 @@ internal sealed class StorageEngine : IStorageEngine
   public async Task CreateTableAsync(int databaseId, string tableName, TableDefinition tableDefIn)
   {
     // First assign a table ID to this new table...
-    var tableDef = tableDefIn.WithId(_nextUserTableId++);
+    // Make sure our increment operation is thread safe.
+    Interlocked.Increment(ref _nextUserTableId);
+    var tableDef = tableDefIn.WithId(_nextUserTableId);
 
     // Ensure the database exists before we attempt to create the table.
     if (!await DatabaseExists(databaseId))

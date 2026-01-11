@@ -330,7 +330,7 @@ public class StorageEngineTests : IDisposable
     // Schema: [table_id, database_id, table_name]
     Assert.Contains(sysTablesRows, r => r.Values[2].ToString() == "Customers"
                                         && r.Values[1].GetAs<int>() == testDatabaseId
-                                        && r.Values[0].GetAs<int>() == 100);
+                                        && r.Values[0].GetAs<int>() == 101);
 
     // 3. Assert: Verify metadata was automatically inserted into sys_columns
     var sysColumnsRows = new List<Record>();
