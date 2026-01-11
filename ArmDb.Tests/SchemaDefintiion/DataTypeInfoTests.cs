@@ -291,4 +291,68 @@ public class DataTypeInfoTests
     }
     // else - Hash codes are not guaranteed to be different for unequal objects, so no assertion here.
   }
+
+  // ==================
+  // FromString Tests
+  // ==================
+
+  [Theory]
+  [InlineData("VARCHAR(50)", PrimitiveDataType.Varchar, 50, null, null)]
+  [InlineData("varchar(100)", PrimitiveDataType.Varchar, 100, null, null)] // Case insensitive
+  [InlineData("VARCHAR( 255 )", PrimitiveDataType.Varchar, 255, null, null)] // Whitespace handling
+  [InlineData("BLOB(4000)", PrimitiveDataType.Blob, 4000, null, null)]
+  [InlineData("DECIMAL(10, 2)", PrimitiveDataType.Decimal, null, 10, 2)]
+  [InlineData("DECIMAL( 18 , 0 )", PrimitiveDataType.Decimal, null, 18, 0)] // Whitespace
+  [InlineData("DECIMAL", PrimitiveDataType.Decimal, null, null, null)]
+  [InlineData("INT", PrimitiveDataType.Int, null, null, null)]
+  [InlineData("INTEGER", PrimitiveDataType.Int, null, null, null)] // Alias check
+  [InlineData("BIGINT", PrimitiveDataType.BigInt, null, null, null)]
+  [InlineData("BOOLEAN", PrimitiveDataType.Boolean, null, null, null)]
+  [InlineData("BOOL", PrimitiveDataType.Boolean, null, null, null)] // Alias check
+  [InlineData("DATETIME", PrimitiveDataType.DateTime, null, null, null)]
+  [InlineData("FLOAT", PrimitiveDataType.Float, null, null, null)]
+  public void FromString_ValidInput_ReturnsExpectedInstance(string input, PrimitiveDataType expectedType, int? expectedMaxLen, int? expectedPrec, int? expectedScale)
+  {
+    // Act
+    var result = DataTypeInfo.FromString(input);
+
+    // Assert
+    Assert.Equal(expectedType, result.PrimitiveType);
+    Assert.Equal(expectedMaxLen, result.MaxLength);
+    Assert.Equal(expectedPrec, result.Precision);
+    Assert.Equal(expectedScale, result.Scale);
+  }
+
+  [Theory]
+  [InlineData(null)]
+  [InlineData("")]
+  [InlineData("   ")]
+  public void FromString_NullOrWhitespace_ThrowsArgumentException(string input)
+  {
+    Assert.Throws<ArgumentException>(() => DataTypeInfo.FromString(input));
+  }
+
+  [Theory]
+  [InlineData("VARCHAR")] // Missing parens/args
+  [InlineData("VARCHAR()")] // Empty args
+  [InlineData("VARCHAR(ABC)")] // Invalid number
+  [InlineData("VARCHAR(10, 2)")] // Too many args
+  [InlineData("BLOB")]
+  [InlineData("DECIMAL(10)")] // Invalid arg count (needs 0 or 2)
+  [InlineData("DECIMAL(10, 2, 1)")] // Too many
+  [InlineData("INT(10)")] // No args allowed
+  [InlineData("BOOLEAN(1)")]
+  [InlineData("Unclosed(Paren")]
+  public void FromString_InvalidFormat_ThrowsFormatException(string input)
+  {
+    Assert.Throws<FormatException>(() => DataTypeInfo.FromString(input));
+  }
+
+  [Theory]
+  [InlineData("UNKNOWN_TYPE")]
+  [InlineData("MYCUSTOMTYPE")]
+  public void FromString_UnknownType_ThrowsNotSupportedException(string input)
+  {
+    Assert.Throws<NotSupportedException>(() => DataTypeInfo.FromString(input));
+  }
 }

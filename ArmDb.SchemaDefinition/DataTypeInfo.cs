@@ -178,6 +178,103 @@ public sealed class DataTypeInfo : IEquatable<DataTypeInfo> // Sealed + IEquatab
   }
 
   /// <summary>
+  /// Parses a string representation of a data type (e.g., "VARCHAR(100)", "DECIMAL(10, 2)", "INT") 
+  /// and returns a DataTypeInfo instance.
+  /// </summary>
+  /// <param name="typeString">The string to parse.</param>
+  /// <returns>A new DataTypeInfo instance.</returns>
+  /// <exception cref="FormatException">Thrown if the string format is invalid.</exception>
+  /// <exception cref="NotSupportedException">Thrown if the type name is not recognized.</exception>
+  public static DataTypeInfo FromString(string typeString)
+  {
+    if (string.IsNullOrWhiteSpace(typeString))
+      throw new ArgumentException("Type string cannot be null or empty.", nameof(typeString));
+
+    // 1. Normalize input
+    string input = typeString.Trim().ToUpperInvariant();
+    string typeName = input;
+    string[] args = Array.Empty<string>();
+
+    // 2. Extract Type and Arguments: Look for parens
+    int openParenIndex = input.IndexOf('(');
+    if (openParenIndex > 0)
+    {
+      if (!input.EndsWith(")"))
+        throw new FormatException($"Invalid type string format: '{typeString}'. Missing closing parenthesis.");
+
+      typeName = input.Substring(0, openParenIndex).Trim();
+      string content = input.Substring(openParenIndex + 1, input.Length - openParenIndex - 2);
+
+      if (!string.IsNullOrWhiteSpace(content))
+      {
+        args = content.Split(',', StringSplitOptions.TrimEntries);
+      }
+    }
+
+    // Helper to validate no arguments for fixed types
+    void EnsureNoArgs()
+    {
+      if (args.Length > 0)
+        throw new FormatException($"{typeName} does not support arguments.");
+    }
+
+    // 3. Parse based on Type Name
+    switch (typeName)
+    {
+      case "VARCHAR":
+        if (args.Length != 1) throw new FormatException("VARCHAR requires exactly one argument (length).");
+        if (!int.TryParse(args[0], out int varcharLen)) throw new FormatException($"Invalid length for VARCHAR: '{args[0]}'.");
+        return new DataTypeInfo(PrimitiveDataType.Varchar, maxLength: varcharLen);
+
+      case "BLOB":
+        if (args.Length != 1) throw new FormatException("BLOB requires exactly one argument (length).");
+        if (!int.TryParse(args[0], out int blobLen)) throw new FormatException($"Invalid length for BLOB: '{args[0]}'.");
+        return new DataTypeInfo(PrimitiveDataType.Blob, maxLength: blobLen);
+
+      case "DECIMAL":
+        if (args.Length == 0)
+        {
+          return new DataTypeInfo(PrimitiveDataType.Decimal);
+        }
+        else if (args.Length == 2)
+        {
+          if (!int.TryParse(args[0], out int prec)) throw new FormatException($"Invalid precision for DECIMAL: '{args[0]}'.");
+          if (!int.TryParse(args[1], out int scale)) throw new FormatException($"Invalid scale for DECIMAL: '{args[1]}'.");
+          return new DataTypeInfo(PrimitiveDataType.Decimal, precision: prec, scale: scale);
+        }
+        else
+        {
+          throw new FormatException($"DECIMAL requires 0 or 2 arguments (Precision, Scale), found {args.Length}.");
+        }
+
+      case "INT":
+      case "INTEGER":
+        EnsureNoArgs();
+        return new DataTypeInfo(PrimitiveDataType.Int);
+
+      case "BIGINT":
+        EnsureNoArgs();
+        return new DataTypeInfo(PrimitiveDataType.BigInt);
+
+      case "BOOLEAN":
+      case "BOOL":
+        EnsureNoArgs();
+        return new DataTypeInfo(PrimitiveDataType.Boolean);
+
+      case "DATETIME":
+        EnsureNoArgs();
+        return new DataTypeInfo(PrimitiveDataType.DateTime);
+
+      case "FLOAT":
+        EnsureNoArgs();
+        return new DataTypeInfo(PrimitiveDataType.Float);
+
+      default:
+        throw new NotSupportedException($"Unknown or unsupported data type: '{typeName}'.");
+    }
+  }
+
+  /// <summary>
   /// Determines whether the specified object is equal to the current object.
   /// </summary>
   public override bool Equals(object? obj)
