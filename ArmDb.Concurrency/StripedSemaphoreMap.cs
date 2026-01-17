@@ -7,6 +7,9 @@ public class StripedSemaphoreMap<TKey>
 
   public StripedSemaphoreMap(int stripeCount)
   {
+    if (stripeCount <= 0)
+      throw new ArgumentOutOfRangeException(nameof(stripeCount));
+
     _stripeCount = stripeCount;
     _semaphores = new SemaphoreSlim[stripeCount];
 
