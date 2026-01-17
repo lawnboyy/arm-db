@@ -24,6 +24,7 @@
     <ProjectReference Include="..\ArmDb.Server\ArmDb.Server.csproj" />
     <ProjectReference Include="..\ArmDb.StorageEngine\ArmDb.StorageEngine.csproj" />
     <ProjectReference Include="..\ArmDb.Common.Abstractions\ArmDb.Common.Abstractions.csproj" />
+    <ProjectReference Include="..\ArmDb.Concurrency\ArmDb.Concurrency.csproj" />
   </ItemGroup>
 
 </Project>

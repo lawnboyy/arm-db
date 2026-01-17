@@ -256,7 +256,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
       _logger.LogTrace($"Thread {threadId} FetchPageAsync: Page {pageId} not in cache. Page must be read and loaded into a free frame...");
 
       // Lock access to the page to avoid multiple threads attempting to load the same page from disk.
-      SemaphoreSlim? pageLoadLock = _pageLoadingLocks.GetOrAdd(pageId, _ => new SemaphoreSlim(1, 1));
+      SemaphoreSlim pageLoadLock = _pageLoadingLocks.GetOrAdd(pageId, _ => new SemaphoreSlim(1, 1));
 
       // Asynchronously wait to acquire the lock to enter the critical section for this page
       _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: Cache miss for PageId {PageId}. Attempting to acquire loading lock.", threadId, pageId);
