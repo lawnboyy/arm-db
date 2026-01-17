@@ -8,7 +8,7 @@ public class StripedSemaphoresTests
   public async Task Indexer_SameKey_ReturnsSameSemaphoreEnforcingMutualExclusion()
   {
     // Arrange
-    var locks = new StripedSemaphores<string>(16);
+    var locks = new StripedSemaphoreMap<string>(16);
     string key = "resource-A";
     int sharedCounter = 0;
     int taskCount = 10;

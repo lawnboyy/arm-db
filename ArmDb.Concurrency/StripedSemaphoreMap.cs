@@ -1,11 +1,11 @@
 ﻿namespace ArmDb.Concurrency;
 
-public class StripedSemaphores<TKey>
+public class StripedSemaphoreMap<TKey>
 {
   private readonly int _stripeCount;
   private readonly SemaphoreSlim[] _semaphores;
 
-  public StripedSemaphores(int stripeCount)
+  public StripedSemaphoreMap(int stripeCount)
   {
     _stripeCount = stripeCount;
     _semaphores = new SemaphoreSlim[stripeCount];
