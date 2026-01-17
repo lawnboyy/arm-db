@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using ArmDb.Concurrency;
 using ArmDb.Storage.Exceptions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -40,10 +41,11 @@ internal sealed class BufferPoolManager : IAsyncDisposable
   private readonly ConcurrentDictionary<PageId, int> _pageTable;
 
   /// <summary>
-  /// A thread-safe dictionary to manage locks on a per page basis. These locks handle multiple
-  /// concurrent attempts to load the same page from disk.
+  /// Special striped locking data structure that will return a semaphore for a given key. The map has
+  /// a fixed number of stripes or buckets to avoid creating a semaphore for every possible page ID. Each
+  /// bucket of keys will share a single semaphore.
   /// </summary>
-  private readonly ConcurrentDictionary<PageId, SemaphoreSlim> _pageLoadingLocks = new();
+  private readonly StripedSemaphoreMap<PageId> _pageLoadingLocks = new(1024);
 
   /// <summary>
   /// A thread-safe queue holding the indices of frames that are currently free and
@@ -256,7 +258,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
       _logger.LogTrace($"Thread {threadId} FetchPageAsync: Page {pageId} not in cache. Page must be read and loaded into a free frame...");
 
       // Lock access to the page to avoid multiple threads attempting to load the same page from disk.
-      SemaphoreSlim pageLoadLock = _pageLoadingLocks.GetOrAdd(pageId, _ => new SemaphoreSlim(1, 1));
+      SemaphoreSlim pageLoadLock = _pageLoadingLocks[pageId];
 
       // Asynchronously wait to acquire the lock to enter the critical section for this page
       _logger.LogTrace("[Thread:{ThreadId}] FetchPageAsync: Cache miss for PageId {PageId}. Attempting to acquire loading lock.", threadId, pageId);

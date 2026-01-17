@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ArmDb.Common.Abstractions\ArmDb.Common.Abstractions.csproj" />
+    <ProjectReference Include="..\ArmDb.Concurrency\ArmDb.Concurrency.csproj" />
   </ItemGroup>
 
   <ItemGroup>
