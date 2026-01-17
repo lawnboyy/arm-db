@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Data;
 using System.Threading.Tasks;
 using ArmDb.Common.Abstractions;
+using ArmDb.Concurrency;
 using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
 using Microsoft.Extensions.Logging;
@@ -16,6 +17,7 @@ internal sealed class StorageEngine : IStorageEngine
   private readonly ILogger<StorageEngine> _logger;
   private readonly ConcurrentDictionary<string, BTree> _tables = new();
   private readonly ConcurrentDictionary<string, TableDefinition> _tableDefinitions = new();
+  private readonly StripedSemaphoreMap<string> _tableCreationLocks = new(1024);
 
   // ID Counters (In a real DB, these would be persisted in a control file or the system tables themselves)
   private int _columnId = 1;
@@ -92,11 +94,6 @@ internal sealed class StorageEngine : IStorageEngine
 
   public async Task CreateTableAsync(int databaseId, string tableName, TableDefinition tableDefIn)
   {
-    // First assign a table ID to this new table...
-    // Make sure our increment operation is thread safe.
-    Interlocked.Increment(ref _nextUserTableId);
-    var tableDef = tableDefIn.WithId(_nextUserTableId);
-
     // Ensure the database exists before we attempt to create the table.
     if (!await DatabaseExists(databaseId))
     {
@@ -109,55 +106,79 @@ internal sealed class StorageEngine : IStorageEngine
       throw new InvalidOperationException($"Table {tableName} already exists.");
     }
 
-    // 2. Instantiate a new B-Tree for this table...
-    var btree = await BTree.CreateAsync(_bpm, tableDef);
-    // Add the B-Tree to the tables lookup...
-    _tables[tableName] = btree;
-    _tableDefinitions[tableName] = tableDef;
+    // Protect access to the critical section where the table ID is incremented and disk space allocated
+    // for the new table.
+    var tableSemaphore = _tableCreationLocks[tableName];
+    await tableSemaphore.WaitAsync();
 
-    // Construct a data row for this table for the system tables table...
-    var tableSchemaRow = new Record(
-        DataValue.CreateInteger(tableDef.TableId),
-        DataValue.CreateInteger(databaseId),
-        DataValue.CreateString(tableName),
-        DataValue.CreateDateTime(DateTime.UtcNow)
-    );
-    var sysTables = _tables[SYS_TABLES_TABLE_NAME];
-    await sysTables.InsertAsync(tableSchemaRow);
-
-    // Insert column information for each column in the sys_columns table...
-    var ordinal = 0;
-    foreach (var columnDef in tableDef.Columns)
+    try
     {
-      var columnSchemaRow = new Record(
-          DataValue.CreateInteger(_columnId++),
-          DataValue.CreateInteger(tableDef.TableId),
-          DataValue.CreateString(columnDef.Name),
-          DataValue.CreateString(columnDef.DataType.ToString()),
-          DataValue.CreateInteger(ordinal++),
-          DataValue.CreateBoolean(columnDef.IsNullable),
-          columnDef.DefaultValueExpression == null
-              ? DataValue.CreateNull(PrimitiveDataType.Varchar)
-              : DataValue.CreateString(columnDef.DefaultValueExpression)
-      );
-      var sysColumns = _tables[SYS_COLUMNS_TABLE_NAME];
-      await sysColumns.InsertAsync(columnSchemaRow);
-    }
+      // If we were waiting on the table lock, then it may have been created by another thread. Therefore,
+      // check our table lookup again and throw if the table already exists.
+      if (_tables.ContainsKey(tableName))
+      {
+        throw new InvalidOperationException($"Table {tableName} already exists.");
+      }
 
-    // 6. Register metadata in sys_constraints
-    foreach (var constraintDef in tableDef.Constraints)
-    {
-      var constraintType = constraintDef is PrimaryKeyConstraint ? nameof(PrimaryKeyConstraint) : nameof(ForeignKeyConstraint);
-      var constraintRow = new Record(
-          DataValue.CreateInteger(_constraintId++),
+      // First assign a table ID to this new table...
+      // Make sure our increment operation is thread safe.
+      Interlocked.Increment(ref _nextUserTableId);
+      var tableDef = tableDefIn.WithId(_nextUserTableId);
+
+      // 2. Instantiate a new B-Tree for this table...
+      var btree = await BTree.CreateAsync(_bpm, tableDef);
+      // Add the B-Tree to the tables lookup...
+      _tables[tableName] = btree;
+      _tableDefinitions[tableName] = tableDef;
+
+      // Construct a data row for this table for the system tables table...
+      var tableSchemaRow = new Record(
           DataValue.CreateInteger(tableDef.TableId),
-          DataValue.CreateString(constraintDef.Name),
-          DataValue.CreateString(constraintType),
-          DataValue.CreateString(GetConstraintDefinitionString(constraintDef)),
+          DataValue.CreateInteger(databaseId),
+          DataValue.CreateString(tableName),
           DataValue.CreateDateTime(DateTime.UtcNow)
       );
-      var sysConstraints = _tables[SYS_CONSTRAINTS_TABLE_NAME];
-      await sysConstraints.InsertAsync(constraintRow);
+      var sysTables = _tables[SYS_TABLES_TABLE_NAME];
+      await sysTables.InsertAsync(tableSchemaRow);
+
+      // Insert column information for each column in the sys_columns table...
+      var ordinal = 0;
+      foreach (var columnDef in tableDef.Columns)
+      {
+        var columnSchemaRow = new Record(
+            DataValue.CreateInteger(_columnId++),
+            DataValue.CreateInteger(tableDef.TableId),
+            DataValue.CreateString(columnDef.Name),
+            DataValue.CreateString(columnDef.DataType.ToString()),
+            DataValue.CreateInteger(ordinal++),
+            DataValue.CreateBoolean(columnDef.IsNullable),
+            columnDef.DefaultValueExpression == null
+                ? DataValue.CreateNull(PrimitiveDataType.Varchar)
+                : DataValue.CreateString(columnDef.DefaultValueExpression)
+        );
+        var sysColumns = _tables[SYS_COLUMNS_TABLE_NAME];
+        await sysColumns.InsertAsync(columnSchemaRow);
+      }
+
+      // 6. Register metadata in sys_constraints
+      foreach (var constraintDef in tableDef.Constraints)
+      {
+        var constraintType = constraintDef is PrimaryKeyConstraint ? nameof(PrimaryKeyConstraint) : nameof(ForeignKeyConstraint);
+        var constraintRow = new Record(
+            DataValue.CreateInteger(_constraintId++),
+            DataValue.CreateInteger(tableDef.TableId),
+            DataValue.CreateString(constraintDef.Name),
+            DataValue.CreateString(constraintType),
+            DataValue.CreateString(GetConstraintDefinitionString(constraintDef)),
+            DataValue.CreateDateTime(DateTime.UtcNow)
+        );
+        var sysConstraints = _tables[SYS_CONSTRAINTS_TABLE_NAME];
+        await sysConstraints.InsertAsync(constraintRow);
+      }
+    }
+    finally
+    {
+      tableSemaphore.Release();
     }
   }
 
