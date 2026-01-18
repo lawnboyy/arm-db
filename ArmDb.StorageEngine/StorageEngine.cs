@@ -565,6 +565,8 @@ internal sealed class StorageEngine : IStorageEngine
     tableDef.AddColumn(dbName);
     tableDef.AddColumn(creationDate);
 
+    // TODO: Add foreign and unique key constraints as well...
+    // https://github.com/lawnboyy/arm-db/issues/3
     tableDef.AddConstraint(new PrimaryKeyConstraint(SYS_DATABASES_TABLE_NAME, new[] { "database_id" }, "PK_sys_databases"));
 
     return tableDef;
@@ -584,6 +586,8 @@ internal sealed class StorageEngine : IStorageEngine
     tableDef.AddColumn(tableNameCol);
     tableDef.AddColumn(createDateCol);
 
+    // TODO: Add foreign and unique key constraints as well...
+    // https://github.com/lawnboyy/arm-db/issues/3
     tableDef.AddConstraint(new PrimaryKeyConstraint(SYS_TABLES_TABLE_NAME, new[] { "table_id" }, "PK_sys_tables"));
 
     return tableDef;
@@ -609,6 +613,8 @@ internal sealed class StorageEngine : IStorageEngine
     tableDef.AddColumn(isNullableCol);
     tableDef.AddColumn(defaultValueExpCol);
 
+    // TODO: Add foreign and unique key constraints as well...
+    // https://github.com/lawnboyy/arm-db/issues/3
     tableDef.AddConstraint(new PrimaryKeyConstraint(SYS_COLUMNS_TABLE_NAME, new[] { "column_id" }, "PK_sys_columns"));
 
     return tableDef;
@@ -632,6 +638,8 @@ internal sealed class StorageEngine : IStorageEngine
     tableDef.AddColumn(def);
     tableDef.AddColumn(creationDate);
 
+    // TODO: Add foreign and unique key constraints as well...
+    // https://github.com/lawnboyy/arm-db/issues/3
     tableDef.AddConstraint(new PrimaryKeyConstraint(SYS_CONSTRAINTS_TABLE_NAME, new[] { "constraint_id" }, "PK_sys_constraints"));
 
     return tableDef;
