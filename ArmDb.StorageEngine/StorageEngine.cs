@@ -593,6 +593,16 @@ internal sealed class StorageEngine : IStorageEngine
     // TODO: Add foreign and unique key constraints as well...
     // https://github.com/lawnboyy/arm-db/issues/3
     tableDef.AddConstraint(new PrimaryKeyConstraint(SYS_TABLES_TABLE_NAME, new[] { "table_id" }, "PK_sys_tables"));
+    tableDef.AddConstraint(new ForeignKeyConstraint(
+      SYS_TABLES_TABLE_NAME,
+      ["database_id"],
+      "sys_databases",
+      ["database_id"],
+      "FK_sys_tables_database_id",
+      ReferentialAction.NoAction,
+      ReferentialAction.Cascade));
+
+    tableDef.AddConstraint(new UniqueKeyConstraint(SYS_TABLES_TABLE_NAME, ["database_id", "table_name"], "UQ_sys_tables_db_name"));
 
     return tableDef;
   }

@@ -427,8 +427,8 @@ public class StorageEngineTests : IDisposable
     VerifyConstraint(allConstraints, sysDatabasesId, "UQ_sys_databases_name", "Unique");
 
     VerifyConstraint(allConstraints, sysTablesId, "PK_sys_tables", "PrimaryKey");
-    // VerifyConstraint(allConstraints, sysTablesId, "FK_sys_tables_database_id", "ForeignKey");
-    // VerifyConstraint(allConstraints, sysTablesId, "UQ_sys_tables_db_name", "Unique");
+    VerifyConstraint(allConstraints, sysTablesId, "FK_sys_tables_database_id", "ForeignKey");
+    VerifyConstraint(allConstraints, sysTablesId, "UQ_sys_tables_db_name", "Unique");
 
     VerifyConstraint(allConstraints, sysColumnsId, "PK_sys_columns", "PrimaryKey");
     // VerifyConstraint(allConstraints, sysColumnsId, "FK_sys_columns_table_id", "ForeignKey");
