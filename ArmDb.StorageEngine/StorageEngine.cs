@@ -596,7 +596,7 @@ internal sealed class StorageEngine : IStorageEngine
     var columnIdCol = new ColumnDefinition("column_id", new DataTypeInfo(PrimitiveDataType.Int), false);
     var tableIdCol = new ColumnDefinition("table_id", new DataTypeInfo(PrimitiveDataType.Int), false);
     var colNameCol = new ColumnDefinition("column_name", new DataTypeInfo(PrimitiveDataType.Varchar, 128), false);
-    var dataTypeInfoCol = new ColumnDefinition("data_type", new DataTypeInfo(PrimitiveDataType.Varchar, 512), false);
+    var dataTypeInfoCol = new ColumnDefinition("data_type_info", new DataTypeInfo(PrimitiveDataType.Varchar, 512), false);
     var ordinalPosCol = new ColumnDefinition("ordinal_position", new DataTypeInfo(PrimitiveDataType.Int), false);
     var isNullableCol = new ColumnDefinition("is_nullable", new DataTypeInfo(PrimitiveDataType.Boolean), false);
     var defaultValueExpCol = new ColumnDefinition("default_value_expression", new DataTypeInfo(PrimitiveDataType.Varchar, 1024));
