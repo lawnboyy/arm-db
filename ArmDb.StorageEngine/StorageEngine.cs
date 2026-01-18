@@ -443,7 +443,12 @@ internal sealed class StorageEngine : IStorageEngine
       // C. Insert into sys_constraints
       foreach (var constraintDef in tableDef.Constraints)
       {
-        var constraintType = constraintDef is PrimaryKeyConstraint ? nameof(PrimaryKeyConstraint) : nameof(ForeignKeyConstraint);
+        var constraintType = constraintDef is PrimaryKeyConstraint
+          ? nameof(PrimaryKeyConstraint)
+            : constraintDef is ForeignKeyConstraint
+              ? nameof(ForeignKeyConstraint)
+              : nameof(UniqueKeyConstraint);
+
         var constraintRow = new Record(
             DataValue.CreateInteger(_constraintId++),
             DataValue.CreateInteger(tableDef.TableId),
@@ -565,9 +570,8 @@ internal sealed class StorageEngine : IStorageEngine
     tableDef.AddColumn(dbName);
     tableDef.AddColumn(creationDate);
 
-    // TODO: Add foreign and unique key constraints as well...
-    // https://github.com/lawnboyy/arm-db/issues/3
-    tableDef.AddConstraint(new PrimaryKeyConstraint(SYS_DATABASES_TABLE_NAME, new[] { "database_id" }, "PK_sys_databases"));
+    tableDef.AddConstraint(new PrimaryKeyConstraint(SYS_DATABASES_TABLE_NAME, ["database_id"], "PK_sys_databases"));
+    tableDef.AddConstraint(new UniqueKeyConstraint(SYS_DATABASES_TABLE_NAME, ["database_name"], "UQ_sys_databases_name"));
 
     return tableDef;
   }

@@ -150,10 +150,10 @@ public sealed class TableDefinition
         //    We *could* attempt it here if DatabaseSchema reference was passed, but deferring is cleaner.
         break;
 
-        //case UniqueConstraint uq: // Assuming UniqueConstraint exists (similar structure to PK)
+      case UniqueKeyConstraint uq: // Assuming UniqueConstraint exists (similar structure to PK)
         // 1. Validate Unique columns exist in THIS table
-        // var uqColumns = uq.GetColumns(this).ToList(); // Assumes UniqueConstraint has GetColumns similar to PK
-        //break;
+        var uqColumns = uq.GetColumns(this).ToList(); // Assumes UniqueConstraint has GetColumns similar to PK
+        break;
 
         //case CheckConstraint ck: // Assuming CheckConstraint exists
         // 1. Basic validation? Maybe check if expression is empty?

@@ -347,7 +347,7 @@ public class StorageEngineTests : IDisposable
 
     // Verify columns for system tables also exist (proving complete bootstrap)
     Assert.Contains(sysColumnsRows, r => r.Values[2].ToString() == "table_name"); // from sys_tables
-    Assert.Contains(sysColumnsRows, r => r.Values[2].ToString() == "data_type");  // from sys_columns (actually defined as 'data_type' in your latest code)
+    Assert.Contains(sysColumnsRows, r => r.Values[2].ToString() == "data_type_info");  // from sys_columns (actually defined as 'data_type' in your latest code)
   }
 
   [Fact]
@@ -424,7 +424,7 @@ public class StorageEngineTests : IDisposable
     var allConstraints = await ScanAllAsync(engine, StorageEngine.SYS_CONSTRAINTS_TABLE_NAME);
 
     VerifyConstraint(allConstraints, sysDatabasesId, "PK_sys_databases", "PrimaryKey");
-    // VerifyConstraint(allConstraints, sysDatabasesId, "UQ_sys_databases_name", "Unique");
+    VerifyConstraint(allConstraints, sysDatabasesId, "UQ_sys_databases_name", "Unique");
 
     VerifyConstraint(allConstraints, sysTablesId, "PK_sys_tables", "PrimaryKey");
     // VerifyConstraint(allConstraints, sysTablesId, "FK_sys_tables_database_id", "ForeignKey");
