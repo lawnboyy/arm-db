@@ -17,6 +17,10 @@ internal sealed class StorageEngine : IStorageEngine
   private readonly ILogger<StorageEngine> _logger;
   private readonly ConcurrentDictionary<string, BTree> _tables = new();
   private readonly ConcurrentDictionary<string, TableDefinition> _tableDefinitions = new();
+
+  // TODO: Implement latch crabbing in the B-Tree should eliminate the need for course grained
+  // table locking.
+  // https://github.com/lawnboyy/arm-db/issues/1
   private readonly StripedSemaphoreMap<string> _tableLocks = new(1024);
 
   // ID Counters (In a real DB, these would be persisted in a control file or the system tables themselves)
@@ -173,6 +177,7 @@ internal sealed class StorageEngine : IStorageEngine
       }
 
       // TODO: Now add the constraints...
+      // https://github.com/lawnboyy/arm-db/issues/2
       // var constraints = await GetConstraints(tableId);
       // foreach (var constraint in constraints)
       // {
@@ -283,6 +288,7 @@ internal sealed class StorageEngine : IStorageEngine
   }
 
   // TODO: Implement this method to hydrate constraints from sys_constraints table...
+  // https://github.com/lawnboyy/arm-db/issues/2
   // private async Task<IReadOnlyList<Constraint>> GetConstraints(TableDefinition tableDef)
   // {
   //   // Look up the columns for this table...
@@ -464,6 +470,7 @@ internal sealed class StorageEngine : IStorageEngine
     var sysTables = _tables[SYS_TABLES_TABLE_NAME];
 
     // TODO: Implement proper page latching in the B-Tree for better performance. For now we'll lock the table.
+    // https://github.com/lawnboyy/arm-db/issues/1
     // Lock the sys_tables for the insertion.
     var sysTablesLock = _tableLocks[SYS_TABLES_TABLE_NAME];
     await sysTablesLock.WaitAsync();
@@ -495,6 +502,7 @@ internal sealed class StorageEngine : IStorageEngine
       var sysColumns = _tables[SYS_COLUMNS_TABLE_NAME];
 
       // TODO: Implement proper page latching in the B-Tree for better performance. For now we'll lock the table for inserts.
+      // https://github.com/lawnboyy/arm-db/issues/1
       await sysColumnsLock.WaitAsync();
       try
       {
@@ -522,6 +530,7 @@ internal sealed class StorageEngine : IStorageEngine
       var sysConstraints = _tables[SYS_CONSTRAINTS_TABLE_NAME];
 
       // TODO: Implement proper page latching in the B-Tree for better performance. For now we'll lock the table for inserts.
+      // https://github.com/lawnboyy/arm-db/issues/1
       await sysConstraintsLock.WaitAsync();
       try
       {
