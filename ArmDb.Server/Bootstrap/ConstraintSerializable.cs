@@ -45,7 +45,7 @@ internal sealed class UniqueConstraintSerializable : ConstraintSerializableBase
   {
     if (ColumnNames == null || !ColumnNames.Any())
       throw new InvalidOperationException($"Deserialized unique constraint serializable object '{Name ?? "(unnamed)"}' is missing column names.");
-    return new UniqueConstraint(tableName, ColumnNames, Name);
+    return new UniqueKeyConstraint(tableName, ColumnNames, Name);
   }
 }
 

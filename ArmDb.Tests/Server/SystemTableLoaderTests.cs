@@ -259,7 +259,7 @@ public class SystemTableLoaderTests
     Assert.Equal(ReferentialAction.Cascade, fk.OnDeleteAction);
 
     // Check Unique Constraint
-    var uq = sysTablesDef.Constraints.OfType<UniqueConstraint>().FirstOrDefault(c => c.Name == "UQ_sys_tables_db_name");
+    var uq = sysTablesDef.Constraints.OfType<UniqueKeyConstraint>().FirstOrDefault(c => c.Name == "UQ_sys_tables_db_name");
     Assert.NotNull(uq);
     Assert.Equal(2, uq.ColumnNames.Count);
     Assert.Equal("database_id", uq.ColumnNames[0]);

@@ -9,7 +9,7 @@ namespace ArmDb.SchemaDefinition; // File-scoped namespace
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "ConstraintType")] // Tells System.Text.Json to use this property name from JSON to decide the type
 [JsonDerivedType(typeof(PrimaryKeyConstraint), typeDiscriminator: "PrimaryKey")] // Maps "PrimaryKey" value to PrimaryKeyConstraint class
 [JsonDerivedType(typeof(ForeignKeyConstraint), typeDiscriminator: "ForeignKey")] // Maps "ForeignKey" value to ForeignKeyConstraint class
-[JsonDerivedType(typeof(UniqueConstraint), typeDiscriminator: "Unique")]       // Maps "Unique" value to UniqueConstraint class
+[JsonDerivedType(typeof(UniqueKeyConstraint), typeDiscriminator: "Unique")]       // Maps "Unique" value to UniqueConstraint class
 public abstract class Constraint
 {
   /// <summary>

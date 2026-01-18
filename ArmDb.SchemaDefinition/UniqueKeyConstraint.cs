@@ -6,7 +6,7 @@ namespace ArmDb.SchemaDefinition; // File-scoped namespace
 /// Standard SQL behavior typically allows multiple rows where one or more columns in the constraint are NULL.
 /// Instances are immutable after creation.
 /// </summary>
-public sealed class UniqueConstraint : Constraint
+public sealed class UniqueKeyConstraint : Constraint
 {
   /// <summary>
   /// Gets the ordered list of column names participating in the unique constraint.
@@ -16,14 +16,14 @@ public sealed class UniqueConstraint : Constraint
   public IReadOnlyList<string> ColumnNames { get; init; }
 
   /// <summary>
-  /// Initializes a new instance of the <see cref="UniqueConstraint"/> class.
+  /// Initializes a new instance of the <see cref="UniqueKeyConstraint"/> class.
   /// </summary>
   /// <param name="tableName">The name of the table this constraint belongs to (used for default naming and context). Must not be null or whitespace.</param>
   /// <param name="columnNames">The names of the columns forming the unique key. Must not be null or empty, cannot contain null/whitespace entries, and column names must be unique (case-insensitive).</param>
   /// <param name="name">Optional name for the constraint. If null/whitespace, a default name is generated (e.g., UQ_TableName_Suffix).</param>
   /// <exception cref="ArgumentNullException">Thrown if columnNames is null.</exception>
   /// <exception cref="ArgumentException">Thrown if tableName is null or whitespace, or if columnNames is empty, contains null/whitespace entries, or contains duplicate names.</exception>
-  public UniqueConstraint(string tableName, IEnumerable<string> columnNames, string? name = null)
+  public UniqueKeyConstraint(string tableName, IEnumerable<string> columnNames, string? name = null)
       : base(name, "UQ", !string.IsNullOrWhiteSpace(tableName) ? tableName : throw new ArgumentException("Table name cannot be null or whitespace.", nameof(tableName))) // Use "UQ" prefix
   {
     ArgumentNullException.ThrowIfNull(columnNames);
