@@ -84,4 +84,71 @@ public class StorageEngineConcurrencyTests
     // Clean up
     await engine.DisposeAsync();
   }
+
+  [Fact]
+  public async Task CreateTableAsync_ConcurrentDifferentTables_AllocatesIndependently()
+  {
+    // Arrange
+    var mockFileSystem = new BpmMockFileSystem();
+    mockFileSystem.EnsureDirectoryExists(_baseTestDir);
+
+    var diskManager = new DiskManager(mockFileSystem, NullLogger<DiskManager>.Instance, _baseTestDir);
+    var bpmOptions = new BufferPoolManagerOptions { PoolSizeInPages = 50 };
+    var bpm = new BufferPoolManager(Options.Create(bpmOptions), diskManager, NullLogger<BufferPoolManager>.Instance);
+
+    var engine = await StorageEngine.CreateStorageEngineAsync(bpm, NullLogger<StorageEngine>.Instance);
+
+    string dbName = "MultiTableDB";
+    int dbId = await engine.CreateDatabaseAsync(dbName);
+
+    var tableNames = new[] { "TableA", "TableB", "TableC", "TableD" };
+
+    // Act
+    // Launch tasks to create tables concurrently. 
+    // This validates that the Storage Engine handles multiple distinct requests simultaneously
+    // without internal state corruption or ID collisions (Safety).
+    // Note: Strict verification that these keys map to different locks (Independent Locking)
+    // is covered by the StripedSemaphoreMapTests unit tests.
+    var tasks = tableNames.Select(name => Task.Run(async () =>
+    {
+      var tableDef = new TableDefinition(name);
+      tableDef.AddColumn(new ColumnDefinition("Id", new DataTypeInfo(PrimitiveDataType.Int), false));
+      tableDef.AddConstraint(new PrimaryKeyConstraint($"PK_{name}", ["Id"]));
+
+      await engine.CreateTableAsync(dbId, name, tableDef);
+    })).ToList();
+
+    await Task.WhenAll(tasks);
+
+    // Assert
+    // 1. Scan sys_tables to get all created table records
+    var sysTablesRows = new List<Record>();
+    await foreach (var row in engine.ScanAsync(StorageEngine.SYS_TABLES_TABLE_NAME))
+    {
+      sysTablesRows.Add(row);
+    }
+
+    // 2. Verify each table has a unique ID and a corresponding file on disk
+    foreach (var name in tableNames)
+    {
+      var tableRecord = sysTablesRows.FirstOrDefault(r => r.Values[2].ToString() == name);
+      Assert.NotNull(tableRecord); // Metadata must exist
+
+      int tableId = tableRecord.Values[0].GetAs<int>();
+
+      // Verify file creation
+      string expectedPath = Path.GetFullPath(Path.Combine(_baseTestDir, $"{tableId}.tbl"));
+      Assert.True(mockFileSystem.FileExists(expectedPath), $"File for {name} (ID: {tableId}) was not created.");
+    }
+
+    // 3. Verify IDs are unique (sanity check)
+    var createdIds = sysTablesRows
+        .Where(r => tableNames.Contains(r.Values[2].ToString()))
+        .Select(r => r.Values[0].GetAs<int>())
+        .ToList();
+
+    Assert.Equal(tableNames.Length, createdIds.Distinct().Count());
+
+    await engine.DisposeAsync();
+  }
 }

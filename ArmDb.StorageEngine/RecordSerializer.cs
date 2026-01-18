@@ -251,6 +251,10 @@ internal static class RecordSerializer
     // 1 byte for every 8 columns, which gives us 1 bit per column.
     var nullBitmapSize = (columnCount + 7) / 8;
     // Grab the null bitmap...
+    if (recordData.Length == 0)
+    {
+      throw new ArgumentOutOfRangeException("What the fuck?");
+    }
     var nullBitmap = recordData.Slice(0, nullBitmapSize);
 
     // We'll use 2 pointers, one for fixed size data and one for variable size data...

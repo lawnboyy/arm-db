@@ -167,6 +167,33 @@ public class StripedSemaphoresTests
   }
 
   [Fact]
+  public void Tables_with_different_names_dont_collide()
+  {
+    var locks = new StripedSemaphoreMap<string>(1024);
+    HashSet<SemaphoreSlim> lockSet =
+    [
+      locks["sys_databases"],
+      locks["sys_tables"],
+      locks["sys_columns"],
+      locks["sys_contraints"],
+      locks["TableA"],
+      locks["TableB"],
+      locks["TableC"],
+      locks["TableE"],
+    ];
+
+    Assert.Equal(8, lockSet.Count);
+
+    HashSet<SemaphoreSlim> lockSet2 =
+    [
+      locks["sys_databases"],
+      locks["sys_databases"],
+    ];
+
+    Assert.Single(lockSet2);
+  }
+
+  [Fact]
   public void Constructor_InvalidStripeCount_ThrowsArgumentOutOfRangeException()
   {
     Assert.Throws<ArgumentOutOfRangeException>(() => new StripedSemaphoreMap<string>(0));

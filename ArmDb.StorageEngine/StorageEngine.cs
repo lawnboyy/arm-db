@@ -17,7 +17,7 @@ internal sealed class StorageEngine : IStorageEngine
   private readonly ILogger<StorageEngine> _logger;
   private readonly ConcurrentDictionary<string, BTree> _tables = new();
   private readonly ConcurrentDictionary<string, TableDefinition> _tableDefinitions = new();
-  private readonly StripedSemaphoreMap<string> _tableCreationLocks = new(1024);
+  private readonly StripedSemaphoreMap<string> _tableLocks = new(1024);
 
   // ID Counters (In a real DB, these would be persisted in a control file or the system tables themselves)
   private int _columnId = 1;
@@ -108,7 +108,7 @@ internal sealed class StorageEngine : IStorageEngine
 
     // Protect access to the critical section where the table ID is incremented and disk space allocated
     // for the new table.
-    var tableSemaphore = _tableCreationLocks[tableName];
+    var tableSemaphore = _tableLocks[tableName];
     await tableSemaphore.WaitAsync();
 
     try
@@ -131,50 +131,8 @@ internal sealed class StorageEngine : IStorageEngine
       _tables[tableName] = btree;
       _tableDefinitions[tableName] = tableDef;
 
-      // Construct a data row for this table for the system tables table...
-      var tableSchemaRow = new Record(
-          DataValue.CreateInteger(tableDef.TableId),
-          DataValue.CreateInteger(databaseId),
-          DataValue.CreateString(tableName),
-          DataValue.CreateDateTime(DateTime.UtcNow)
-      );
-      var sysTables = _tables[SYS_TABLES_TABLE_NAME];
-      await sysTables.InsertAsync(tableSchemaRow);
-
-      // Insert column information for each column in the sys_columns table...
-      var ordinal = 0;
-      foreach (var columnDef in tableDef.Columns)
-      {
-        var columnSchemaRow = new Record(
-            DataValue.CreateInteger(_columnId++),
-            DataValue.CreateInteger(tableDef.TableId),
-            DataValue.CreateString(columnDef.Name),
-            DataValue.CreateString(columnDef.DataType.ToString()),
-            DataValue.CreateInteger(ordinal++),
-            DataValue.CreateBoolean(columnDef.IsNullable),
-            columnDef.DefaultValueExpression == null
-                ? DataValue.CreateNull(PrimitiveDataType.Varchar)
-                : DataValue.CreateString(columnDef.DefaultValueExpression)
-        );
-        var sysColumns = _tables[SYS_COLUMNS_TABLE_NAME];
-        await sysColumns.InsertAsync(columnSchemaRow);
-      }
-
-      // 6. Register metadata in sys_constraints
-      foreach (var constraintDef in tableDef.Constraints)
-      {
-        var constraintType = constraintDef is PrimaryKeyConstraint ? nameof(PrimaryKeyConstraint) : nameof(ForeignKeyConstraint);
-        var constraintRow = new Record(
-            DataValue.CreateInteger(_constraintId++),
-            DataValue.CreateInteger(tableDef.TableId),
-            DataValue.CreateString(constraintDef.Name),
-            DataValue.CreateString(constraintType),
-            DataValue.CreateString(GetConstraintDefinitionString(constraintDef)),
-            DataValue.CreateDateTime(DateTime.UtcNow)
-        );
-        var sysConstraints = _tables[SYS_CONSTRAINTS_TABLE_NAME];
-        await sysConstraints.InsertAsync(constraintRow);
-      }
+      // Now we need to insert the user table metadata into the system database.      
+      await AddUserTableToSystemDatabaseAsync(tableDef, tableName, databaseId);
     }
     finally
     {
@@ -490,6 +448,88 @@ internal sealed class StorageEngine : IStorageEngine
         );
         var sysConstraints = _tables[SYS_CONSTRAINTS_TABLE_NAME];
         await sysConstraints.InsertAsync(constraintRow);
+      }
+    }
+  }
+
+  private async Task AddUserTableToSystemDatabaseAsync(TableDefinition tableDef, string tableName, int databaseId)
+  {
+    // Construct a data row for this table for the system tables table...
+    var tableSchemaRow = new Record(
+        DataValue.CreateInteger(tableDef.TableId),
+        DataValue.CreateInteger(databaseId),
+        DataValue.CreateString(tableName),
+        DataValue.CreateDateTime(DateTime.UtcNow)
+    );
+    var sysTables = _tables[SYS_TABLES_TABLE_NAME];
+
+    // TODO: Implement proper page latching in the B-Tree for better performance. For now we'll lock the table.
+    // Lock the sys_tables for the insertion.
+    var sysTablesLock = _tableLocks[SYS_TABLES_TABLE_NAME];
+    await sysTablesLock.WaitAsync();
+    try
+    {
+      await sysTables.InsertAsync(tableSchemaRow);
+    }
+    finally
+    {
+      sysTablesLock.Release();
+    }
+
+    // Insert column information for each column in the sys_columns table...
+    var ordinal = 0;
+    var sysColumnsLock = _tableLocks[SYS_COLUMNS_TABLE_NAME];
+    foreach (var columnDef in tableDef.Columns)
+    {
+      var columnSchemaRow = new Record(
+          DataValue.CreateInteger(_columnId++),
+          DataValue.CreateInteger(tableDef.TableId),
+          DataValue.CreateString(columnDef.Name),
+          DataValue.CreateString(columnDef.DataType.ToString()),
+          DataValue.CreateInteger(ordinal++),
+          DataValue.CreateBoolean(columnDef.IsNullable),
+          columnDef.DefaultValueExpression == null
+              ? DataValue.CreateNull(PrimitiveDataType.Varchar)
+              : DataValue.CreateString(columnDef.DefaultValueExpression)
+      );
+      var sysColumns = _tables[SYS_COLUMNS_TABLE_NAME];
+
+      // TODO: Implement proper page latching in the B-Tree for better performance. For now we'll lock the table for inserts.
+      await sysColumnsLock.WaitAsync();
+      try
+      {
+        await sysColumns.InsertAsync(columnSchemaRow);
+      }
+      finally
+      {
+        sysColumnsLock.Release();
+      }
+    }
+
+    // 6. Register metadata in sys_constraints
+    var sysConstraintsLock = _tableLocks[SYS_CONSTRAINTS_TABLE_NAME];
+    foreach (var constraintDef in tableDef.Constraints)
+    {
+      var constraintType = constraintDef is PrimaryKeyConstraint ? nameof(PrimaryKeyConstraint) : nameof(ForeignKeyConstraint);
+      var constraintRow = new Record(
+          DataValue.CreateInteger(_constraintId++),
+          DataValue.CreateInteger(tableDef.TableId),
+          DataValue.CreateString(constraintDef.Name),
+          DataValue.CreateString(constraintType),
+          DataValue.CreateString(GetConstraintDefinitionString(constraintDef)),
+          DataValue.CreateDateTime(DateTime.UtcNow)
+      );
+      var sysConstraints = _tables[SYS_CONSTRAINTS_TABLE_NAME];
+
+      // TODO: Implement proper page latching in the B-Tree for better performance. For now we'll lock the table for inserts.
+      await sysConstraintsLock.WaitAsync();
+      try
+      {
+        await sysConstraints.InsertAsync(constraintRow);
+      }
+      finally
+      {
+        sysConstraintsLock.Release();
       }
     }
   }
