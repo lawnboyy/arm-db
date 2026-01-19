@@ -627,9 +627,19 @@ internal sealed class StorageEngine : IStorageEngine
     tableDef.AddColumn(isNullableCol);
     tableDef.AddColumn(defaultValueExpCol);
 
-    // TODO: Add foreign and unique key constraints as well...
-    // https://github.com/lawnboyy/arm-db/issues/3
+    // Add foreign and unique key constraints
     tableDef.AddConstraint(new PrimaryKeyConstraint(SYS_COLUMNS_TABLE_NAME, new[] { "column_id" }, "PK_sys_columns"));
+    tableDef.AddConstraint(new ForeignKeyConstraint(
+      SYS_COLUMNS_TABLE_NAME,
+       ["table_id"],
+      "sys_tables",
+      ["table_id"],
+      "FK_sys_columns_table_id",
+      ReferentialAction.NoAction,
+      ReferentialAction.Cascade));
+
+    tableDef.AddConstraint(new UniqueKeyConstraint(SYS_COLUMNS_TABLE_NAME, ["table_id", "column_name"], "UQ_sys_columns_table_col"));
+    tableDef.AddConstraint(new UniqueKeyConstraint(SYS_COLUMNS_TABLE_NAME, ["table_id", "ordinal_position"], "UQ_sys_columns_table_ord"));
 
     return tableDef;
   }

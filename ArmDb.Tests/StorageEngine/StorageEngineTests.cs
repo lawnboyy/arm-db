@@ -375,23 +375,23 @@ public class StorageEngineTests : IDisposable
       return row.Values[0].GetAs<int>();
     }
 
-    var sysDatabasesId = GetTableId("sys_databases");
-    var sysTablesId = GetTableId("sys_tables");
-    var sysColumnsId = GetTableId("sys_columns");
-    var sysConstraintsId = GetTableId("sys_constraints");
+    var sysDatabasesTableName = GetTableId("sys_databases");
+    var sysTablesTableName = GetTableId("sys_tables");
+    var sysColumnsTableName = GetTableId("sys_columns");
+    var sysConstraintsTableName = GetTableId("sys_constraints");
 
     // 4. Assert: Verify Column Definitions in 'sys_columns' for each table
     var allColumns = await ScanAllAsync(engine, StorageEngine.SYS_COLUMNS_TABLE_NAME);
 
     // Define expected schemas based on your JSON files
-    VerifySchema(allColumns, sysDatabasesId, new[]
+    VerifySchema(allColumns, sysDatabasesTableName, new[]
     {
             ("database_id", "Int"),
             ("database_name", "Varchar"),
             ("creation_date", "DateTime")
         });
 
-    VerifySchema(allColumns, sysTablesId, new[]
+    VerifySchema(allColumns, sysTablesTableName, new[]
     {
             ("table_id", "Int"),
             ("database_id", "Int"),
@@ -399,7 +399,7 @@ public class StorageEngineTests : IDisposable
             ("creation_date", "DateTime")
         });
 
-    VerifySchema(allColumns, sysColumnsId, new[]
+    VerifySchema(allColumns, sysColumnsTableName, new[]
     {
             ("column_id", "Int"),
             ("table_id", "Int"),
@@ -410,7 +410,7 @@ public class StorageEngineTests : IDisposable
             ("default_value_expression", "Varchar")
         });
 
-    VerifySchema(allColumns, sysConstraintsId, new[]
+    VerifySchema(allColumns, sysConstraintsTableName, new[]
     {
             ("constraint_id", "Int"),
             ("table_id", "Int"),
@@ -423,17 +423,19 @@ public class StorageEngineTests : IDisposable
     // 5. Assert: Verify Constraints in 'sys_constraints'
     var allConstraints = await ScanAllAsync(engine, StorageEngine.SYS_CONSTRAINTS_TABLE_NAME);
 
-    VerifyConstraint(allConstraints, sysDatabasesId, "PK_sys_databases", "PrimaryKey");
-    VerifyConstraint(allConstraints, sysDatabasesId, "UQ_sys_databases_name", "Unique");
+    VerifyConstraint(allConstraints, sysDatabasesTableName, "PK_sys_databases", "PrimaryKey");
+    VerifyConstraint(allConstraints, sysDatabasesTableName, "UQ_sys_databases_name", "Unique");
 
-    VerifyConstraint(allConstraints, sysTablesId, "PK_sys_tables", "PrimaryKey");
-    VerifyConstraint(allConstraints, sysTablesId, "FK_sys_tables_database_id", "ForeignKey");
-    VerifyConstraint(allConstraints, sysTablesId, "UQ_sys_tables_db_name", "Unique");
+    VerifyConstraint(allConstraints, sysTablesTableName, "PK_sys_tables", "PrimaryKey");
+    VerifyConstraint(allConstraints, sysTablesTableName, "FK_sys_tables_database_id", "ForeignKey");
+    VerifyConstraint(allConstraints, sysTablesTableName, "UQ_sys_tables_db_name", "Unique");
 
-    VerifyConstraint(allConstraints, sysColumnsId, "PK_sys_columns", "PrimaryKey");
-    // VerifyConstraint(allConstraints, sysColumnsId, "FK_sys_columns_table_id", "ForeignKey");
+    VerifyConstraint(allConstraints, sysColumnsTableName, "PK_sys_columns", "PrimaryKey");
+    VerifyConstraint(allConstraints, sysColumnsTableName, "FK_sys_columns_table_id", "ForeignKey");
+    VerifyConstraint(allConstraints, sysColumnsTableName, "UQ_sys_columns_table_col", "Unique");
+    VerifyConstraint(allConstraints, sysColumnsTableName, "UQ_sys_columns_table_ord", "Unique");
 
-    VerifyConstraint(allConstraints, sysConstraintsId, "PK_sys_constraints", "PrimaryKey");
+    VerifyConstraint(allConstraints, sysConstraintsTableName, "PK_sys_constraints", "PrimaryKey");
     // VerifyConstraint(allConstraints, sysConstraintsId, "FK_sys_constraints_table_id", "ForeignKey");
   }
 
