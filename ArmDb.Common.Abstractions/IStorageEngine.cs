@@ -52,7 +52,5 @@ namespace ArmDb.Common.Abstractions
     /// <param name="value">The value of the column to scan for.</param>
     /// <returns></returns>
     IAsyncEnumerable<Record> ScanAsync(string tableName, string columnName, DataValue value);
-
-    // Add methods for Read, Update, Delete, Scan, etc. later
   }
 }
