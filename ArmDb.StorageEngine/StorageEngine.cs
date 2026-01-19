@@ -662,9 +662,19 @@ internal sealed class StorageEngine : IStorageEngine
     tableDef.AddColumn(def);
     tableDef.AddColumn(creationDate);
 
-    // TODO: Add foreign and unique key constraints as well...
-    // https://github.com/lawnboyy/arm-db/issues/3
+    // Add foreign and unique key constraints
     tableDef.AddConstraint(new PrimaryKeyConstraint(SYS_CONSTRAINTS_TABLE_NAME, new[] { "constraint_id" }, "PK_sys_constraints"));
+
+    tableDef.AddConstraint(new ForeignKeyConstraint(
+      SYS_CONSTRAINTS_TABLE_NAME,
+       ["table_id"],
+      "sys_tables",
+      ["table_id"],
+      "FK_sys_constraints_table_id",
+      ReferentialAction.NoAction,
+      ReferentialAction.Cascade));
+
+    tableDef.AddConstraint(new UniqueKeyConstraint(SYS_CONSTRAINTS_TABLE_NAME, ["table_id", "constraint_name"], "UQ_sys_constraints_table_name"));
 
     return tableDef;
   }
