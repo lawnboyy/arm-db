@@ -190,9 +190,14 @@ internal sealed class StorageEngine : IStorageEngine
     return null;
   }
 
-  public ValueTask DisposeAsync()
+  public async ValueTask DisposeAsync()
   {
-    return new ValueTask();
+    if (_bpm != null)
+    {
+      // TODO: Other components may eventually need to use the BPM (e.g. Write Ahead Log WAL) and we'll need to let something else (the server?)
+      // manage the BPM lifecycle. But for now it is only used by the StorageEngine, so it can dispose it.
+      await _bpm.DisposeAsync();
+    }
   }
 
   public async Task InsertRowAsync(string tableName, Record row)
@@ -209,6 +214,17 @@ internal sealed class StorageEngine : IStorageEngine
     var btree = _tables[tableName];
 
     await foreach (var row in btree.ScanAsync(min, minInclusive, max, maxInclusive))
+    {
+      yield return row;
+    }
+  }
+
+  public async IAsyncEnumerable<Record> ScanAsync(string tableName, string columnName, DataValue value)
+  {
+    // Lookup the table...
+    var btree = _tables[tableName];
+
+    await foreach (var row in btree.ScanAsync(columnName, value))
     {
       yield return row;
     }

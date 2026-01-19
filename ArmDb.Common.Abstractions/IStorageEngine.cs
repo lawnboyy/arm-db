@@ -44,6 +44,15 @@ namespace ArmDb.Common.Abstractions
     /// <returns></returns>
     IAsyncEnumerable<Record> ScanAsync(string tableName, Key? min = null, bool minInclusive = false, Key? max = null, bool maxInclusive = false);
 
+    /// <summary>
+    /// Scans a table for a given column value and returns the results as an asynchronous enumerator.
+    /// </summary>
+    /// <param name="tableName">The name of the table to scan.</param>
+    /// <param name="columnName">The column name to scan.</param>
+    /// <param name="value">The value of the column to scan for.</param>
+    /// <returns></returns>
+    IAsyncEnumerable<Record> ScanAsync(string tableName, string columnName, DataValue value);
+
     // Add methods for Read, Update, Delete, Scan, etc. later
   }
 }

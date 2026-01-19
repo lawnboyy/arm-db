@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using ArmDb.Common.Abstractions;
 using Record = ArmDb.DataModel.Record;
 using ArmDb.Common.Utils;
+using ArmDb.DataModel;
 
 namespace ArmDb.UnitTests.Storage;
 
@@ -142,7 +143,122 @@ public class StorageEngineGenesisTests : IDisposable
     VerifyConstraint(allConstraints, sysConstraintsTableId, "UQ_sys_constraints_table_name", "Unique");
   }
 
-  // --- Helpers ---
+  [Fact]
+  public async Task Bootstrap_IsIdempotent_OnRestart()
+  {
+    // Arrange
+    // 1. First Boot
+    // Setup BufferPoolManager
+    var bpmOptions = new BufferPoolManagerOptions
+    {
+      PoolSizeInPages = 100,
+    };
+    var bpmLogger = NullLogger<BufferPoolManager>.Instance;
+    var bpm = new BufferPoolManager(Options.Create(bpmOptions), _diskManager, bpmLogger);
+    var engine1 = await StorageEngine.CreateStorageEngineAsync(bpm, NullLogger<StorageEngine>.Instance);
+
+    // Capture the Table ID of sys_tables from the first run
+    int sysTablesId_Run1 = -1;
+    await foreach (var row in engine1.ScanAsync(StorageEngine.SYS_TABLES_TABLE_NAME))
+    {
+      if (row.Values[2].ToString() == StorageEngine.SYS_TABLES_TABLE_NAME)
+      {
+        sysTablesId_Run1 = row.Values[0].GetAs<int>();
+      }
+    }
+    Assert.True(sysTablesId_Run1 > 0, "sys_tables should exist on first boot");
+
+    // Close Engine 1 (simulate shutdown)
+    await engine1.DisposeAsync();
+
+    // Act
+    // 2. Second Boot (Restart)
+    // We create a new engine instance pointing to the SAME Disk/BPM (since we reuse _bpm in constructor)
+    // The Genesis logic should detect existing files and NOT create new ones.
+    // Setup new BufferPoolManager with no cached pages...
+    var bpm2 = new BufferPoolManager(Options.Create(bpmOptions), _diskManager, bpmLogger);
+    var engine2 = await StorageEngine.CreateStorageEngineAsync(bpm2, NullLogger<StorageEngine>.Instance);
+
+    // Assert
+    int sysTablesId_Run2 = -1;
+    int rowCount = 0;
+    await foreach (var row in engine2.ScanAsync(StorageEngine.SYS_TABLES_TABLE_NAME))
+    {
+      rowCount++;
+      if (row.Values[2].ToString() == StorageEngine.SYS_TABLES_TABLE_NAME)
+      {
+        sysTablesId_Run2 = row.Values[0].GetAs<int>();
+      }
+    }
+
+    // The ID should be exactly the same. 
+    // If the bootstrap logic ran again blindly, it might have created a duplicate entry or a new file.
+    Assert.Equal(sysTablesId_Run1, sysTablesId_Run2);
+
+    // Ensure we didn't duplicate the rows in sys_tables
+    // Expecting: sys_databases, sys_tables, sys_columns, sys_constraints (4 system tables)
+    // We verify that the count of system tables is reasonable (>= 4) and not double (>= 8).
+    Assert.True(rowCount >= 4, "Should have at least standard system tables");
+
+    // Strict check: Ensure 'sys_tables' only appears ONCE
+    var sysTablesRows = new List<Record>();
+    await foreach (var row in engine2.ScanAsync(StorageEngine.SYS_TABLES_TABLE_NAME))
+    {
+      if (row.Values[2].ToString() == StorageEngine.SYS_TABLES_TABLE_NAME)
+      {
+        sysTablesRows.Add(row);
+      }
+    }
+    Assert.Single(sysTablesRows);
+
+    await engine2.DisposeAsync();
+  }
+
+  [Fact]
+  public async Task Bootstrap_SystemTables_Are_SelfDescribing()
+  {
+    // The "Holy Grail" of a DBMS: Can I query sys_columns to find the schema of sys_tables?
+    // This proves the catalog is fully integrated and not just "hardcoded" logic.
+
+    // Arrange
+    var engine = await StorageEngine.CreateStorageEngineAsync(_bpm, NullLogger<StorageEngine>.Instance);
+
+    // 1. Find the Table ID of 'sys_tables'
+    List<int> sysTablesIds = [];
+    await foreach (var row in engine.ScanAsync(StorageEngine.SYS_TABLES_TABLE_NAME))
+    {
+      if (row.Values[2].ToString() == StorageEngine.SYS_TABLES_TABLE_NAME)
+      {
+        sysTablesIds.Add(row.Values[0].GetAs<int>());
+      }
+    }
+    Assert.Single(sysTablesIds);
+    var sysTablesId = sysTablesIds.First();
+    Assert.True(sysTablesId >= 0, "Could not find sys_tables ID");
+
+    // Act
+    // 2. Scan 'sys_columns' looking for columns belonging to 'sys_tables'
+    var columns = new List<string>();
+    await foreach (var row in engine.ScanAsync(StorageEngine.SYS_COLUMNS_TABLE_NAME, "table_id", DataValue.CreateInteger(sysTablesId)))
+    {
+      // Schema: [column_id, table_id, column_name, ...]
+      // Index 1 is table_id
+      Assert.True(row.Values[1].GetAs<int>() == sysTablesId);
+      columns.Add(row.Values[2].ToString()); // Add column name
+    }
+
+    // Assert
+    // sys_tables MUST have columns describing itself
+    // Based on sys_tables.json: table_id, database_id, table_name, creation_date
+    Assert.Contains("table_id", columns);
+    Assert.Contains("database_id", columns);
+    Assert.Contains("table_name", columns);
+    Assert.Contains("creation_date", columns);
+
+    Assert.Equal(4, columns.Count);
+
+    await engine.DisposeAsync();
+  }
 
   private async Task<List<Record>> ScanAllAsync(IStorageEngine engine, string tableName)
   {

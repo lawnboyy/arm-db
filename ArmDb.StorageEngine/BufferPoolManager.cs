@@ -651,7 +651,7 @@ internal sealed class BufferPoolManager : IAsyncDisposable
 
   /// <summary>
   /// Asynchronously disposes of resources managed by the BufferPoolManager,
-  /// ensuring all dirty pages are flushed to disk and rented memory is returned.
+  /// ensuring all dirty pages are flushed to disk.
   /// </summary>
   public async ValueTask DisposeAsync()
   {
