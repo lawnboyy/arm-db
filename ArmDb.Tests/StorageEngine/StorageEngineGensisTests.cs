@@ -260,6 +260,60 @@ public class StorageEngineGenesisTests : IDisposable
     await engine.DisposeAsync();
   }
 
+  [Fact]
+  public async Task Bootstrap_SystemData_Maintains_ReferentialIntegrity()
+  {
+    // This test acts as a "Consistency Check" on the bootstrapped catalog.
+    // It ensures that we don't have orphaned columns or tables assigned to non-existent databases.
+
+    // Arrange
+    var engine = await StorageEngine.CreateStorageEngineAsync(_bpm, NullLogger<StorageEngine>.Instance);
+
+    // 1. Get System Database ID
+    int systemDbId = -1;
+    await foreach (var row in engine.ScanAsync(StorageEngine.SYS_DATABASES_TABLE_NAME))
+    {
+      if (row.Values[1].ToString() == "System")
+        systemDbId = row.Values[0].GetAs<int>();
+    }
+    Assert.Equal(0, systemDbId); // System DB is always 0
+
+    // 2. Fetch all System Tables
+    var tableIds = new HashSet<int>();
+    await foreach (var row in engine.ScanAsync(StorageEngine.SYS_TABLES_TABLE_NAME))
+    {
+      // Verify Link: sys_tables.database_id -> sys_databases.database_id
+      int dbId = row.Values[1].GetAs<int>();
+      Assert.Equal(systemDbId, dbId);
+
+      tableIds.Add(row.Values[0].GetAs<int>());
+    }
+    // We expect at least the 4 core system tables
+    Assert.True(tableIds.Count >= 4, "Expected at least 4 system tables.");
+
+    // 3. Check Integrity: sys_columns -> sys_tables
+    await foreach (var row in engine.ScanAsync(StorageEngine.SYS_COLUMNS_TABLE_NAME))
+    {
+      // Schema: [column_id, table_id, ...]
+      int tableId = row.Values[1].GetAs<int>();
+
+      // Verify Link: sys_columns.table_id -> sys_tables.table_id
+      Assert.Contains(tableId, tableIds);
+    }
+
+    // 4. Check Integrity: sys_constraints -> sys_tables
+    await foreach (var row in engine.ScanAsync(StorageEngine.SYS_CONSTRAINTS_TABLE_NAME))
+    {
+      // Schema: [constraint_id, table_id, ...]
+      int tableId = row.Values[1].GetAs<int>();
+
+      // Verify Link: sys_constraints.table_id -> sys_tables.table_id
+      Assert.Contains(tableId, tableIds);
+    }
+
+    await engine.DisposeAsync();
+  }
+
   private async Task<List<Record>> ScanAllAsync(IStorageEngine engine, string tableName)
   {
     var results = new List<Record>();
