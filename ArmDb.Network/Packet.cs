@@ -3,7 +3,7 @@ namespace ArmDb.Network;
 /// <summary>
 /// Abstract base class for all network packets in the ArmDb protocol.
 /// </summary>
-public abstract class Packet
+public abstract record Packet
 {
   /// <summary>
   /// Gets the type of the packet.
