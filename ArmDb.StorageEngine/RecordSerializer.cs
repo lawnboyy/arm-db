@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Data;
 using System.Runtime.InteropServices;
 using System.Text;
+using ArmDb.Common.Utils;
 using ArmDb.DataModel;
 using ArmDb.SchemaDefinition;
 using Record = ArmDb.DataModel.Record;

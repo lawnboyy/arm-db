@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace ArmDb.Storage;
+namespace ArmDb.Common.Utils;
 
 public static class BinaryUtilities
 {
@@ -140,7 +140,7 @@ public static class BinaryUtilities
   /// <param name="source">A read-only span of bytes. Must be at least 16 bytes long.</param>
   /// <returns>The reconstructed decimal value.</returns>
   /// <exception cref="ArgumentException">Thrown if source span is shorter than 16 bytes.</exception>
-  internal static decimal ConvertSpanToDecimal(ReadOnlySpan<byte> source)
+  public static decimal ConvertSpanToDecimal(ReadOnlySpan<byte> source)
   {
     const int decimalSize = sizeof(decimal); // 16 bytes
     if (source.Length < decimalSize)
@@ -160,7 +160,7 @@ public static class BinaryUtilities
   }
 
   [MethodImpl(MethodImplOptions.AggressiveInlining)]
-  internal static bool ToBoolean(ReadOnlySpan<byte> value)
+  public static bool ToBoolean(ReadOnlySpan<byte> value)
   {
     if (value.Length < sizeof(byte))
       ArgumentOutOfRangeException.ThrowIfLessThan(value.Length, sizeof(byte));
