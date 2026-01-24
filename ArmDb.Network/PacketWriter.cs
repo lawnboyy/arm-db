@@ -143,7 +143,7 @@ public class PacketWriter
 
       foreach (var field in packet.Fields)
       {
-        payloadBuffer.Write([.. Encoding.UTF8.GetBytes(field.Name), 0]);
+        payloadBuffer.Write(Encoding.UTF8.GetBytes(field.Name));
         payloadBuffer.WriteByte((byte)field.DataType);
       }
 
