@@ -48,7 +48,7 @@ public enum PacketType : byte
   /// <summary>
   /// 'C': Command Complete. Signals the end of a SQL command execution (e.g., "INSERT 1").
   /// </summary>
-  CommandComplete = (byte)'C',
+  CommandComplete = (byte)'F',
 
   /// <summary>
   /// 'Z': Ready For Query. Signals the server is idle and ready for the next command.

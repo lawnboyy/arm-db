@@ -51,6 +51,22 @@ public static class BinaryUtilities
     return value;
   }
 
+  public static void WriteInt16BigEndian(Span<byte> destination, short value)
+  {
+    const int intSize = sizeof(short);
+    if (intSize > destination.Length)
+    {
+      throw new ArgumentOutOfRangeException(nameof(destination), $"Destination span length ({destination.Length}) is less than the size of an int ({intSize}).");
+    }
+
+    short valueToWrite = value;
+    if (BitConverter.IsLittleEndian)
+    {
+      valueToWrite = ReverseEndianness(valueToWrite); // Calls internal method
+    }
+    MemoryMarshal.Write(destination, in valueToWrite);
+  }
+
   public static void WriteInt32LittleEndian(Span<byte> destination, int value)
   {
     const int intSize = sizeof(int);
@@ -97,6 +113,26 @@ public static class BinaryUtilities
       valueToWrite = ReverseEndianness(valueToWrite); // Calls internal method
     }
     MemoryMarshal.Write(destination, in valueToWrite);
+  }
+
+  /// <summary>
+  /// Reverses the byte order (endianness) of a 32-bit signed integer.
+  /// Marked internal for testing accessibility via InternalsVisibleTo.
+  /// </summary>
+  internal static short ReverseEndianness(short value)
+  {
+    // Work with unsigned integer to guarantee logical right shifts
+    ushort uval = (ushort)value;
+
+    // Isolate and shift each byte to its new position
+    ushort byte1 = (ushort)(uval >> 8);  // Byte 1 -> Byte 0 position 1000 1100 1110 1111 => 0000 0000 1000 1100
+    ushort byte0 = (ushort)(uval << 8);  // Byte 0 -> Byte 1 position 1000 1100 1110 1111 => 1110 1111 0000 0000
+
+    // Combine the rearranged bytes using bitwise OR
+    ushort result = (ushort)(byte0 | byte1); // 1111 1001 0001 0011 1110 1111 1000 1100
+
+    // Cast back to signed int for the final result
+    return (short)result;
   }
 
   /// <summary>
