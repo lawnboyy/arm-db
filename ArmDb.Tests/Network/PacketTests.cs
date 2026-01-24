@@ -311,4 +311,23 @@ public class PacketTests
     string strVal = Encoding.UTF8.GetString(buffer.AsSpan(offset, 5));
     Assert.Equal("Hello", strVal);
   }
+
+  [Fact]
+  public async Task WritePacketAsync_UnknownPacketType_ThrowsArgumentException()
+  {
+    // Arrange
+    var stream = new MemoryStream();
+    var writer = new PacketWriter(stream);
+
+    // Act & Assert
+    // We cast an integer to PacketType to simulate an unknown type
+    var invalidPacket = new FakePacket((PacketType)255);
+    await Assert.ThrowsAsync<NotSupportedException>(() => writer.WritePacketAsync(invalidPacket));
+  }
+
+  // Helper for invalid packet testing
+  private record FakePacket(PacketType Type) : Packet
+  {
+    public override PacketType Type { get; } = Type;
+  }
 }

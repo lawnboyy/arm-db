@@ -60,7 +60,7 @@ public class PacketWriter
         break;
 
       default:
-        throw new ArgumentException($"Unknown packet type: {packet.Type}!");
+        throw new NotSupportedException($"Packet type: {packet.Type} is not supported!");
     }
   }
 
