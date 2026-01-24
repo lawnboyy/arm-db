@@ -21,21 +21,20 @@ public class PacketWriter
       case PacketType.Connect:
         var connectPacket = (ConnectPacket)packet;
 
+        // TODO: Consider using RecyclableMemoryStream package to reduce GC pressure here...
         using (var payloadBuffer = new MemoryStream())
         {
           // Serialize the payload in Big Endian to write to the temporary payload buffer...
           Span<byte> payloadSpan = stackalloc byte[4];
           BinaryPrimitives.WriteInt32BigEndian(payloadSpan, connectPacket.ProtocolVersion);
           payloadBuffer.Write(payloadSpan);
-          // await payloadBuffer.WriteAsync(payloadSpan.ToArray(), ct);
 
-          // Now write the header to the stream...
-          // Write the packet type to the stream...
-          await _stream.WriteAsync([packetType], 0, 1);
-          // Write the total payload length to the stream...
-          Span<byte> lengthBuffer = stackalloc byte[4];
-          BinaryPrimitives.WriteInt32BigEndian(lengthBuffer, (int)payloadBuffer.Length);
-          await _stream.WriteAsync(lengthBuffer.ToArray(), 0, lengthBuffer.Length, ct);
+          // Write the header to the stream...
+          Span<byte> headerBuffer = stackalloc byte[5];
+          headerBuffer[0] = packetType;
+          var lengthSlice = headerBuffer.Slice(1, 4);
+          BinaryPrimitives.WriteInt32BigEndian(lengthSlice, (int)payloadBuffer.Length);
+          await _stream.WriteAsync(headerBuffer.ToArray(), 0, headerBuffer.Length, ct);
 
           // Now write the payload to the stream...
           payloadBuffer.Position = 0;
