@@ -1,15 +1,11 @@
-using System;
 using System.Buffers.Binary;
-using System.IO;
 using System.Text;
-using System.Threading.Tasks;
 using ArmDb.Network;
 using ArmDb.SchemaDefinition;
-using Xunit;
 
 namespace ArmDb.UnitTests.Network;
 
-public class PacketTests
+public class PacketWriterTests
 {
   [Fact]
   public async Task WritePacketAsync_ConnectPacket_WritesCorrectBytes()
