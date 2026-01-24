@@ -67,6 +67,22 @@ public static class BinaryUtilities
     MemoryMarshal.Write(destination, in valueToWrite);
   }
 
+  public static void WriteInt32BigEndian(Span<byte> destination, int value)
+  {
+    const int intSize = sizeof(int);
+    if (intSize > destination.Length)
+    {
+      throw new ArgumentOutOfRangeException(nameof(destination), $"Destination span length ({destination.Length}) is less than the size of an int ({intSize}).");
+    }
+
+    int valueToWrite = value;
+    if (BitConverter.IsLittleEndian)
+    {
+      valueToWrite = ReverseEndianness(valueToWrite); // Calls internal method
+    }
+    MemoryMarshal.Write(destination, in valueToWrite);
+  }
+
   public static void WriteInt64LittleEndian(Span<byte> destination, long value)
   {
     const int longSize = sizeof(long);
@@ -93,13 +109,13 @@ public static class BinaryUtilities
     uint uval = (uint)value;
 
     // Isolate and shift each byte to its new position
-    uint byte3 = (uval >> 24);              // Byte 3 -> Byte 0 position
-    uint byte2 = (uval >> 8) & 0x0000FF00;  // Byte 2 -> Byte 1 position
-    uint byte1 = (uval << 8) & 0x00FF0000;  // Byte 1 -> Byte 2 position
-    uint byte0 = (uval << 24);              // Byte 0 -> Byte 3 position
+    uint byte3 = (uval >> 24);              // Byte 3 -> Byte 0 position 1111 1111 0000 0000 0000 0000 0000 0000 0000 => 0000 0000 0000 0000 0000 0000 0000 1111 1111
+    uint byte2 = (uval >> 8) & 0x0000FF00;  // Byte 2 -> Byte 1 position 1111 1111 0000 0000 0000 0000 0000 0000 0000 => 0000 0000 0000 0000 0000 0000 0000 0000 0000
+    uint byte1 = (uval << 8) & 0x00FF0000;  // Byte 1 -> Byte 2 position 1111 1111 0000 0000 0000 0000 0000 0000 0000 => 0000 0000 0000 0000 0000 0000 0000 0000 0000
+    uint byte0 = (uval << 24);              // Byte 0 -> Byte 3 position 1111 1111 0000 0000 0000 0000 0000 0000 0000 => 0000 0000 0000 0000 0000 0000 0000 0000 0000
 
     // Combine the rearranged bytes using bitwise OR
-    uint result = byte0 | byte1 | byte2 | byte3;
+    uint result = byte0 | byte1 | byte2 | byte3; // 0000 0000 0000 0000 0000 0000 0000 1111 1111
 
     // Cast back to signed int for the final result
     return (int)result;

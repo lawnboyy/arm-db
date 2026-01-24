@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using ArmDb.Common.Utils;
 
 namespace ArmDb.Network;
 
@@ -33,13 +34,13 @@ public class PacketWriter
         {
           // Serialize the payload in Big Endian to write to the temporary payload buffer...
           Span<byte> payloadSpan = stackalloc byte[4];
-          BinaryPrimitives.WriteInt32BigEndian(payloadSpan, connectPacket.ProtocolVersion);
+          BinaryUtilities.WriteInt32BigEndian(payloadSpan, connectPacket.ProtocolVersion);
           payloadBuffer.Write(payloadSpan);
 
           // Write the header to the stream...
           Span<byte> headerBuffer = stackalloc byte[5];
           headerBuffer[0] = packetType;
-          BinaryPrimitives.WriteInt32BigEndian(headerBuffer.Slice(1), (int)payloadBuffer.Length);
+          BinaryUtilities.WriteInt32BigEndian(headerBuffer.Slice(1), (int)payloadBuffer.Length);
           await _stream.WriteAsync(headerBuffer.ToArray(), 0, headerBuffer.Length, ct);
 
           // Now write the payload to the stream...

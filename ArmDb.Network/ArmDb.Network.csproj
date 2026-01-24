@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ArmDb.DataModel\ArmDb.DataModel.csproj" />
+    <ProjectReference Include="..\ArmDb.Common.Utils\ArmDb.Common.Utils.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
