@@ -109,13 +109,13 @@ public static class BinaryUtilities
     uint uval = (uint)value;
 
     // Isolate and shift each byte to its new position
-    uint byte3 = (uval >> 24);              // Byte 3 -> Byte 0 position 1111 1111 0000 0000 0000 0000 0000 0000 0000 => 0000 0000 0000 0000 0000 0000 0000 1111 1111
-    uint byte2 = (uval >> 8) & 0x0000FF00;  // Byte 2 -> Byte 1 position 1111 1111 0000 0000 0000 0000 0000 0000 0000 => 0000 0000 0000 0000 0000 0000 0000 0000 0000
-    uint byte1 = (uval << 8) & 0x00FF0000;  // Byte 1 -> Byte 2 position 1111 1111 0000 0000 0000 0000 0000 0000 0000 => 0000 0000 0000 0000 0000 0000 0000 0000 0000
-    uint byte0 = (uval << 24);              // Byte 0 -> Byte 3 position 1111 1111 0000 0000 0000 0000 0000 0000 0000 => 0000 0000 0000 0000 0000 0000 0000 0000 0000
+    uint byte3 = (uval >> 24);              // Byte 3 -> Byte 0 position 1000 1100 1110 1111 0001 0011 0111 1111 1001 => 0000 0000 0000 0000 0000 0000 0000 1000 1100
+    uint byte2 = (uval >> 8) & 0x0000FF00;  // Byte 2 -> Byte 1 position 1000 1100 1110 1111 0001 0011 0111 1111 1001 => 0000 0000 0000 0000 1110 1111 0000 0000 0000
+    uint byte1 = (uval << 8) & 0x00FF0000;  // Byte 1 -> Byte 2 position 1000 1100 1110 1111 0001 0011 0111 1111 1001 => 0000 0000 0001 0011 0000 0000 0000 0000 0000
+    uint byte0 = (uval << 24);              // Byte 0 -> Byte 3 position 1000 1100 1110 1111 0001 0011 0111 1111 1001 => 1111 1001 0000 0000 0000 0000 0000 0000 0000
 
     // Combine the rearranged bytes using bitwise OR
-    uint result = byte0 | byte1 | byte2 | byte3; // 0000 0000 0000 0000 0000 0000 0000 1111 1111
+    uint result = byte0 | byte1 | byte2 | byte3; // 1111 1001 0001 0011 1110 1111 1000 1100
 
     // Cast back to signed int for the final result
     return (int)result;
