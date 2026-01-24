@@ -11,6 +11,13 @@ public class PacketWriter
     _stream = stream;
   }
 
+  /// <summary>
+  /// Accepts a packet and writes it to the member stream (memory or network stream).
+  /// </summary>
+  /// <param name="packet"></param>
+  /// <param name="ct"></param>
+  /// <returns></returns>
+  /// <exception cref="ArgumentException"></exception>
   public async Task WritePacketAsync(Packet packet, CancellationToken ct = default)
   {
     // All packets will be in the format [Type: char] [Length: int] [Payload]
@@ -32,8 +39,7 @@ public class PacketWriter
           // Write the header to the stream...
           Span<byte> headerBuffer = stackalloc byte[5];
           headerBuffer[0] = packetType;
-          var lengthSlice = headerBuffer.Slice(1, 4);
-          BinaryPrimitives.WriteInt32BigEndian(lengthSlice, (int)payloadBuffer.Length);
+          BinaryPrimitives.WriteInt32BigEndian(headerBuffer.Slice(1), (int)payloadBuffer.Length);
           await _stream.WriteAsync(headerBuffer.ToArray(), 0, headerBuffer.Length, ct);
 
           // Now write the payload to the stream...
