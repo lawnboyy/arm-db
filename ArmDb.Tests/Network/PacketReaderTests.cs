@@ -88,4 +88,26 @@ public class PacketReaderTests
     Assert.NotNull(readPacket);
     Assert.IsType<TerminatePacket>(readPacket);
   }
+
+  [Fact]
+  public async Task ReadPacketAsync_CommandCompletePacket_ReadsCorrectly()
+  {
+    // Arrange
+    var stream = new MemoryStream();
+    var writer = new PacketWriter(stream);
+    var originalPacket = new CommandCompletePacket(Tag: "INSERT 1");
+
+    await writer.WritePacketAsync(originalPacket);
+    stream.Position = 0;
+
+    // Act
+    var reader = new PacketReader(stream);
+    var readPacket = await reader.ReadPacketAsync();
+
+    // Assert
+    Assert.NotNull(readPacket);
+    Assert.IsType<CommandCompletePacket>(readPacket);
+    var commandCompletePacket = (CommandCompletePacket)readPacket;
+    Assert.Equal(originalPacket.Tag, commandCompletePacket.Tag);
+  }
 }

@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Dynamic;
+using System.Text;
 using ArmDb.Common.Utils;
 
 namespace ArmDb.Network;
@@ -26,6 +27,9 @@ public class PacketReader
       case PacketType.AuthenticationOk:
         return new AuthenticationOkPacket();
 
+      case PacketType.CommandComplete:
+        return await ReadCommandCompletePacketAsync(payloadLength, ct);
+
       case PacketType.Connect:
         return await ReadConnectPacketAsync(ct);
 
@@ -38,6 +42,21 @@ public class PacketReader
       default:
         throw new NotSupportedException($"Packet type {packetType} is not supported!");
     }
+  }
+
+  private async Task<CommandCompletePacket> ReadCommandCompletePacketAsync(int length, CancellationToken ct = default)
+  {
+    var tagBuffer = new byte[length];
+    await _stream.ReadExactlyAsync(tagBuffer, ct);
+
+    // Verify that null termination character...
+    if (tagBuffer[^1] != 0)
+    {
+      throw new Exception("Character string payload was not properly terminated. The data may have been corrupted!");
+    }
+
+    var tag = Encoding.UTF8.GetString(tagBuffer[..^1]);
+    return new CommandCompletePacket(tag);
   }
 
   private async Task<ConnectPacket> ReadConnectPacketAsync(CancellationToken ct = default)
