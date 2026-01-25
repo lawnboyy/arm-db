@@ -1,0 +1,34 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ArmDb.Server\ArmDb.Server.csproj" />
+    <ProjectReference Include="..\ArmDb.Network\ArmDb.Network.csproj" />
+    <ProjectReference Include="..\ArmDb.StorageEngine\ArmDb.StorageEngine.csproj" />
+    <ProjectReference Include="..\ArmDb.Common.Abstractions\ArmDb.Common.Abstractions.csproj" />
+    <ProjectReference Include="..\ArmDb.Common.Utils\ArmDb.Common.Utils.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>ArmDb.IntegrationTests</_Parameter1> </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>

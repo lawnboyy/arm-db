@@ -7,7 +7,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.SchemaDefinition", "A
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.Cli", "ArmDb.Cli\ArmDb.Cli.csproj", "{5F925906-2E55-4E42-B917-C697DC4B60D2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.Tests", "ArmDb.Tests\ArmDb.Tests.csproj", "{5015DDA0-5520-4901-A2BC-CB558E09DF18}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.Tests.Unit", "ArmDb.Tests.Unit\ArmDb.Tests.Unit.csproj", "{5015DDA0-5520-4901-A2BC-CB558E09DF18}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.DataModel", "ArmDb.DataModel\ArmDb.DataModel.csproj", "{AEA78E40-014E-4AEE-858D-98F3B9A548FB}"
 EndProject
@@ -22,6 +22,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.Concurrency", "ArmDb.Concurrency\ArmDb.Concurrency.csproj", "{8C3C7CDE-CA97-446C-AFD5-4770755423A5}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.Network", "ArmDb.Network\ArmDb.Network.csproj", "{BB702EA5-8CC2-44CE-A5F3-C6949BDAA5EC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArmDb.Tests.Integration", "ArmDb.Tests.Integration\ArmDb.Tests.Integration.csproj", "{6571A2A4-EEA0-4E17-B16E-0CD8B0BE7406}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -153,6 +155,18 @@ Global
 		{BB702EA5-8CC2-44CE-A5F3-C6949BDAA5EC}.Release|x64.Build.0 = Release|Any CPU
 		{BB702EA5-8CC2-44CE-A5F3-C6949BDAA5EC}.Release|x86.ActiveCfg = Release|Any CPU
 		{BB702EA5-8CC2-44CE-A5F3-C6949BDAA5EC}.Release|x86.Build.0 = Release|Any CPU
+		{6571A2A4-EEA0-4E17-B16E-0CD8B0BE7406}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6571A2A4-EEA0-4E17-B16E-0CD8B0BE7406}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6571A2A4-EEA0-4E17-B16E-0CD8B0BE7406}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{6571A2A4-EEA0-4E17-B16E-0CD8B0BE7406}.Debug|x64.Build.0 = Debug|Any CPU
+		{6571A2A4-EEA0-4E17-B16E-0CD8B0BE7406}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{6571A2A4-EEA0-4E17-B16E-0CD8B0BE7406}.Debug|x86.Build.0 = Debug|Any CPU
+		{6571A2A4-EEA0-4E17-B16E-0CD8B0BE7406}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6571A2A4-EEA0-4E17-B16E-0CD8B0BE7406}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6571A2A4-EEA0-4E17-B16E-0CD8B0BE7406}.Release|x64.ActiveCfg = Release|Any CPU
+		{6571A2A4-EEA0-4E17-B16E-0CD8B0BE7406}.Release|x64.Build.0 = Release|Any CPU
+		{6571A2A4-EEA0-4E17-B16E-0CD8B0BE7406}.Release|x86.ActiveCfg = Release|Any CPU
+		{6571A2A4-EEA0-4E17-B16E-0CD8B0BE7406}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
