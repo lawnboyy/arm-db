@@ -29,6 +29,29 @@ public static class BinaryUtilities
   }
 
   /// <summary>
+  /// Reads a 16 bit integer from the source span. It will only read the first 2 bytes.
+  /// </summary>
+  /// <param name="source"></param>
+  /// <returns></returns>
+  /// <exception cref="ArgumentOutOfRangeException"></exception>
+  public static short ReadInt16BigEndian(ReadOnlySpan<byte> source)
+  {
+    const short intSize = sizeof(short);
+    if (source.Length < intSize)
+    {
+      throw new ArgumentOutOfRangeException(nameof(source), $"Source size ({source.Length}) is less than the size of an int ({intSize}).");
+    }
+
+    short value = MemoryMarshal.Read<short>(source);
+    if (BitConverter.IsLittleEndian)
+    {
+      value = ReverseEndianness(value);
+    }
+
+    return value;
+  }
+
+  /// <summary>
   /// Reads a 32 bit integer from the source span. It will only read the first 4 bytes.
   /// </summary>
   /// <param name="source"></param>

@@ -1,5 +1,6 @@
-using System.Buffers.Binary;
-using System.Dynamic;
+using System.Buffers;
+using System.Drawing;
+using System.Net;
 using System.Text;
 using ArmDb.Common.Utils;
 
@@ -33,6 +34,9 @@ public class PacketReader
       case PacketType.Connect:
         return await ReadConnectPacketAsync(ct);
 
+      case PacketType.DataRow:
+        return await ReadDataRowPacketAsync(payloadLength, ct);
+
       case PacketType.ReadyForQuery:
         return ReadReadyForQueryPacket();
 
@@ -52,7 +56,7 @@ public class PacketReader
     // Verify that null termination character...
     if (tagBuffer[^1] != 0)
     {
-      throw new Exception("Character string payload was not properly terminated. The data may have been corrupted!");
+      throw new ProtocolViolationException("Character string payload was not properly terminated. The data may have been corrupted!");
     }
 
     var tag = Encoding.UTF8.GetString(tagBuffer[..^1]);
@@ -65,6 +69,45 @@ public class PacketReader
     await _stream.ReadExactlyAsync(versionBuffer, ct);
     int version = BinaryUtilities.ReadInt32BigEndian(versionBuffer);
     return new ConnectPacket(version);
+  }
+
+  private async Task<DataRowPacket> ReadDataRowPacketAsync(int length, CancellationToken ct = default)
+  {
+    // Format: [ValueCount (2 bytes)] + For Each: [Length (4 bytes)] [Data (N bytes)]
+    // Rent a payload buffer from the shared array pool...
+    var payloadBuffer = ArrayPool<byte>.Shared.Rent(length);
+    var memoryBuffer = payloadBuffer.AsMemory(0, length);
+    // Read in the entire payload from the stream...
+    await _stream.ReadExactlyAsync(memoryBuffer, ct);
+    // Read the 16 bit int that represents the value count...
+    var valueCount = BinaryUtilities.ReadInt16BigEndian(memoryBuffer.Slice(0, 2).Span);
+    int offset = 2;
+
+    // Loop through the rest of the buffer and parse out the values.
+    var values = new List<byte[]?>();
+    for (var i = 0; i < valueCount; i++)
+    {
+      // Read the length from the current offset...
+      var valueLength = BinaryUtilities.ReadInt32BigEndian(memoryBuffer.Slice(offset, sizeof(int)).Span);
+      offset += sizeof(int);
+      if (valueLength == -1)
+      {
+        // Value is null...
+        values.Add(null);
+      }
+      else
+      {
+        // Read in the value based on the length.
+        var bytes = new byte[valueLength];
+        memoryBuffer
+          .Slice(offset, valueLength)
+          .CopyTo(bytes);
+        values.Add(bytes);
+        offset += valueLength;
+      }
+    }
+
+    return new DataRowPacket(values);
   }
 
   private ReadyForQueryPacket ReadReadyForQueryPacket()
