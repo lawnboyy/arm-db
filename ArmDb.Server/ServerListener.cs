@@ -25,7 +25,6 @@ internal class ServerListener
     _loggerFactory = loggerFactory;
     _storageEngine = storageEngine;
     _tcpListener = new TcpListener(IPAddress.Loopback, port);
-
   }
 
   internal static async Task<ServerListener> CreateServerListener(int port, IFileSystem fileSystem, string filePath, ILoggerFactory loggerFactory)
