@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Net;
 using System.Text;
 using ArmDb.Network;
+using ArmDb.SchemaDefinition;
 
 namespace ArmDb.UnitTests.Network;
 
@@ -270,5 +271,67 @@ public class PacketReaderTests
       Assert.NotNull(dataRow.Values[i]);
       Assert.Equal(allValues[i], dataRow.Values[i]);
     }
+  }
+
+  [Fact]
+  public async Task ReadPacketAsync_QueryPacket_ReadsCorrectly()
+  {
+    // Arrange
+    var stream = new MemoryStream();
+    var writer = new PacketWriter(stream);
+    string expectedSql = "SELECT * FROM sys_tables WHERE table_id = 1";
+    var originalPacket = new QueryPacket(Sql: expectedSql);
+
+    await writer.WritePacketAsync(originalPacket);
+    stream.Position = 0; // Rewind for reading
+
+    // Act
+    var reader = new PacketReader(stream);
+    var readPacket = await reader.ReadPacketAsync();
+
+    // Assert
+    Assert.NotNull(readPacket);
+    Assert.IsType<QueryPacket>(readPacket);
+    var queryPacket = (QueryPacket)readPacket;
+    Assert.Equal(expectedSql, queryPacket.Sql);
+  }
+
+  [Fact]
+  public async Task ReadPacketAsync_RowDescriptionPacket_ReadsCorrectly()
+  {
+    // Arrange
+    var stream = new MemoryStream();
+    var writer = new PacketWriter(stream);
+
+    var fields = new List<RowDescriptionPacket.FieldDescription>
+    {
+      new("id", PrimitiveDataType.Int),
+      new("username", PrimitiveDataType.Varchar),
+      new("is_active", PrimitiveDataType.Boolean)
+    };
+    var originalPacket = new RowDescriptionPacket(fields);
+
+    await writer.WritePacketAsync(originalPacket);
+    stream.Position = 0;
+
+    // Act
+    var reader = new PacketReader(stream);
+    var readPacket = await reader.ReadPacketAsync();
+
+    // Assert
+    Assert.NotNull(readPacket);
+    Assert.IsType<RowDescriptionPacket>(readPacket);
+    var rowDescPacket = (RowDescriptionPacket)readPacket;
+
+    Assert.Equal(fields.Count, rowDescPacket.Fields.Count);
+
+    Assert.Equal("id", rowDescPacket.Fields[0].Name);
+    Assert.Equal(PrimitiveDataType.Int, rowDescPacket.Fields[0].DataType);
+
+    Assert.Equal("username", rowDescPacket.Fields[1].Name);
+    Assert.Equal(PrimitiveDataType.Varchar, rowDescPacket.Fields[1].DataType);
+
+    Assert.Equal("is_active", rowDescPacket.Fields[2].Name);
+    Assert.Equal(PrimitiveDataType.Boolean, rowDescPacket.Fields[2].DataType);
   }
 }

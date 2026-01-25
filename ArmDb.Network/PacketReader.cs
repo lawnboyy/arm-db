@@ -1,8 +1,9 @@
 using System.Buffers;
-using System.Drawing;
 using System.Net;
 using System.Text;
 using ArmDb.Common.Utils;
+using ArmDb.SchemaDefinition;
+using static ArmDb.Network.RowDescriptionPacket;
 
 namespace ArmDb.Network;
 
@@ -40,8 +41,14 @@ public class PacketReader
       case PacketType.Error:
         return await ReadErrorPacket(payloadLength, ct);
 
+      case PacketType.Query:
+        return await ReadQueryPacketAsync(payloadLength, ct);
+
       case PacketType.ReadyForQuery:
         return ReadReadyForQueryPacket();
+
+      case PacketType.RowDescription:
+        return await ReadRowDescriptionPacketAsync(payloadLength, ct);
 
       case PacketType.Terminate:
         return new TerminatePacket();
@@ -72,6 +79,62 @@ public class PacketReader
     await _stream.ReadExactlyAsync(versionBuffer, ct);
     int version = BinaryUtilities.ReadInt32BigEndian(versionBuffer);
     return new ConnectPacket(version);
+  }
+
+  private async Task<RowDescriptionPacket> ReadRowDescriptionPacketAsync(int length, CancellationToken ct)
+  {
+    // Format: [FieldCount (2 bytes)] + For Each: [Name (String)] [Type (1 byte)]
+    // Rent a payload buffer from the shared array pool...
+    var payloadBuffer = ArrayPool<byte>.Shared.Rent(length);
+    try
+    {
+      // Slice our memory buffer since the rented buffer is only guaranteed to be at least the length we provided, but could be greater.
+      // In order to read the payload length exactly, the buffer size must be exactly the payload size. Otherwise, we risk trying
+      // to read past the end of the stream which throw an exception.
+      var memoryBuffer = payloadBuffer.AsMemory(0, length);
+      // Read in the entire payload from the stream...
+      await _stream.ReadExactlyAsync(memoryBuffer, ct);
+      // Read the 16 bit int that represents the value count...
+      var fieldCount = BinaryUtilities.ReadInt16BigEndian(memoryBuffer.Slice(0, 2).Span);
+
+      int offset = 2;
+
+      // Loop through the rest of the buffer and parse out the fields.
+      var fields = new List<FieldDescription>();
+      for (var i = 0; i < fieldCount; i++)
+      {
+        // Read the field name by reading until we find a null terminator.
+        byte currentByte = memoryBuffer.Span[offset];
+        List<byte> nameBytes = new();
+        while (currentByte != 0)
+        {
+          nameBytes.Add(currentByte);
+          offset++;
+          currentByte = memoryBuffer.Span[offset];
+        }
+
+        // Get the name string...
+        var name = Encoding.UTF8.GetString(nameBytes.ToArray());
+
+        // Advance the offset to skip the null terminator
+        offset++;
+
+        // Now get the byte that represents the data type...
+        PrimitiveDataType fieldType = (PrimitiveDataType)memoryBuffer.Span[offset];
+
+        fields.Add(new FieldDescription(name, fieldType));
+
+        // Advance the offset...
+        offset++;
+      }
+
+      return new RowDescriptionPacket(fields);
+    }
+    finally
+    {
+      // Return our buffer, now that we no longer need it...
+      ArrayPool<byte>.Shared.Return(payloadBuffer);
+    }
   }
 
   private async Task<DataRowPacket> ReadDataRowPacketAsync(int length, CancellationToken ct = default)
@@ -139,6 +202,21 @@ public class PacketReader
 
     var error = Encoding.UTF8.GetString(errorBuffer[..^1]);
     return new ErrorPacket(severity, error);
+  }
+
+  private async Task<QueryPacket> ReadQueryPacketAsync(int length, CancellationToken ct = default)
+  {
+    var queryBuffer = new byte[length];
+    await _stream.ReadExactlyAsync(queryBuffer, ct);
+
+    // Verify that null termination character...
+    if (queryBuffer[^1] != 0)
+    {
+      throw new ProtocolViolationException("Character string payload was not properly terminated. The data may have been corrupted!");
+    }
+
+    var query = Encoding.UTF8.GetString(queryBuffer[..^1]);
+    return new QueryPacket(query);
   }
 
   private ReadyForQueryPacket ReadReadyForQueryPacket()
