@@ -115,6 +115,29 @@ public class PacketReaderTests
   }
 
   [Fact]
+  public async Task ReadPacketAsync_ErrorPacket_ReadsCorrectly()
+  {
+    // Arrange
+    var stream = new MemoryStream();
+    var writer = new PacketWriter(stream);
+    var originalPacket = new ErrorPacket(Severity: 2, Message: "Syntax Error");
+
+    await writer.WritePacketAsync(originalPacket);
+    stream.Position = 0;
+
+    // Act
+    var reader = new PacketReader(stream);
+    var readPacket = await reader.ReadPacketAsync();
+
+    // Assert
+    Assert.NotNull(readPacket);
+    Assert.IsType<ErrorPacket>(readPacket);
+    var errorPacket = (ErrorPacket)readPacket;
+    Assert.Equal(originalPacket.Severity, errorPacket.Severity);
+    Assert.Equal(originalPacket.Message, errorPacket.Message);
+  }
+
+  [Fact]
   public async Task ReadPacketAsync_MissingNullTerminator_ThrowsProtocolViolationException()
   {
     // Arrange

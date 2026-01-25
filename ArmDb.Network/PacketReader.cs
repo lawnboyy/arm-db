@@ -37,6 +37,9 @@ public class PacketReader
       case PacketType.DataRow:
         return await ReadDataRowPacketAsync(payloadLength, ct);
 
+      case PacketType.Error:
+        return await ReadErrorPacket(payloadLength, ct);
+
       case PacketType.ReadyForQuery:
         return ReadReadyForQueryPacket();
 
@@ -119,6 +122,23 @@ public class PacketReader
       // Return our buffer, now that we no longer need it...
       ArrayPool<byte>.Shared.Return(payloadBuffer);
     }
+  }
+
+  private async Task<ErrorPacket> ReadErrorPacket(int length, CancellationToken ct = default)
+  {
+    // Get the severity byte
+    byte severity = (byte)_stream.ReadByte();
+    var errorBuffer = new byte[length - 1];
+    await _stream.ReadExactlyAsync(errorBuffer, ct);
+
+    // Verify that null termination character...
+    if (errorBuffer[^1] != 0)
+    {
+      throw new ProtocolViolationException("Character string payload was not properly terminated. The data may have been corrupted!");
+    }
+
+    var error = Encoding.UTF8.GetString(errorBuffer[..^1]);
+    return new ErrorPacket(severity, error);
   }
 
   private ReadyForQueryPacket ReadReadyForQueryPacket()
