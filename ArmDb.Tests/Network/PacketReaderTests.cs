@@ -181,4 +181,71 @@ public class PacketReaderTests
     Assert.NotNull(dataRowPacket.Values[2]);
     Assert.Equal(val3, dataRowPacket.Values[2]);
   }
+
+  [Fact]
+  public async Task ReadPacketAsync_DataRowPacket_AllPrimitiveTypes_ReadsCorrectly()
+  {
+    // Arrange
+    var stream = new MemoryStream();
+    var writer = new PacketWriter(stream);
+
+    // 1. Int (4 bytes)
+    var valInt = new byte[4];
+    BinaryPrimitives.WriteInt32BigEndian(valInt, int.MaxValue);
+
+    // 2. BigInt (8 bytes)
+    var valBigInt = new byte[8];
+    BinaryPrimitives.WriteInt64BigEndian(valBigInt, long.MaxValue);
+
+    // 3. Varchar (UTF-8 String)
+    var valVarchar = Encoding.UTF8.GetBytes("🔥 Test String 🔥");
+
+    // 4. Boolean (1 byte)
+    var valBool = new byte[] { 1 }; // True
+
+    // 5. Decimal (16 bytes - usually 4 ints)
+    // For testing "binary pass-through", we just need 16 bytes. 
+    // Real serialization logic belongs in the Engine/Executor layer.
+    var valDecimal = new byte[16];
+    new Random(42).NextBytes(valDecimal);
+
+    // 6. DateTime (8 bytes - Ticks)
+    var valDateTime = new byte[8];
+    BinaryPrimitives.WriteInt64BigEndian(valDateTime, DateTime.UtcNow.Ticks);
+
+    // 7. Float (Double - 8 bytes)
+    var valFloat = new byte[8];
+    BinaryPrimitives.WriteDoubleBigEndian(valFloat, 123.456d);
+
+    // 8. Blob (Arbitrary binary data)
+    var valBlob = new byte[20];
+    new Random(99).NextBytes(valBlob);
+
+    var allValues = new List<byte[]?>
+        {
+            valInt, valBigInt, valVarchar, valBool,
+            valDecimal, valDateTime, valFloat, valBlob
+        };
+
+    var originalPacket = new DataRowPacket(allValues);
+
+    // Act
+    await writer.WritePacketAsync(originalPacket);
+    stream.Position = 0;
+
+    var reader = new PacketReader(stream);
+    var readPacket = await reader.ReadPacketAsync();
+
+    // Assert
+    Assert.NotNull(readPacket);
+    var dataRow = Assert.IsType<DataRowPacket>(readPacket);
+
+    Assert.Equal(allValues.Count, dataRow.Values.Count);
+
+    for (int i = 0; i < allValues.Count; i++)
+    {
+      Assert.NotNull(dataRow.Values[i]);
+      Assert.Equal(allValues[i], dataRow.Values[i]);
+    }
+  }
 }
