@@ -76,38 +76,49 @@ public class PacketReader
     // Format: [ValueCount (2 bytes)] + For Each: [Length (4 bytes)] [Data (N bytes)]
     // Rent a payload buffer from the shared array pool...
     var payloadBuffer = ArrayPool<byte>.Shared.Rent(length);
-    var memoryBuffer = payloadBuffer.AsMemory(0, length);
-    // Read in the entire payload from the stream...
-    await _stream.ReadExactlyAsync(memoryBuffer, ct);
-    // Read the 16 bit int that represents the value count...
-    var valueCount = BinaryUtilities.ReadInt16BigEndian(memoryBuffer.Slice(0, 2).Span);
-    int offset = 2;
-
-    // Loop through the rest of the buffer and parse out the values.
-    var values = new List<byte[]?>();
-    for (var i = 0; i < valueCount; i++)
+    try
     {
-      // Read the length from the current offset...
-      var valueLength = BinaryUtilities.ReadInt32BigEndian(memoryBuffer.Slice(offset, sizeof(int)).Span);
-      offset += sizeof(int);
-      if (valueLength == -1)
-      {
-        // Value is null...
-        values.Add(null);
-      }
-      else
-      {
-        // Read in the value based on the length.
-        var bytes = new byte[valueLength];
-        memoryBuffer
-          .Slice(offset, valueLength)
-          .CopyTo(bytes);
-        values.Add(bytes);
-        offset += valueLength;
-      }
-    }
+      // Slice our memory buffer since the rented buffer is only guaranteed to be at least the length we provided, but could be greater.
+      // In order to read the payload length exactly, the buffer size must be exactly the payload size. Otherwise, we risk trying
+      // to read past the end of the stream which throw an exception.
+      var memoryBuffer = payloadBuffer.AsMemory(0, length);
+      // Read in the entire payload from the stream...
+      await _stream.ReadExactlyAsync(memoryBuffer, ct);
+      // Read the 16 bit int that represents the value count...
+      var valueCount = BinaryUtilities.ReadInt16BigEndian(memoryBuffer.Slice(0, 2).Span);
+      int offset = 2;
 
-    return new DataRowPacket(values);
+      // Loop through the rest of the buffer and parse out the values.
+      var values = new List<byte[]?>();
+      for (var i = 0; i < valueCount; i++)
+      {
+        // Read the length from the current offset...
+        var valueLength = BinaryUtilities.ReadInt32BigEndian(memoryBuffer.Slice(offset, sizeof(int)).Span);
+        offset += sizeof(int);
+        if (valueLength == -1)
+        {
+          // Value is null...
+          values.Add(null);
+        }
+        else
+        {
+          // Read in the value based on the length.
+          var bytes = new byte[valueLength];
+          memoryBuffer
+            .Slice(offset, valueLength)
+            .CopyTo(bytes);
+          values.Add(bytes);
+          offset += valueLength;
+        }
+      }
+
+      return new DataRowPacket(values);
+    }
+    finally
+    {
+      // Return our buffer, now that we no longer need it...
+      ArrayPool<byte>.Shared.Return(payloadBuffer);
+    }
   }
 
   private ReadyForQueryPacket ReadReadyForQueryPacket()
