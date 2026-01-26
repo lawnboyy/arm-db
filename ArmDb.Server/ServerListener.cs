@@ -68,7 +68,7 @@ internal class ServerListener
   {
     using (client)
     {
-      var handler = new ConnectionHandler(client, _storageEngine);
+      var handler = new ConnectionHandler(client, _storageEngine, _loggerFactory);
       await handler.RunAsync(ct);
     }
   }

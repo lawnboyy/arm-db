@@ -4,7 +4,7 @@ using ArmDb.Server;
 using ArmDb.Common.Abstractions;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace ArmDb.IntegrationTests;
+namespace ArmDb.Tests.Integration;
 
 public class TestServer : IAsyncDisposable
 {

@@ -161,6 +161,68 @@ public static class BinaryUtilities
     MemoryMarshal.Write(destination, in valueToWrite);
   }
 
+  public static void WriteInt64BigEndian(Span<byte> destination, long value)
+  {
+    const int longSize = sizeof(long);
+    if (longSize > destination.Length)
+    {
+      throw new ArgumentOutOfRangeException(nameof(destination), $"Destination span length ({destination.Length}) is less than the size of a long ({longSize}).");
+    }
+
+    long valueToWrite = value;
+    if (BitConverter.IsLittleEndian)
+    {
+      valueToWrite = ReverseEndianness(valueToWrite); // Calls internal method
+    }
+    MemoryMarshal.Write(destination, in valueToWrite);
+  }
+
+  /// <summary>
+  /// Writes a <see cref="double" /> into a span of bytes, as little endian.
+  /// </summary>
+  /// <param name="destination">The span of bytes where the value is to be written, as little endian.</param>
+  /// <param name="value">The value to write into the span of bytes.</param>
+  /// <remarks>Writes exactly 8 bytes to the beginning of the span.</remarks>
+  /// <exception cref="ArgumentOutOfRangeException">
+  /// <paramref name="destination" /> is too small to contain a <see cref="double" />.
+  /// </exception>
+  [MethodImpl(MethodImplOptions.AggressiveInlining)]
+  public static void WriteDoubleLittleEndian(Span<byte> destination, double value)
+  {
+    if (!BitConverter.IsLittleEndian)
+    {
+      long tmp = ReverseEndianness(BitConverter.DoubleToInt64Bits(value));
+      MemoryMarshal.Write(destination, in tmp);
+    }
+    else
+    {
+      MemoryMarshal.Write(destination, in value);
+    }
+  }
+
+  /// <summary>
+  /// Writes a <see cref="double" /> into a span of bytes, as little endian.
+  /// </summary>
+  /// <param name="destination">The span of bytes where the value is to be written, as little endian.</param>
+  /// <param name="value">The value to write into the span of bytes.</param>
+  /// <remarks>Writes exactly 8 bytes to the beginning of the span.</remarks>
+  /// <exception cref="ArgumentOutOfRangeException">
+  /// <paramref name="destination" /> is too small to contain a <see cref="double" />.
+  /// </exception>
+  [MethodImpl(MethodImplOptions.AggressiveInlining)]
+  public static void WriteDoubleBigEndian(Span<byte> destination, double value)
+  {
+    if (BitConverter.IsLittleEndian)
+    {
+      long tmp = ReverseEndianness(BitConverter.DoubleToInt64Bits(value));
+      MemoryMarshal.Write(destination, in tmp);
+    }
+    else
+    {
+      MemoryMarshal.Write(destination, in value);
+    }
+  }
+
   /// <summary>
   /// Reverses the byte order (endianness) of a 32-bit signed integer.
   /// Marked internal for testing accessibility via InternalsVisibleTo.
