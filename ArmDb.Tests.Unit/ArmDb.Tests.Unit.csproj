@@ -26,6 +26,7 @@
     <ProjectReference Include="..\ArmDb.Common.Abstractions\ArmDb.Common.Abstractions.csproj" />
     <ProjectReference Include="..\ArmDb.Concurrency\ArmDb.Concurrency.csproj" />
     <ProjectReference Include="..\ArmDb.Network\ArmDb.Network.csproj" />
+    <ProjectReference Include="..\ArmDb.Sql\ArmDb.Sql.csproj" />
   </ItemGroup>
 
 </Project>
