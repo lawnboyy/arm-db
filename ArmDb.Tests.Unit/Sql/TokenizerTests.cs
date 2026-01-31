@@ -68,4 +68,52 @@ public class TokenizerTests
     var eof = tokenizer.GetNextToken();
     Assert.Equal(TokenType.EndOfFile, eof.Type);
   }
+
+  [Fact]
+  public void Tokenize_KeywordNextToSymbol_ReturnsCorrectTokens()
+  {
+    // Scenario: SELECT*FROM -> [SELECT, Star, FROM]
+    // This validates that the keyword scanner stops correctly at a symbol delimiter.
+
+    var tokenizer = new Tokenizer("SELECT*FROM");
+
+    // 1. SELECT
+    var t1 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Select, t1.Type);
+
+    // 2. *
+    var t2 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Star, t2.Type);
+
+    // 3. FROM
+    var t3 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.From, t3.Type);
+  }
+
+  [Fact]
+  public void Tokenize_Symbols_ReturnsCorrectTokens()
+  {
+    // Scenario: * , ; ( ) . = != <> > < >= <= + - /
+    // Note: Spaces added to simplify separation, though tokenizer should handle adjacent symbols too if logic is robust.
+
+    var input = "* , ; ( ) . = != <> > < >= <= + - /";
+    var tokenizer = new Tokenizer(input);
+
+    Assert.Equal(TokenType.Star, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.Comma, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.Semicolon, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.OpenParen, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.CloseParen, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.Dot, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.Equal, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.NotEqual, tokenizer.GetNextToken().Type); // !=
+    Assert.Equal(TokenType.NotEqual, tokenizer.GetNextToken().Type); // <>
+    Assert.Equal(TokenType.GreaterThan, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.LessThan, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.GreaterThanOrEqual, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.LessThanOrEqual, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.Plus, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.Minus, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.Slash, tokenizer.GetNextToken().Type);
+  }
 }
