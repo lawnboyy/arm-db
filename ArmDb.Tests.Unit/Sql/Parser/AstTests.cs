@@ -387,4 +387,54 @@ public partial class AstTests
     // Verify Where
     Assert.Null(selectStmt.WhereClause);
   }
+
+  [Fact]
+  public void UpdateStatement_ConstructsCorrectly()
+  {
+    /*
+    UPDATE mydb.users
+        SET email='bob.whiley@mail.com'
+        WHERE id = 1;
+    */
+
+    // Arrange & Act
+    var table = new ObjectIdentifier("users", "mydb");
+
+    var assignments = new List<UpdateAssignment>
+        {
+            new UpdateAssignment(
+                "email",
+                new LiteralExpression("bob.whiley@mail.com", PrimitiveDataType.Varchar)
+            )
+        };
+
+    var whereClause = new BinaryExpression(
+        new ColumnExpression("id"),
+        BinaryOperator.Equal,
+        new LiteralExpression(1, PrimitiveDataType.Int)
+    );
+
+    var updateStmt = new UpdateStatement(table, assignments, whereClause);
+
+    // Assert
+    Assert.NotNull(updateStmt);
+    Assert.Equal("users", updateStmt.Table.Name);
+    Assert.Equal("mydb", updateStmt.Table.DatabaseName);
+
+    Assert.Single(updateStmt.Assignments);
+    Assert.Equal("email", updateStmt.Assignments[0].ColumnName);
+
+    var val = Assert.IsType<LiteralExpression>(updateStmt.Assignments[0].Value);
+    Assert.Equal("bob.whiley@mail.com", val.Value);
+
+    Assert.NotNull(updateStmt.WhereClause);
+    var binary = Assert.IsType<BinaryExpression>(updateStmt.WhereClause);
+    Assert.Equal(BinaryOperator.Equal, binary.Operator);
+
+    var left = Assert.IsType<ColumnExpression>(binary.Left);
+    Assert.Equal("id", left.Name);
+
+    var right = Assert.IsType<LiteralExpression>(binary.Right);
+    Assert.Equal(1, right.Value);
+  }
 }
