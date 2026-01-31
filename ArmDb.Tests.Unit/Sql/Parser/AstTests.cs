@@ -8,6 +8,20 @@ namespace ArmDb.Tests.Unit.Sql.Parser;
 public partial class AstTests
 {
   [Fact]
+  public void CreateDatabaseStatement_ConstructsCorrectly()
+  {
+    // SQL: CREATE DATABASE "mydb";
+
+    // Arrange & Act
+    string dbName = "mydb";
+    var createDbStmt = new CreateDatabaseStatement(dbName);
+
+    // Assert
+    Assert.NotNull(createDbStmt);
+    Assert.Equal(dbName, createDbStmt.DatabaseName);
+  }
+
+  [Fact]
   public void CreateTableStatement_SimpleStructure_ConstructsCorrectly()
   {
     // SQL: CREATE TABLE simple_users (id INT, username VARCHAR(255));
