@@ -3,7 +3,7 @@ using ArmDb.SchemaDefinition;
 using ArmDb.Sql.Ast; // Assuming this namespace based on project structure
 using Xunit;
 
-namespace ArmDb.Tests.Unit.Sql.Parser;
+namespace ArmDb.Tests.Unit.Sql;
 
 public partial class AstTests
 {
