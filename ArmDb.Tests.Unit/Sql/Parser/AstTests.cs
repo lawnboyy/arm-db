@@ -389,6 +389,65 @@ public partial class AstTests
   }
 
   [Fact]
+  public void SelectStatement_WithProjectionsAndWhere_ConstructsCorrectly()
+  {
+    /*
+    SELECT id, username AS u, is_onboarded 
+    FROM mydb.users 
+    WHERE id > 10;
+    */
+
+    // Arrange & Act
+    var fromTable = new ObjectIdentifier("users", "mydb");
+
+    var columns = new List<SelectColumn>
+    {
+      new SelectColumn(new ColumnExpression("id"), null),
+      new SelectColumn(new ColumnExpression("username"), "u"),
+      new SelectColumn(new ColumnExpression("is_onboarded"), null)
+    };
+
+    var whereClause = new BinaryExpression(
+      new ColumnExpression("id"),
+      BinaryOperator.GreaterThan,
+      new LiteralExpression(10, PrimitiveDataType.Int)
+    );
+
+    var selectStmt = new SelectStatement(columns, fromTable, whereClause);
+
+    // Assert
+    Assert.NotNull(selectStmt);
+
+    // Verify From
+    Assert.Equal("users", selectStmt.FromTable.Name);
+    Assert.Equal("mydb", selectStmt.FromTable.DatabaseName);
+
+    // Verify Columns
+    Assert.Equal(3, selectStmt.Columns.Count);
+
+    // Col 1: id
+    var expr1 = Assert.IsType<ColumnExpression>(selectStmt.Columns[0].Expression);
+    Assert.Equal("id", expr1.Name);
+    Assert.Null(selectStmt.Columns[0].Alias);
+
+    // Col 2: username AS u
+    var expr2 = Assert.IsType<ColumnExpression>(selectStmt.Columns[1].Expression);
+    Assert.Equal("username", expr2.Name);
+    Assert.Equal("u", selectStmt.Columns[1].Alias);
+
+    // Verify Where
+    Assert.NotNull(selectStmt.WhereClause);
+    var bin = Assert.IsType<BinaryExpression>(selectStmt.WhereClause);
+    Assert.Equal(BinaryOperator.GreaterThan, bin.Operator);
+
+    var left = Assert.IsType<ColumnExpression>(bin.Left);
+    Assert.Equal("id", left.Name);
+
+    var right = Assert.IsType<LiteralExpression>(bin.Right);
+    Assert.Equal(10, right.Value);
+  }
+
+  [Fact]
   public void UpdateStatement_ConstructsCorrectly()
   {
     /*
@@ -471,5 +530,22 @@ public partial class AstTests
 
     var right = Assert.IsType<LiteralExpression>(binary.Right);
     Assert.Equal(1, right.Value);
+  }
+
+  [Fact]
+  public void DropTableStatement_ConstructsCorrectly()
+  {
+    /*
+    DROP TABLE mydb.users;
+    */
+
+    // Arrange & Act
+    var table = new ObjectIdentifier("users", "mydb");
+    var dropStmt = new DropTableStatement(table);
+
+    // Assert
+    Assert.NotNull(dropStmt);
+    Assert.Equal("users", dropStmt.Table.Name);
+    Assert.Equal("mydb", dropStmt.Table.DatabaseName);
   }
 }
