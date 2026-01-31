@@ -23,5 +23,5 @@ public enum BinaryOperator
 // Function Calls (nextval('...'))
 public record FunctionCallExpression(
     string FunctionName,
-    List<SqlExpression> Arguments
+    IReadOnlyList<SqlExpression> Arguments
 ) : SqlExpression;
