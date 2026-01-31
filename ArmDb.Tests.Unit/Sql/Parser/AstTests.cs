@@ -437,4 +437,39 @@ public partial class AstTests
     var right = Assert.IsType<LiteralExpression>(binary.Right);
     Assert.Equal(1, right.Value);
   }
+
+  [Fact]
+  public void DeleteStatement_ConstructsCorrectly()
+  {
+    /*
+    DELETE FROM mydb.users
+        WHERE id = 1;
+    */
+
+    // Arrange & Act
+    var table = new ObjectIdentifier("users", "mydb");
+
+    var whereClause = new BinaryExpression(
+        new ColumnExpression("id"),
+        BinaryOperator.Equal,
+        new LiteralExpression(1, PrimitiveDataType.Int)
+    );
+
+    var deleteStmt = new DeleteStatement(table, whereClause);
+
+    // Assert
+    Assert.NotNull(deleteStmt);
+    Assert.Equal("users", deleteStmt.FromTable.Name);
+    Assert.Equal("mydb", deleteStmt.FromTable.DatabaseName);
+
+    Assert.NotNull(deleteStmt.WhereClause);
+    var binary = Assert.IsType<BinaryExpression>(deleteStmt.WhereClause);
+    Assert.Equal(BinaryOperator.Equal, binary.Operator);
+
+    var left = Assert.IsType<ColumnExpression>(binary.Left);
+    Assert.Equal("id", left.Name);
+
+    var right = Assert.IsType<LiteralExpression>(binary.Right);
+    Assert.Equal(1, right.Value);
+  }
 }
