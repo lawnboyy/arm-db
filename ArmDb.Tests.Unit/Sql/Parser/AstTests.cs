@@ -352,4 +352,39 @@ public partial class AstTests
     Assert.Equal(true, val4.Value);
     Assert.Equal(PrimitiveDataType.Boolean, val4.Type);
   }
+
+  [Fact]
+  public void SelectStatement_Simple_ConstructsCorrectly()
+  {
+    // SQL: SELECT * FROM users;
+
+    // Arrange & Act
+    var fromTable = new ObjectIdentifier("users", "mydb");
+
+    var columns = new List<SelectColumn>
+        {
+            // SELECT *
+            new SelectColumn(new ColumnExpression("*"), null)
+        };
+
+    var selectStmt = new SelectStatement(columns, fromTable, null);
+
+    // Assert
+    Assert.NotNull(selectStmt);
+
+    // Verify From
+    Assert.Equal("users", selectStmt.FromTable.Name);
+    Assert.Equal("mydb", selectStmt.FromTable.DatabaseName);
+
+    // Verify Columns
+    Assert.Single(selectStmt.Columns);
+    var col1 = selectStmt.Columns[0];
+    Assert.Null(col1.Alias);
+
+    var expr = Assert.IsType<ColumnExpression>(col1.Expression);
+    Assert.Equal("*", expr.Name);
+
+    // Verify Where
+    Assert.Null(selectStmt.WhereClause);
+  }
 }
