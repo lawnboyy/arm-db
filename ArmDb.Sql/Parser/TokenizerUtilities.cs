@@ -4,11 +4,10 @@ namespace ArmDb.Sql.Parser;
 
 public static class TokenizerUtilities
 {
+  private static readonly object _lookupLockObj = new object();
   public static readonly ConcurrentDictionary<string, TokenType> KeywordLookup = BuildKeywordsDictionary();
   public static readonly ConcurrentDictionary<string, TokenType> SingleCharSymbolLookup = BuildSingleCharSymbolsDictionary();
   public static readonly ConcurrentDictionary<string, TokenType> DoubleCharSymbolLookup = BuildDoubleCharSymbolsDictionary();
-
-  private static readonly object _lookupLockObj = new object();
 
   public static bool IsValidIdentifierStartingChar(char c)
   {
