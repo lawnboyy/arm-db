@@ -548,4 +548,44 @@ public partial class AstTests
     Assert.Equal("users", dropStmt.Table.Name);
     Assert.Equal("mydb", dropStmt.Table.DatabaseName);
   }
+
+  [Fact]
+  public void SelectStatement_WithAggregateFunction_ConstructsCorrectly()
+  {
+    /*
+    SELECT count(*) AS total_rows 
+    FROM mydb.users;
+    */
+
+    // Arrange & Act
+    var fromTable = new ObjectIdentifier("users", "mydb");
+
+    // count(*) is a FunctionCallExpression
+    var countCall = new FunctionCallExpression(
+      "count",
+      new List<SqlExpression> { new ColumnExpression("*") }
+    );
+
+    var columns = new List<SelectColumn>
+    {
+      new SelectColumn(countCall, "total_rows")
+    };
+
+    var selectStmt = new SelectStatement(columns, fromTable, null);
+
+    // Assert
+    Assert.NotNull(selectStmt);
+
+    // Verify Column
+    Assert.Single(selectStmt.Columns);
+    var col = selectStmt.Columns[0];
+    Assert.Equal("total_rows", col.Alias);
+
+    var func = Assert.IsType<FunctionCallExpression>(col.Expression);
+    Assert.Equal("count", func.FunctionName); // Case-insensitive logic usually handles this, but AST stores literal
+    Assert.Single(func.Arguments);
+
+    var arg = Assert.IsType<ColumnExpression>(func.Arguments[0]);
+    Assert.Equal("*", arg.Name);
+  }
 }
