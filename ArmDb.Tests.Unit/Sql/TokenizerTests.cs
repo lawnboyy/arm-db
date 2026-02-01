@@ -99,21 +99,89 @@ public class TokenizerTests
     var input = "* , ; ( ) . = != <> > < >= <= + - /";
     var tokenizer = new Tokenizer(input);
 
-    Assert.Equal(TokenType.Star, tokenizer.GetNextToken().Type);
-    Assert.Equal(TokenType.Comma, tokenizer.GetNextToken().Type);
-    Assert.Equal(TokenType.Semicolon, tokenizer.GetNextToken().Type);
-    Assert.Equal(TokenType.OpenParen, tokenizer.GetNextToken().Type);
-    Assert.Equal(TokenType.CloseParen, tokenizer.GetNextToken().Type);
-    Assert.Equal(TokenType.Dot, tokenizer.GetNextToken().Type);
-    Assert.Equal(TokenType.Equal, tokenizer.GetNextToken().Type);
-    Assert.Equal(TokenType.NotEqual, tokenizer.GetNextToken().Type); // !=
-    Assert.Equal(TokenType.NotEqual, tokenizer.GetNextToken().Type); // <>
-    Assert.Equal(TokenType.GreaterThan, tokenizer.GetNextToken().Type);
-    Assert.Equal(TokenType.LessThan, tokenizer.GetNextToken().Type);
-    Assert.Equal(TokenType.GreaterThanOrEqual, tokenizer.GetNextToken().Type);
-    Assert.Equal(TokenType.LessThanOrEqual, tokenizer.GetNextToken().Type);
-    Assert.Equal(TokenType.Plus, tokenizer.GetNextToken().Type);
-    Assert.Equal(TokenType.Minus, tokenizer.GetNextToken().Type);
-    Assert.Equal(TokenType.Slash, tokenizer.GetNextToken().Type);
+    var t1 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Star, t1.Type);
+    Assert.Equal("*", t1.Value);
+
+    var t2 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Comma, t2.Type);
+    Assert.Equal(",", t2.Value);
+
+    var t3 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Semicolon, t3.Type);
+    Assert.Equal(";", t3.Value);
+
+    var t4 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.OpenParen, t4.Type);
+    Assert.Equal("(", t4.Value);
+
+    var t5 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.CloseParen, t5.Type);
+    Assert.Equal(")", t5.Value);
+
+    var t6 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Dot, t6.Type);
+    Assert.Equal(".", t6.Value);
+
+    var t7 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Equal, t7.Type);
+    Assert.Equal("=", t7.Value);
+
+    var t8 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.NotEqual, t8.Type); // !=
+    Assert.Equal("!=", t8.Value);
+
+    var t9 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.NotEqual, t9.Type); // <>
+    Assert.Equal("<>", t9.Value);
+
+    var t10 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.GreaterThan, t10.Type);
+    Assert.Equal(">", t10.Value);
+
+    var t11 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.LessThan, t11.Type);
+    Assert.Equal("<", t11.Value);
+
+    var t12 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.GreaterThanOrEqual, t12.Type);
+    Assert.Equal(">=", t12.Value);
+
+    var t13 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.LessThanOrEqual, t13.Type);
+    Assert.Equal("<=", t13.Value);
+
+    var t14 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Plus, t14.Type);
+    Assert.Equal("+", t14.Value);
+
+    var t15 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Minus, t15.Type);
+    Assert.Equal("-", t15.Value);
+
+    var t16 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Slash, t16.Type);
+    Assert.Equal("/", t16.Value);
+  }
+
+  [Fact]
+  public void Tokenize_NumericLiterals_ReturnsCorrectTokens()
+  {
+    // Scenario: 123 45.67 -10 -> [NumericLiteral, NumericLiteral, Symbol(-), NumericLiteral]
+    // Note: Lexers often tokenize negative numbers as [Minus, Number] and leave it to the Parser to combine them.
+    // We will assume that behavior here.
+
+    var input = "123 45.67";
+    var tokenizer = new Tokenizer(input);
+
+    // 1. 123
+    var t1 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.NumericLiteral, t1.Type);
+    Assert.Equal("123", t1.Value);
+
+    // 2. 45.67
+    var t2 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.NumericLiteral, t2.Type);
+    Assert.Equal("45.67", t2.Value);
   }
 }

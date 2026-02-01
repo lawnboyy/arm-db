@@ -36,16 +36,45 @@ public class Tokenizer
     var nextCharStr = nextChar.ToString();
     var next2Chars = startPos < _sql.Length - 1 ? _sql.AsSpan().Slice(startPos, 2).ToString() : "";
 
-    // Check the double character symbols first so we don't incorrectly match a single character symbol...
-    if (DoubleCharSymbolLookup.ContainsKey(next2Chars))
+    // First check if the first character of the next token is a number. If so, then the entire token must be a number
+    // or it's invalid since identifiers and keywords cannot start with a number.
+    if (char.IsNumber(nextChar))
     {
-      var token = new Token(nextChar, startPos, DoubleCharSymbolLookup[next2Chars]);
+      var currentChar = nextChar;
+      var currentPosition = startPos;
+      var decimalCount = 0;
+      while ((char.IsNumber(currentChar) || currentChar == '.') && currentPosition < _sql.Length)
+      {
+        if (currentChar == '.')
+        {
+          decimalCount++;
+          if (decimalCount > 1)
+            throw new ArgumentException("Invalid number value found with multiple decimals.");
+        }
+
+        currentPosition++;
+        if (currentPosition < _sql.Length)
+          currentChar = _sql[currentPosition];
+      }
+
+      // Now slice out the token
+      var tokenValue = _sql.AsSpan().Slice(startPos, currentPosition - startPos).ToString();
+
+      // If we haven't reached the end of the SQL string, move the position back 1.
+      _position = currentPosition;
+
+      return new Token(tokenValue, startPos, TokenType.NumericLiteral);
+    }
+    // Check the double character symbols first so we don't incorrectly match a single character symbol...
+    else if (DoubleCharSymbolLookup.ContainsKey(next2Chars))
+    {
+      var token = new Token(next2Chars, startPos, DoubleCharSymbolLookup[next2Chars]);
       _position += 2;
       return token;
     }
     else if (SingleCharSymbolLookup.ContainsKey(nextCharStr))
     {
-      var token = new Token(nextChar, startPos, SingleCharSymbolLookup[nextCharStr]);
+      var token = new Token(nextChar.ToString(), startPos, SingleCharSymbolLookup[nextCharStr]);
       _position++;
       return token;
     }
