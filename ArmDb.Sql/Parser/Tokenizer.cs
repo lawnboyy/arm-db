@@ -74,7 +74,7 @@ public class Tokenizer
     }
     else if (SingleCharSymbolLookup.ContainsKey(nextCharStr))
     {
-      var token = new Token(nextChar.ToString(), startPos, SingleCharSymbolLookup[nextCharStr]);
+      var token = new Token(nextCharStr, startPos, SingleCharSymbolLookup[nextCharStr]);
       _position++;
       return token;
     }
