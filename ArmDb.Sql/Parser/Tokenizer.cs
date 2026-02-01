@@ -69,9 +69,8 @@ public class Tokenizer
       _position = currentPosition;
 
       // See if this is a keyword...
-      var tokenLower = tokenValue.ToLower();
-      if (KeywordLookup.ContainsKey(tokenLower))
-        return new Token(tokenValue, startPos, KeywordLookup[tokenLower]);
+      if (KeywordLookup.ContainsKey(tokenValue))
+        return new Token(tokenValue, startPos, KeywordLookup[tokenValue]);
 
       throw new NotSupportedException($"SQL token not supported!");
     }
