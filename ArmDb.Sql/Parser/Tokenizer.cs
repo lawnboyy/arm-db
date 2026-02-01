@@ -1,4 +1,5 @@
 
+using System.Text;
 using static ArmDb.Sql.Parser.TokenizerUtilities;
 
 namespace ArmDb.Sql.Parser;
@@ -37,7 +38,7 @@ public class Tokenizer
     var next2Chars = startPos < _sql.Length - 1 ? _sql.AsSpan().Slice(startPos, 2).ToString() : "";
 
     // First check if the first character of the next token is a number. If so, then the entire token must be a number
-    // or it's invalid since identifiers and keywords cannot start with a number.
+    // or it's invalid since identifiers and keywords cannot start with a number.    
     if (char.IsNumber(nextChar))
     {
       var currentChar = nextChar;
@@ -64,6 +65,11 @@ public class Tokenizer
       _position = currentPosition;
 
       return new Token(tokenValue, startPos, TokenType.NumericLiteral);
+    }
+    else if (nextChar == '\'')
+    {
+      var literal = ParseStringLiteral(_sql.AsSpan(), ref _position);
+      return new Token(literal, startPos, TokenType.StringLiteral);
     }
     // Check the double character symbols first so we don't incorrectly match a single character symbol...
     else if (DoubleCharSymbolLookup.ContainsKey(next2Chars))
@@ -107,5 +113,77 @@ public class Tokenizer
     {
       throw new NotSupportedException($"SQL token not supported!");
     }
+  }
+
+  private string ParseStringLiteral(ReadOnlySpan<char> stringLiteral, ref int position)
+  {
+    if (stringLiteral.Slice(position, 2).ToString() == "''")
+    {
+      // Advance the position past the empty string...
+      position += 2;
+      return "";
+    }
+
+    var startPos = position;
+
+    var currentPosition = position;
+    var currentChar = stringLiteral[0];
+    // The first character should be a single quote
+    if (currentChar != '\'')
+      throw new ArgumentException("Attempted to parse a string literally that was not wrapped in single quotes!");
+
+    currentPosition++;
+
+    if (currentPosition < stringLiteral.Length)
+      currentChar = stringLiteral[currentPosition];
+    else
+      throw new ArgumentException("Invalid string literal!");
+
+    var containsEscapedQuotes = false;
+    while (currentChar != '\'' && currentPosition < stringLiteral.Length)
+    {
+      currentPosition++;
+      if (currentPosition < stringLiteral.Length)
+        currentChar = stringLiteral[currentPosition];
+
+      // If we encounter 2 single quotes in a row, it is an escaped single quote and we ignore it.
+      var nextPos = currentPosition + 1;
+      if (currentChar == '\'' && nextPos < stringLiteral.Length && stringLiteral[nextPos] == '\'')
+      {
+        containsEscapedQuotes = true;
+        currentPosition++;
+        if (nextPos + 1 < stringLiteral.Length)
+          currentChar = stringLiteral[nextPos + 1];
+      }
+    }
+
+    // Advance the position...
+    _position = currentPosition + 1;
+
+    // Return the string with the outer quotes stripped.
+    var value = _sql.AsSpan().Slice(startPos + 1, currentPosition - startPos - 1);
+    return UnescapeStringLiteral(value);
+  }
+
+  private string UnescapeStringLiteral(ReadOnlySpan<char> literal)
+  {
+    if (literal.IndexOf("''") < 0)
+      return literal.ToString();
+
+    var sb = new StringBuilder(literal.Length);
+
+    for (int i = 0; i < literal.Length; i++)
+    {
+      char c = literal[i];
+      sb.Append(c);
+
+      // If we hit a quote and the next one is also a quote, skip the next one
+      if (c == '\'' && i + 1 < literal.Length && literal[i + 1] == '\'')
+      {
+        i++; // Skip the escaping quote
+      }
+    }
+
+    return sb.ToString();
   }
 }

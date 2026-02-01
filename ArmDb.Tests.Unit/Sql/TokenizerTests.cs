@@ -184,4 +184,33 @@ public class TokenizerTests
     Assert.Equal(TokenType.NumericLiteral, t2.Type);
     Assert.Equal("45.67", t2.Value);
   }
+
+  [Fact]
+  public void Tokenize_StringLiterals_ReturnsCorrectTokens()
+  {
+    // Scenario: 'hello' '' 'O''Connor' 'hello world' -> 4 String Literals
+
+    var input = "'hello' '' 'O''Connor' 'hello world'";
+    var tokenizer = new Tokenizer(input);
+
+    // 1. 'hello'
+    var t1 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.StringLiteral, t1.Type);
+    Assert.Equal("hello", t1.Value); // Quotes stripped
+
+    // 2. '' (Empty)
+    var t2 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.StringLiteral, t2.Type);
+    Assert.Equal("", t2.Value);
+
+    // 3. 'O''Connor' (Escaped quote)
+    var t3 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.StringLiteral, t3.Type);
+    Assert.Equal("O'Connor", t3.Value); // Double quote becomes single
+
+    // 4. 'hello world' (Spaces preserved)
+    var t4 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.StringLiteral, t4.Type);
+    Assert.Equal("hello world", t4.Value);
+  }
 }
