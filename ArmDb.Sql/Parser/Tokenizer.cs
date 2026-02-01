@@ -139,7 +139,6 @@ public class Tokenizer
     else
       throw new ArgumentException("Invalid string literal!");
 
-    var containsEscapedQuotes = false;
     while (currentChar != '\'' && currentPosition < stringLiteral.Length)
     {
       currentPosition++;
@@ -150,7 +149,6 @@ public class Tokenizer
       var nextPos = currentPosition + 1;
       if (currentChar == '\'' && nextPos < stringLiteral.Length && stringLiteral[nextPos] == '\'')
       {
-        containsEscapedQuotes = true;
         currentPosition++;
         if (nextPos + 1 < stringLiteral.Length)
           currentChar = stringLiteral[nextPos + 1];
