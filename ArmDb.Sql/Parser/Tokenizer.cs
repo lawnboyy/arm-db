@@ -129,7 +129,7 @@ public class Tokenizer
     var startPos = position;
 
     var currentPosition = position;
-    var currentChar = sql[0];
+    var currentChar = sql[currentPosition];
     // The first character should be a single quote
     if (currentChar != '\'')
       throw new ArgumentException("Attempted to parse a string literally that was not wrapped in single quotes!");

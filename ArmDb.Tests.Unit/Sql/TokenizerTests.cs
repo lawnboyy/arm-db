@@ -245,4 +245,168 @@ public class TokenizerTests
     // Should throw when trying to find the end of the string
     Assert.ThrowsAny<UnterminatedStringLiteralException>(() => tokenizer.GetNextToken());
   }
+
+  [Fact]
+  public void Tokenize_FullSelectStatement_ReturnsCorrectSequence()
+  {
+    // SQL: SELECT * FROM sys_tables WHERE id = 1;
+    var sql = "SELECT * FROM sys_tables WHERE id = 1;";
+    var tokenizer = new Tokenizer(sql);
+
+    // 1. SELECT
+    Assert.Equal(TokenType.Select, tokenizer.GetNextToken().Type);
+
+    // 2. *
+    Assert.Equal(TokenType.Star, tokenizer.GetNextToken().Type);
+
+    // 3. FROM
+    Assert.Equal(TokenType.From, tokenizer.GetNextToken().Type);
+
+    // 4. sys_tables
+    var table = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Identifier, table.Type);
+    Assert.Equal("sys_tables", table.Value);
+
+    // 5. WHERE
+    Assert.Equal(TokenType.Where, tokenizer.GetNextToken().Type);
+
+    // 6. id
+    var col = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Identifier, col.Type);
+    Assert.Equal("id", col.Value);
+
+    // 7. =
+    Assert.Equal(TokenType.Equal, tokenizer.GetNextToken().Type);
+
+    // 8. 1
+    var val = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.NumericLiteral, val.Type);
+    Assert.Equal("1", val.Value);
+
+    // 9. ;
+    Assert.Equal(TokenType.Semicolon, tokenizer.GetNextToken().Type);
+
+    // 10. EOF
+    Assert.Equal(TokenType.EndOfFile, tokenizer.GetNextToken().Type);
+  }
+
+  [Fact]
+  public void Tokenize_CreateTableStatement_ReturnsCorrectSequence()
+  {
+    // SQL: CREATE TABLE users (id INT, name VARCHAR);
+    var sql = "CREATE TABLE users (id INT, name VARCHAR);";
+    var tokenizer = new Tokenizer(sql);
+
+    Assert.Equal(TokenType.Create, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.Table, tokenizer.GetNextToken().Type);
+
+    var tableName = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Identifier, tableName.Type);
+    Assert.Equal("users", tableName.Value);
+
+    Assert.Equal(TokenType.OpenParen, tokenizer.GetNextToken().Type);
+
+    var col1 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Identifier, col1.Type);
+    Assert.Equal("id", col1.Value);
+
+    // INT is a keyword (DataType)
+    Assert.Equal(TokenType.Int, tokenizer.GetNextToken().Type);
+
+    Assert.Equal(TokenType.Comma, tokenizer.GetNextToken().Type);
+
+    var col2 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Identifier, col2.Type);
+    Assert.Equal("name", col2.Value);
+
+    // VARCHAR is a keyword
+    Assert.Equal(TokenType.Varchar, tokenizer.GetNextToken().Type);
+
+    Assert.Equal(TokenType.CloseParen, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.Semicolon, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.EndOfFile, tokenizer.GetNextToken().Type);
+  }
+
+  [Fact]
+  public void Tokenize_KitchenSink_ReturnsCorrectSequence()
+  {
+    // Complex scenario with multiple statements, operators, parentheses, and types.
+    var sql = @"
+          SELECT * FROM orders WHERE (total > 100.50 AND status != 'pending') OR is_vip = TRUE;
+          INSERT INTO logs (msg) VALUES ('Error: 404');";
+
+    var tokenizer = new Tokenizer(sql);
+
+    // Statement 1: SELECT
+    Assert.Equal(TokenType.Select, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.Star, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.From, tokenizer.GetNextToken().Type);
+
+    var table = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Identifier, table.Type);
+    Assert.Equal("orders", table.Value);
+
+    Assert.Equal(TokenType.Where, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.OpenParen, tokenizer.GetNextToken().Type);
+
+    var col1 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Identifier, col1.Type);
+    Assert.Equal("total", col1.Value);
+
+    Assert.Equal(TokenType.GreaterThan, tokenizer.GetNextToken().Type);
+
+    var num = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.NumericLiteral, num.Type);
+    Assert.Equal("100.50", num.Value);
+
+    Assert.Equal(TokenType.And, tokenizer.GetNextToken().Type);
+
+    var col2 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Identifier, col2.Type);
+    Assert.Equal("status", col2.Value);
+
+    Assert.Equal(TokenType.NotEqual, tokenizer.GetNextToken().Type);
+
+    var str = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.StringLiteral, str.Type);
+    Assert.Equal("pending", str.Value);
+
+    Assert.Equal(TokenType.CloseParen, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.Or, tokenizer.GetNextToken().Type);
+
+    var col3 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Identifier, col3.Type);
+    Assert.Equal("is_vip", col3.Value);
+
+    Assert.Equal(TokenType.Equal, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.BooleanLiteral, tokenizer.GetNextToken().Type); // TRUE is mapped to BooleanLiteral
+    Assert.Equal(TokenType.Semicolon, tokenizer.GetNextToken().Type);
+
+    // Statement 2: INSERT
+    Assert.Equal(TokenType.Insert, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.Into, tokenizer.GetNextToken().Type);
+
+    var table2 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Identifier, table2.Type);
+    Assert.Equal("logs", table2.Value);
+
+    Assert.Equal(TokenType.OpenParen, tokenizer.GetNextToken().Type);
+
+    var col4 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Identifier, col4.Type);
+    Assert.Equal("msg", col4.Value);
+
+    Assert.Equal(TokenType.CloseParen, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.Values, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.OpenParen, tokenizer.GetNextToken().Type);
+
+    var str2 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.StringLiteral, str2.Type);
+    Assert.Equal("Error: 404", str2.Value);
+
+    Assert.Equal(TokenType.CloseParen, tokenizer.GetNextToken().Type);
+    Assert.Equal(TokenType.Semicolon, tokenizer.GetNextToken().Type);
+
+    Assert.Equal(TokenType.EndOfFile, tokenizer.GetNextToken().Type);
+  }
 }
