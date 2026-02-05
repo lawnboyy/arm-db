@@ -91,9 +91,33 @@ public class SqlParser
         case TokenType.Identifier:
           columnName = token.Value;
           break;
+        case TokenType.BigInt:
+          var bigIntDef = new ColumnDefinition(columnName, new DataTypeInfo(PrimitiveDataType.BigInt));
+          columns.Add(bigIntDef);
+          break;
+        case TokenType.Blob:
+          var blobDef = ParseBlobDefinition(columnName);
+          columns.Add(blobDef);
+          break;
+        case TokenType.Boolean:
+          var boolDef = new ColumnDefinition(columnName, new DataTypeInfo(PrimitiveDataType.Boolean));
+          columns.Add(boolDef);
+          break;
+        case TokenType.DateTime:
+          var datetimeDef = new ColumnDefinition(columnName, new DataTypeInfo(PrimitiveDataType.DateTime));
+          columns.Add(datetimeDef);
+          break;
+        case TokenType.Decimal:
+          var decimalDef = ParseDecimalDefinition(columnName);
+          columns.Add(decimalDef);
+          break;
+        case TokenType.Float:
+          var floatDef = new ColumnDefinition(columnName, new DataTypeInfo(PrimitiveDataType.Float));
+          columns.Add(floatDef);
+          break;
         case TokenType.Int:
-          var columnDef = new ColumnDefinition(columnName, new DataTypeInfo(PrimitiveDataType.Int));
-          columns.Add(columnDef);
+          var intDef = new ColumnDefinition(columnName, new DataTypeInfo(PrimitiveDataType.Int));
+          columns.Add(intDef);
           break;
         case TokenType.Varchar:
           var varChar = ParseVarCharDefinition(columnName);
@@ -111,6 +135,29 @@ public class SqlParser
     }
 
     return columns;
+  }
+
+  private ColumnDefinition ParseBlobDefinition(string columnName)
+  {
+    // BLOB should be in the form BLOB(255), so we need to parse out the max length.
+    // The next token must be the opening parenthesis for the max length.
+    var token = _tokenizer.GetNextToken();
+    if (token.Type != TokenType.OpenParen)
+      throw new InvalidSqlException($"Syntax error: expected '(' but found {token.Value} at {token.Position}");
+
+    // The next token should be the number value for the max length.
+    token = _tokenizer.GetNextToken();
+    if (token.Type != TokenType.NumericLiteral)
+      throw new InvalidSqlException($"Parse error: expected number but found {token.Value} at {token.Position}");
+
+    var maxLength = int.Parse(token.Value);
+    // Discard the closing parenthesis...
+    token = _tokenizer.GetNextToken();
+    if (token.Type != TokenType.CloseParen)
+      throw new InvalidSqlException($"Syntax error: expected ')' but found {token.Value}");
+
+    var varChar = new ColumnDefinition(columnName, new DataTypeInfo(PrimitiveDataType.Blob, maxLength));
+    return varChar;
   }
 
   private ColumnDefinition ParseVarCharDefinition(string columnName)
@@ -133,6 +180,42 @@ public class SqlParser
       throw new InvalidSqlException($"Syntax error: expected ')' but found {token.Value}");
 
     var varChar = new ColumnDefinition(columnName, new DataTypeInfo(PrimitiveDataType.Varchar, maxLength));
+    return varChar;
+  }
+
+  private ColumnDefinition ParseDecimalDefinition(string columnName)
+  {
+    // DECIMAL should be in the form DECIMAL(10, 4), so we need to parse out the precision and scale.
+    // The next token must be the opening parenthesis for the max length.
+    var token = _tokenizer.GetNextToken();
+    if (token.Type != TokenType.OpenParen)
+      throw new InvalidSqlException($"Syntax error: expected '(' but found {token.Value} at {token.Position}");
+
+    // The next token must be the number value for the precisionh.
+    token = _tokenizer.GetNextToken();
+    if (token.Type != TokenType.NumericLiteral)
+      throw new InvalidSqlException($"Parse error: expected number but found {token.Value} at {token.Position}");
+
+    var precision = int.Parse(token.Value);
+
+    // A comma must separate the precision and scale values.
+    token = _tokenizer.GetNextToken();
+    if (token.Type != TokenType.Comma)
+      throw new InvalidSqlException($"Syntax error: expected ',' but found {token.Value} at {token.Position}");
+
+    // The next token must be the scale.
+    token = _tokenizer.GetNextToken();
+    if (token.Type != TokenType.NumericLiteral)
+      throw new InvalidSqlException($"Parse error: expected number but found {token.Value} at {token.Position}");
+
+    var scale = int.Parse(token.Value);
+
+    // Discard the closing parenthesis...
+    token = _tokenizer.GetNextToken();
+    if (token.Type != TokenType.CloseParen)
+      throw new InvalidSqlException($"Syntax error: expected ')' but found {token.Value}");
+
+    var varChar = new ColumnDefinition(columnName, new DataTypeInfo(PrimitiveDataType.Decimal, null, precision, scale));
     return varChar;
   }
 }
