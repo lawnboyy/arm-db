@@ -1,4 +1,5 @@
 using ArmDb.Sql;
+using ArmDb.Sql.Exceptions;
 using ArmDb.Sql.Parser;
 
 namespace ArmDb.Tests.Unit.Sql.Parser;
@@ -212,5 +213,36 @@ public class TokenizerTests
     var t4 = tokenizer.GetNextToken();
     Assert.Equal(TokenType.StringLiteral, t4.Type);
     Assert.Equal("hello world", t4.Value);
+  }
+
+  [Fact]
+  public void Tokenize_Identifiers_ReturnsCorrectTokens()
+  {
+    // Scenario: users "My Table" "select" _hidden -> [Identifier, Identifier]
+
+    var input = "users _hidden";
+    var tokenizer = new Tokenizer(input);
+
+    // 1. users (Simple)
+    var t1 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Identifier, t1.Type);
+    Assert.Equal("users", t1.Value);
+
+    // 4. _hidden (Starts with underscore)
+    var t4 = tokenizer.GetNextToken();
+    Assert.Equal(TokenType.Identifier, t4.Type);
+    Assert.Equal("_hidden", t4.Value);
+  }
+
+  [Fact]
+  public void Tokenize_UnterminatedString_ThrowsException()
+  {
+    // Scenario: 'hello world (Missing closing quote)
+
+    var input = "'hello world";
+    var tokenizer = new Tokenizer(input);
+
+    // Should throw when trying to find the end of the string
+    Assert.ThrowsAny<UnterminatedStringLiteralException>(() => tokenizer.GetNextToken());
   }
 }

@@ -1,5 +1,6 @@
 
 using System.Text;
+using ArmDb.Sql.Exceptions;
 using static ArmDb.Sql.Parser.TokenizerUtilities;
 
 namespace ArmDb.Sql.Parser;
@@ -32,9 +33,9 @@ public class Tokenizer
     int startPos = _position;
 
     // Check if the next character is a symbol.
-    // TODO: Handle multi-character symbols (e.g. <=, >=, !=)
     var nextChar = _sql[startPos];
     var nextCharStr = nextChar.ToString();
+    // Handle multi-character symbols (e.g. <=, >=, !=)
     var next2Chars = startPos < _sql.Length - 1 ? _sql.AsSpan().Slice(startPos, 2).ToString() : "";
 
     // First check if the first character of the next token is a number. If so, then the entire token must be a number
@@ -107,7 +108,8 @@ public class Tokenizer
       if (KeywordLookup.ContainsKey(tokenValue))
         return new Token(tokenValue, startPos, KeywordLookup[tokenValue]);
 
-      throw new NotSupportedException($"SQL token not supported!");
+      // The remaining option is an identifier...
+      return new Token(tokenValue, startPos, TokenType.Identifier);
     }
     else
     {
@@ -115,9 +117,9 @@ public class Tokenizer
     }
   }
 
-  private string ParseStringLiteral(ReadOnlySpan<char> stringLiteral, ref int position)
+  private string ParseStringLiteral(ReadOnlySpan<char> sql, ref int position)
   {
-    if (stringLiteral.Slice(position, 2).ToString() == "''")
+    if (sql.Slice(position, 2).ToString() == "''")
     {
       // Advance the position past the empty string...
       position += 2;
@@ -127,33 +129,36 @@ public class Tokenizer
     var startPos = position;
 
     var currentPosition = position;
-    var currentChar = stringLiteral[0];
+    var currentChar = sql[0];
     // The first character should be a single quote
     if (currentChar != '\'')
       throw new ArgumentException("Attempted to parse a string literally that was not wrapped in single quotes!");
 
     currentPosition++;
 
-    if (currentPosition < stringLiteral.Length)
-      currentChar = stringLiteral[currentPosition];
+    if (currentPosition < sql.Length)
+      currentChar = sql[currentPosition];
     else
       throw new ArgumentException("Invalid string literal!");
 
-    while (currentChar != '\'' && currentPosition < stringLiteral.Length)
+    while (currentChar != '\'' && currentPosition < sql.Length)
     {
       currentPosition++;
-      if (currentPosition < stringLiteral.Length)
-        currentChar = stringLiteral[currentPosition];
+      if (currentPosition < sql.Length)
+        currentChar = sql[currentPosition];
 
       // If we encounter 2 single quotes in a row, it is an escaped single quote and we ignore it.
       var nextPos = currentPosition + 1;
-      if (currentChar == '\'' && nextPos < stringLiteral.Length && stringLiteral[nextPos] == '\'')
+      if (currentChar == '\'' && nextPos < sql.Length && sql[nextPos] == '\'')
       {
         currentPosition++;
-        if (nextPos + 1 < stringLiteral.Length)
-          currentChar = stringLiteral[nextPos + 1];
+        if (nextPos + 1 < sql.Length)
+          currentChar = sql[nextPos + 1];
       }
     }
+
+    if (currentPosition == sql.Length)
+      throw new UnterminatedStringLiteralException($"Unterminated string literal at position: {startPos}");
 
     // Advance the position...
     _position = currentPosition + 1;
