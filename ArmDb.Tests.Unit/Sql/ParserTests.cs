@@ -198,4 +198,77 @@ public class ParserTests
     Assert.Equal("Log Entry", val2.Value);
     Assert.Equal(PrimitiveDataType.Varchar, val2.Type);
   }
+
+  [Fact]
+  public void Parse_InsertStatement_NoColumns_ReturnsCorrectAst()
+  {
+    // Scenario: INSERT INTO table VALUES (...) without specifying column names.
+    // Arrange
+    var sql = "INSERT INTO mydb.users VALUES (1, 'user')";
+    var parser = new SqlParser(sql);
+
+    // Act
+    var statement = parser.ParseStatement();
+
+    // Assert
+    Assert.NotNull(statement);
+    var insertStmt = Assert.IsType<InsertStatement>(statement);
+
+    Assert.Empty(insertStmt.Columns); // Should be empty list
+    Assert.Equal(2, insertStmt.Values.Count);
+  }
+
+  [Fact]
+  public void Parse_InsertStatement_WithNull_ReturnsCorrectAst()
+  {
+    // Scenario: Inserting NULL keyword
+    // Arrange
+    var sql = "INSERT INTO mydb.users (id, name) VALUES (1, NULL)";
+    var parser = new SqlParser(sql);
+
+    // Act
+    var statement = parser.ParseStatement();
+
+    // Assert
+    Assert.NotNull(statement);
+    var insertStmt = Assert.IsType<InsertStatement>(statement);
+
+    Assert.Equal(2, insertStmt.Values.Count);
+
+    // Value 2: NULL
+    var val2 = Assert.IsType<LiteralExpression>(insertStmt.Values[1]);
+    Assert.Null(val2.Value);
+    // Assuming PrimitiveDataType.Unknown or similar for generic NULL, unless inferred.
+    // Based on previous design discussions, we map NULL token to a literal with null value.
+  }
+
+  // TODO: Add support for negative numbers
+  // https://github.com/lawnboyy/arm-db/issues/11
+  // [Fact]
+  // public void Parse_InsertStatement_WithNegativeNumbers_ReturnsCorrectAst()
+  // {
+  //   // Scenario: Inserting negative integers and decimals
+  //   // Arrange
+  //   var sql = "INSERT INTO weather (temp_c, temp_f) VALUES (-5, -45.5)";
+  //   var parser = new SqlParser(sql);
+
+  //   // Act
+  //   var statement = parser.ParseStatement();
+
+  //   // Assert
+  //   Assert.NotNull(statement);
+  //   var insertStmt = Assert.IsType<InsertStatement>(statement);
+
+  //   Assert.Equal(2, insertStmt.Values.Count);
+
+  //   // Value 1: -5 (Int)
+  //   var val1 = Assert.IsType<LiteralExpression>(insertStmt.Values[0]);
+  //   Assert.Equal(-5, val1.Value);
+  //   Assert.Equal(PrimitiveDataType.Int, val1.Type);
+
+  //   // Value 2: -45.5 (Decimal)
+  //   var val2 = Assert.IsType<LiteralExpression>(insertStmt.Values[1]);
+  //   Assert.Equal(-45.5m, val2.Value);
+  //   Assert.Equal(PrimitiveDataType.Decimal, val2.Type);
+  // }
 }

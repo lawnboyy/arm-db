@@ -154,6 +154,8 @@ public class SqlParser
         // Anything less than 10 will fit in a 32-bit      
         else if (token.Value.Length < 10)
           return new LiteralExpression(int.Parse(token.Value), PrimitiveDataType.Int);
+        // A value with exactly 10 digits could be 32-bit or 64-bit, so we'll try parsing an int first, then a long if
+        // that fails.
         else if (token.Value.Length == 10)
         {
           var is32Bit = int.TryParse(token.Value, out int integer);
