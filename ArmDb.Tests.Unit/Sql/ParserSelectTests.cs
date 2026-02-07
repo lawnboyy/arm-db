@@ -10,7 +10,7 @@ public partial class ParserTests
   {
     // Scenario: Simple SELECT * FROM table
     // Arrange
-    var sql = "SELECT * FROM users";
+    var sql = "SELECT * FROM mydb.users";
     var parser = new SqlParser(sql);
 
     // Act
@@ -22,13 +22,15 @@ public partial class ParserTests
 
     // Verify From
     Assert.Equal("users", selectStmt.FromTable.Name);
+    Assert.Equal("mydb", selectStmt.FromTable.DatabaseName);
 
     // Verify Columns
     Assert.Single(selectStmt.Columns);
     var col1 = selectStmt.Columns[0];
     Assert.Null(col1.Alias);
 
-    var colExpr = Assert.IsType<WildcardExpression>(col1.Expression);
+    // Expect WildcardExpression instead of ColumnExpression("*")
+    Assert.IsType<WildcardExpression>(col1.Expression);
 
     // Verify Where
     Assert.Null(selectStmt.WhereClause);

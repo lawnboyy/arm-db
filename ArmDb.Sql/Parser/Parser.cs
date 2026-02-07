@@ -60,23 +60,23 @@ public class SqlParser
     // INSERT statements must begin with the keywords: INSERT INTO
     var token = _tokenizer.GetNextToken();
     if (token.Type != TokenType.Into)
-      throw new InvalidSqlException($"Syntax error: expected INTO but found {token.Value} at position: {token.Position}");
+      throw new InvalidSqlException($"Syntax error: expected INTO but found '{token.Value}' at position: {token.Position}");
 
     // The database and table name must come next in the following format: dbname.tablename
     token = _tokenizer.GetNextToken();
     if (token.Type != TokenType.Identifier)
-      throw new InvalidSqlException($"Parse error: expected database name but found {token.Value} at position: {token.Position}");
+      throw new InvalidSqlException($"Parse error: expected database name but found '{token.Value}' at position: {token.Position}");
 
     var dbName = token.Value;
     // A period must separate the database name from the table name.
     token = _tokenizer.GetNextToken();
     if (token.Type != TokenType.Dot)
-      throw new InvalidSqlException($"Syntax error: expected dbName.tableName but found {token.Value} at position: {token.Position}");
+      throw new InvalidSqlException($"Syntax error: expected dbName.tableName but found '{token.Value}' at position: {token.Position}");
 
     // The table name must follow the database name
     token = _tokenizer.GetNextToken();
     if (token.Type != TokenType.Identifier)
-      throw new InvalidSqlException($"Syntax error: expected dbName.tableName but found {token.Value} at position: {token.Position}");
+      throw new InvalidSqlException($"Syntax error: expected dbName.tableName but found '{token.Value}' at position: {token.Position}");
 
     var tableName = token.Value;
 
@@ -93,7 +93,7 @@ public class SqlParser
       {
         token = _tokenizer.GetNextToken();
         if (token.Type != TokenType.Identifier)
-          throw new InvalidSqlException($"Syntax error: expected column name but found {token.Value} at {token.Position}");
+          throw new InvalidSqlException($"Syntax error: expected column name but found '{token.Value}' at {token.Position}");
 
         columns.Add(token.Value);
 
@@ -102,21 +102,21 @@ public class SqlParser
           break;
 
         if (token.Type != TokenType.Comma)
-          throw new InvalidSqlException($"Syntax error: expected ',' or ')' in column list but found {token.Value} at {token.Position}");
+          throw new InvalidSqlException($"Syntax error: expected ',' or ')' in column list but found '{token.Value}' at {token.Position}");
       }
       // Advance to the next token after the closing parenthesis
       token = _tokenizer.GetNextToken();
     }
 
     if (token.Type != TokenType.Values)
-      throw new InvalidSqlException($"Syntax error: expected VALUES but found {token.Value} at {token.Position}");
+      throw new InvalidSqlException($"Syntax error: expected VALUES but found '{token.Value}' at {token.Position}");
 
     // Parse column values...
     var values = new List<SqlExpression>();
     token = _tokenizer.GetNextToken();
 
     if (token.Type != TokenType.OpenParen)
-      throw new InvalidSqlException($"Syntax error: expected '(' after VALUES but found {token.Value} at {token.Position}");
+      throw new InvalidSqlException($"Syntax error: expected '(' after VALUES but found '{token.Value}' at {token.Position}");
 
     while (true)
     {
@@ -129,7 +129,7 @@ public class SqlParser
         break;
 
       if (token.Type != TokenType.Comma)
-        throw new InvalidSqlException($"Syntax error: expected ',' or ')' in values list but found {token.Value} at {token.Position}");
+        throw new InvalidSqlException($"Syntax error: expected ',' or ')' in values list but found '{token.Value}' at {token.Position}");
     }
 
     return new InsertStatement(new ObjectIdentifier(tableName, dbName), columns, values);
@@ -150,11 +150,31 @@ public class SqlParser
 
     }
 
-    // TODO: Parse the FROM clause...
-    var fromTable = "users";
-    // TODO: Parse the WHERE clause...    
+    // Parse the FROM clause...
+    // The FROM clause must begin with the FROM keyword.
+    token = _tokenizer.GetNextToken();
+    if (token.Type != TokenType.From)
+      throw new InvalidSqlException($"Syntax error: expected 'FROM' but found '{token.Value}' at {token.Position}");
 
-    return new SelectStatement(columns, new ObjectIdentifier(fromTable, ""), null);
+    // The next tokens should be database name and table name separated by a '.'
+    token = _tokenizer.GetNextToken();
+    if (token.Type != TokenType.Identifier)
+      throw new InvalidSqlException($"Syntax error: expected database identifier but found '{token.Value}' at {token.Position}");
+
+    var databaseName = token.Value;
+
+    token = _tokenizer.GetNextToken();
+    if (token.Type != TokenType.Dot)
+      throw new InvalidSqlException($"Syntax error: unexpected token found at {token.Position}, '{token.Value}'");
+
+    token = _tokenizer.GetNextToken();
+    if (token.Type != TokenType.Identifier)
+      throw new InvalidSqlException($"Syntax error: expected table identifier but found '{token.Value}' at {token.Position}");
+
+    var fromTable = token.Value;
+    // TODO: Parse the WHERE clause...  
+
+    return new SelectStatement(columns, new ObjectIdentifier(fromTable, databaseName), null);
   }
 
   private SqlExpression ParseExpression()
@@ -196,7 +216,7 @@ public class SqlParser
           }
         }
 
-        throw new InvalidSqlException($"Parse error: could not parse numeric value {token.Value} at position: {token.Position}");
+        throw new InvalidSqlException($"Parse error: could not parse numeric value '{token.Value}' at position: {token.Position}");
 
       case TokenType.BooleanLiteral:
         return new LiteralExpression(bool.Parse(token.Value), PrimitiveDataType.Boolean);
@@ -205,7 +225,7 @@ public class SqlParser
         return new LiteralExpression(null, PrimitiveDataType.Unknown); // Or a specific Null type
 
       default:
-        throw new InvalidSqlException($"Unexpected token in expression: {token.Value} ({token.Type}) at {token.Position}");
+        throw new InvalidSqlException($"Unexpected token in expression: '{token.Value}' ({token.Type}) at {token.Position}");
     }
   }
 
@@ -214,7 +234,7 @@ public class SqlParser
     // The next token must be the table name.
     var token = _tokenizer.GetNextToken();
     if (token.Type != TokenType.Identifier)
-      throw new InvalidSqlException($"Parse error: expected table name but found: {token.Value}");
+      throw new InvalidSqlException($"Parse error: expected table name but found: '{token.Value}'");
 
     ObjectIdentifier table = new ObjectIdentifier(token.Value, "mydb");
 
@@ -300,18 +320,18 @@ public class SqlParser
     // The next token must be the opening parenthesis for the max length.
     var token = _tokenizer.GetNextToken();
     if (token.Type != TokenType.OpenParen)
-      throw new InvalidSqlException($"Syntax error: expected '(' but found {token.Value} at {token.Position}");
+      throw new InvalidSqlException($"Syntax error: expected '(' but found '{token.Value}' at {token.Position}");
 
     // The next token should be the number value for the max length.
     token = _tokenizer.GetNextToken();
     if (token.Type != TokenType.NumericLiteral)
-      throw new InvalidSqlException($"Parse error: expected number but found {token.Value} at {token.Position}");
+      throw new InvalidSqlException($"Parse error: expected number but found '{token.Value}' at {token.Position}");
 
     var maxLength = int.Parse(token.Value);
     // Discard the closing parenthesis...
     token = _tokenizer.GetNextToken();
     if (token.Type != TokenType.CloseParen)
-      throw new InvalidSqlException($"Syntax error: expected ')' but found {token.Value}");
+      throw new InvalidSqlException($"Syntax error: expected ')' but found '{token.Value}'");
 
     var varChar = new ColumnDefinition(columnName, new DataTypeInfo(PrimitiveDataType.Blob, maxLength));
     return varChar;
@@ -323,18 +343,18 @@ public class SqlParser
     // The next token must be the opening parenthesis for the max length.
     var token = _tokenizer.GetNextToken();
     if (token.Type != TokenType.OpenParen)
-      throw new InvalidSqlException($"Syntax error: expected '(' but found {token.Value} at {token.Position}");
+      throw new InvalidSqlException($"Syntax error: expected '(' but found '{token.Value}' at {token.Position}");
 
     // The next token should be the number value for the max length.
     token = _tokenizer.GetNextToken();
     if (token.Type != TokenType.NumericLiteral)
-      throw new InvalidSqlException($"Parse error: expected number but found {token.Value} at {token.Position}");
+      throw new InvalidSqlException($"Parse error: expected number but found '{token.Value}' at {token.Position}");
 
     var maxLength = int.Parse(token.Value);
     // Discard the closing parenthesis...
     token = _tokenizer.GetNextToken();
     if (token.Type != TokenType.CloseParen)
-      throw new InvalidSqlException($"Syntax error: expected ')' but found {token.Value}");
+      throw new InvalidSqlException($"Syntax error: expected ')' but found '{token.Value}'");
 
     var varChar = new ColumnDefinition(columnName, new DataTypeInfo(PrimitiveDataType.Varchar, maxLength));
     return varChar;
@@ -346,31 +366,31 @@ public class SqlParser
     // The next token must be the opening parenthesis for the max length.
     var token = _tokenizer.GetNextToken();
     if (token.Type != TokenType.OpenParen)
-      throw new InvalidSqlException($"Syntax error: expected '(' but found {token.Value} at {token.Position}");
+      throw new InvalidSqlException($"Syntax error: expected '(' but found '{token.Value}' at {token.Position}");
 
     // The next token must be the number value for the precisionh.
     token = _tokenizer.GetNextToken();
     if (token.Type != TokenType.NumericLiteral)
-      throw new InvalidSqlException($"Parse error: expected number but found {token.Value} at {token.Position}");
+      throw new InvalidSqlException($"Parse error: expected number but found '{token.Value}' at {token.Position}");
 
     var precision = int.Parse(token.Value);
 
     // A comma must separate the precision and scale values.
     token = _tokenizer.GetNextToken();
     if (token.Type != TokenType.Comma)
-      throw new InvalidSqlException($"Syntax error: expected ',' but found {token.Value} at {token.Position}");
+      throw new InvalidSqlException($"Syntax error: expected ',' but found '{token.Value}' at {token.Position}");
 
     // The next token must be the scale.
     token = _tokenizer.GetNextToken();
     if (token.Type != TokenType.NumericLiteral)
-      throw new InvalidSqlException($"Parse error: expected number but found {token.Value} at {token.Position}");
+      throw new InvalidSqlException($"Parse error: expected number but found '{token.Value}' at {token.Position}");
 
     var scale = int.Parse(token.Value);
 
     // Discard the closing parenthesis...
     token = _tokenizer.GetNextToken();
     if (token.Type != TokenType.CloseParen)
-      throw new InvalidSqlException($"Syntax error: expected ')' but found {token.Value}");
+      throw new InvalidSqlException($"Syntax error: expected ')' but found '{token.Value}'");
 
     var varChar = new ColumnDefinition(columnName, new DataTypeInfo(PrimitiveDataType.Decimal, null, precision, scale));
     return varChar;
