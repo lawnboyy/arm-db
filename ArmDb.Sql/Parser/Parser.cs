@@ -20,9 +20,9 @@ public class SqlParser
     switch (currentToken.Type)
     {
       case TokenType.Create:
-        {
-          return ParseCreateStatement();
-        }
+        return ParseCreateStatement();
+      case TokenType.Insert:
+        return ParseInsertStatement();
       default:
         throw new InvalidSqlException("Unexpected token type!");
     }
@@ -52,12 +52,142 @@ public class SqlParser
     }
   }
 
+  private SqlStatement ParseInsertStatement()
+  {
+    // INSERT statements must begin with the keywords: INSERT INTO
+    var token = _tokenizer.GetNextToken();
+    if (token.Type != TokenType.Into)
+      throw new InvalidSqlException($"Syntax error: expected INTO but found {token.Value} at position: {token.Position}");
+
+    // The database and table name must come next in the following format: dbname.tablename
+    token = _tokenizer.GetNextToken();
+    if (token.Type != TokenType.Identifier)
+      throw new InvalidSqlException($"Parse error: expected database name but found {token.Value} at position: {token.Position}");
+
+    var dbName = token.Value;
+    // A period must separate the database name from the table name.
+    token = _tokenizer.GetNextToken();
+    if (token.Type != TokenType.Dot)
+      throw new InvalidSqlException($"Syntax error: expected dbName.tableName but found {token.Value} at position: {token.Position}");
+
+    // The table name must follow the database name
+    token = _tokenizer.GetNextToken();
+    if (token.Type != TokenType.Identifier)
+      throw new InvalidSqlException($"Syntax error: expected dbName.tableName but found {token.Value} at position: {token.Position}");
+
+    var tableName = token.Value;
+
+    // Parse the column names
+    // The column names must be wrapped in parentheses, and separated by commas...
+    var columns = new List<string>();
+    token = _tokenizer.GetNextToken();
+
+    // The column list is theoretically optional in SQL, but our current pattern usually implies it.
+    // If we see an OpenParen, we assume it's the column list.
+    if (token.Type == TokenType.OpenParen)
+    {
+      while (true)
+      {
+        token = _tokenizer.GetNextToken();
+        if (token.Type != TokenType.Identifier)
+          throw new InvalidSqlException($"Syntax error: expected column name but found {token.Value} at {token.Position}");
+
+        columns.Add(token.Value);
+
+        token = _tokenizer.GetNextToken();
+        if (token.Type == TokenType.CloseParen)
+          break;
+
+        if (token.Type != TokenType.Comma)
+          throw new InvalidSqlException($"Syntax error: expected ',' or ')' in column list but found {token.Value} at {token.Position}");
+      }
+      // Advance to the next token after the closing parenthesis
+      token = _tokenizer.GetNextToken();
+    }
+
+    if (token.Type != TokenType.Values)
+      throw new InvalidSqlException($"Syntax error: expected VALUES but found {token.Value} at {token.Position}");
+
+    // Parse column values...
+    var values = new List<SqlExpression>();
+    token = _tokenizer.GetNextToken();
+
+    if (token.Type != TokenType.OpenParen)
+      throw new InvalidSqlException($"Syntax error: expected '(' after VALUES but found {token.Value} at {token.Position}");
+
+    while (true)
+    {
+      // Parse the expression for the value
+      var expr = ParseExpression();
+      values.Add(expr);
+
+      token = _tokenizer.GetNextToken();
+      if (token.Type == TokenType.CloseParen)
+        break;
+
+      if (token.Type != TokenType.Comma)
+        throw new InvalidSqlException($"Syntax error: expected ',' or ')' in values list but found {token.Value} at {token.Position}");
+    }
+
+    return new InsertStatement(new ObjectIdentifier(tableName, dbName), columns, values);
+  }
+
+  private SqlExpression ParseExpression()
+  {
+    var token = _tokenizer.GetNextToken();
+    switch (token.Type)
+    {
+      case TokenType.StringLiteral:
+        return new LiteralExpression(token.Value, PrimitiveDataType.Varchar);
+
+      case TokenType.NumericLiteral:
+        // Simple heuristic: if it contains a dot, treat as decimal/float, otherwise int
+        if (token.Value.Contains('.'))
+        {
+          // Using Decimal for better precision in DB context usually, or Float
+          return new LiteralExpression(decimal.Parse(token.Value), PrimitiveDataType.Decimal);
+        }
+
+        // Anything greater than 10 digits will need to be a 64-bit        
+        if (token.Value.Length > 10)
+          return new LiteralExpression(long.Parse(token.Value), PrimitiveDataType.BigInt);
+        // Anything less than 10 will fit in a 32-bit      
+        else if (token.Value.Length < 10)
+          return new LiteralExpression(int.Parse(token.Value), PrimitiveDataType.Int);
+        else if (token.Value.Length == 10)
+        {
+          var is32Bit = int.TryParse(token.Value, out int integer);
+          if (is32Bit)
+          {
+            return new LiteralExpression(integer, PrimitiveDataType.Int);
+          }
+          else
+          {
+            var is64Bit = long.TryParse(token.Value, out long longVal);
+            if (is64Bit)
+              return new LiteralExpression(longVal, PrimitiveDataType.BigInt);
+          }
+        }
+
+        throw new InvalidSqlException($"Parse error: could not parse numeric value {token.Value} at position: {token.Position}");
+
+      case TokenType.BooleanLiteral:
+        return new LiteralExpression(bool.Parse(token.Value), PrimitiveDataType.Boolean);
+
+      case TokenType.Null:
+        return new LiteralExpression(null, PrimitiveDataType.Unknown); // Or a specific Null type
+
+      default:
+        throw new InvalidSqlException($"Unexpected token in expression: {token.Value} ({token.Type}) at {token.Position}");
+    }
+  }
+
   private SqlStatement ParseCreateTableStatement()
   {
     // The next token must be the table name.
     var token = _tokenizer.GetNextToken();
     if (token.Type != TokenType.Identifier)
-      throw new InvalidSqlException($"Expected table name but found: {token.Value}");
+      throw new InvalidSqlException($"Parse error: expected table name but found: {token.Value}");
 
     ObjectIdentifier table = new ObjectIdentifier(token.Value, "mydb");
 

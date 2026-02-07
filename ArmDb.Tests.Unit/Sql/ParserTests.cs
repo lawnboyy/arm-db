@@ -118,4 +118,84 @@ public class ParserTests
     Assert.Equal(PrimitiveDataType.Blob, createTableStmt.Columns[7].DataType.PrimitiveType);
     Assert.Equal(1024, createTableStmt.Columns[7].DataType.MaxLength);
   }
+
+  [Fact]
+  public void Parse_InsertStatement_ReturnsCorrectAst()
+  {
+    // Arrange
+    var sql = @"
+      INSERT INTO mydb.users(
+        email, first_name, last_name, is_onboarded, last_updated)
+      VALUES ('bob@mail.com', 'Bob', 'Whiley', true, '11-18-2025')";
+    var parser = new SqlParser(sql);
+
+    // Act
+    var statement = parser.ParseStatement();
+
+    // Assert
+    Assert.NotNull(statement);
+    var insertStmt = Assert.IsType<InsertStatement>(statement);
+
+    // Verify Table
+    Assert.Equal("users", insertStmt.Table.Name);
+    Assert.Equal("mydb", insertStmt.Table.DatabaseName);
+
+    // Verify Columns
+    Assert.Equal(5, insertStmt.Columns.Count);
+    Assert.Equal("email", insertStmt.Columns[0]);
+    Assert.Equal("first_name", insertStmt.Columns[1]);
+    Assert.Equal("last_name", insertStmt.Columns[2]);
+    Assert.Equal("is_onboarded", insertStmt.Columns[3]);
+    Assert.Equal("last_updated", insertStmt.Columns[4]);
+
+    // Verify Values
+    Assert.Equal(5, insertStmt.Values.Count);
+
+    var val1 = Assert.IsType<LiteralExpression>(insertStmt.Values[0]);
+    Assert.Equal("bob@mail.com", val1.Value);
+    Assert.Equal(PrimitiveDataType.Varchar, val1.Type);
+
+    var val2 = Assert.IsType<LiteralExpression>(insertStmt.Values[1]);
+    Assert.Equal("Bob", val2.Value);
+
+    var val3 = Assert.IsType<LiteralExpression>(insertStmt.Values[2]);
+    Assert.Equal("Whiley", val3.Value);
+
+    var val4 = Assert.IsType<LiteralExpression>(insertStmt.Values[3]);
+    Assert.Equal(true, val4.Value);
+    Assert.Equal(PrimitiveDataType.Boolean, val4.Type);
+
+    var val5 = Assert.IsType<LiteralExpression>(insertStmt.Values[4]);
+    Assert.Equal("11-18-2025", val5.Value);
+    Assert.Equal(PrimitiveDataType.Varchar, val5.Type);
+  }
+
+  [Fact]
+  public void Parse_InsertStatement_WithBigInt_ReturnsCorrectAst()
+  {
+    // Arrange
+    // Value 3000000000 exceeds Int32.MaxValue (2,147,483,647)
+    var sql = "INSERT INTO mydb.logs (id, message) VALUES (3000000000, 'Log Entry')";
+    var parser = new SqlParser(sql);
+
+    // Act
+    var statement = parser.ParseStatement();
+
+    // Assert
+    Assert.NotNull(statement);
+    var insertStmt = Assert.IsType<InsertStatement>(statement);
+
+    Assert.Equal(2, insertStmt.Values.Count);
+
+    // Verify BigInt detection
+    // The parser should automatically detect that 3000000000 > Int32.MaxValue and use BigInt
+    var val1 = Assert.IsType<LiteralExpression>(insertStmt.Values[0]);
+    Assert.Equal(3000000000L, val1.Value);
+    Assert.Equal(PrimitiveDataType.BigInt, val1.Type);
+
+    // Verify String
+    var val2 = Assert.IsType<LiteralExpression>(insertStmt.Values[1]);
+    Assert.Equal("Log Entry", val2.Value);
+    Assert.Equal(PrimitiveDataType.Varchar, val2.Type);
+  }
 }
