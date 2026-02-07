@@ -8,6 +8,8 @@ public record LiteralExpression(object? Value, PrimitiveDataType Type) : SqlExpr
 // Identifiers (Column References)
 public record ColumnExpression(string Name, string? TableAlias = null) : SqlExpression;
 
+public record WildcardExpression() : SqlExpression;
+
 // Binary Operations (WHERE id = 1)
 public record BinaryExpression(
     SqlExpression Left,

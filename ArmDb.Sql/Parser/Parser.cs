@@ -23,6 +23,8 @@ public class SqlParser
         return ParseCreateStatement();
       case TokenType.Insert:
         return ParseInsertStatement();
+      case TokenType.Select:
+        return ParseSelectStatement();
       default:
         throw new InvalidSqlException("Unexpected token type!");
     }
@@ -34,7 +36,8 @@ public class SqlParser
     // The first token is the CREATE keyword. The next token must be a
     // reserved keyword to indicate what is to be created. Otherwise, we
     // have an invalid SQL statement.
-    // Currently, we just support DATABASE, TABLE, and INDEX.
+    // Currently, we just support DATABASE and TABLE. We'll add support
+    // for INDEX later.
     // Get the next token.
     var token = _tokenizer.GetNextToken();
     switch (token.Type)
@@ -130,6 +133,28 @@ public class SqlParser
     }
 
     return new InsertStatement(new ObjectIdentifier(tableName, dbName), columns, values);
+  }
+
+  private SqlStatement ParseSelectStatement()
+  {
+    // The next token must be the * character or a comma delimited list of column names.
+    var token = _tokenizer.GetNextToken();
+    var columns = new List<SelectColumn>();
+    if (token.Type == TokenType.Star)
+    {
+      var column = new SelectColumn(new WildcardExpression(), null);
+      columns.Add(column);
+    }
+    else // Parse the column list
+    {
+
+    }
+
+    // TODO: Parse the FROM clause...
+    var fromTable = "users";
+    // TODO: Parse the WHERE clause...    
+
+    return new SelectStatement(columns, new ObjectIdentifier(fromTable, ""), null);
   }
 
   private SqlExpression ParseExpression()

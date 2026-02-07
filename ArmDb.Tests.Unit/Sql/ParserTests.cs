@@ -4,7 +4,7 @@ using ArmDb.Sql.Parser; // Assuming namespace based on folder structure
 
 namespace ArmDb.Tests.Unit.Sql.Parser;
 
-public class ParserTests
+public partial class ParserTests
 {
   [Fact]
   public void Parse_CreateDatabase_ReturnsCorrectAst()
