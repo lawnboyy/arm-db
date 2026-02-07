@@ -18,6 +18,16 @@ public class Tokenizer
 
   public Token GetNextToken()
   {
+    return ReturnNextToken();
+  }
+
+  public Token Peek()
+  {
+    return ReturnNextToken(false);
+  }
+
+  private Token ReturnNextToken(bool advancePosition = true)
+  {
     if (_position == _sql.Length)
     {
       return new Token("", _position, TokenType.EndOfFile);
@@ -62,8 +72,9 @@ public class Tokenizer
       // Now slice out the token
       var tokenValue = _sql.AsSpan().Slice(startPos, currentPosition - startPos).ToString();
 
-      // If we haven't reached the end of the SQL string, move the position back 1.
-      _position = currentPosition;
+      // Advance the position now that we have parsed the number token.
+      if (advancePosition)
+        _position = currentPosition;
 
       return new Token(tokenValue, startPos, TokenType.NumericLiteral);
     }
@@ -82,7 +93,8 @@ public class Tokenizer
     else if (SingleCharSymbolLookup.ContainsKey(nextCharStr))
     {
       var token = new Token(nextCharStr, startPos, SingleCharSymbolLookup[nextCharStr]);
-      _position++;
+      if (advancePosition)
+        _position++;
       return token;
     }
     // See if the next token starts with a valid character for an identifier...
@@ -101,8 +113,9 @@ public class Tokenizer
       // Now slice out the token
       var tokenValue = _sql.AsSpan().Slice(startPos, currentPosition - startPos).ToString();
 
-      // If we haven't reached the end of the SQL string, move the position back 1.
-      _position = currentPosition;
+      // Advance the position after parsing the identifier...
+      if (advancePosition)
+        _position = currentPosition;
 
       // See if this is a keyword...
       if (KeywordLookup.ContainsKey(tokenValue))
@@ -117,12 +130,13 @@ public class Tokenizer
     }
   }
 
-  private string ParseStringLiteral(ReadOnlySpan<char> sql, ref int position)
+  private string ParseStringLiteral(ReadOnlySpan<char> sql, ref int position, bool advancePosition = true)
   {
     if (sql.Slice(position, 2).ToString() == "''")
     {
       // Advance the position past the empty string...
-      position += 2;
+      if (advancePosition)
+        position += 2;
       return "";
     }
 
@@ -161,7 +175,8 @@ public class Tokenizer
       throw new UnterminatedStringLiteralException($"Unterminated string literal at position: {startPos}");
 
     // Advance the position...
-    _position = currentPosition + 1;
+    if (advancePosition)
+      _position = currentPosition + 1;
 
     // Return the string with the outer quotes stripped.
     var value = _sql.AsSpan().Slice(startPos + 1, currentPosition - startPos - 1);

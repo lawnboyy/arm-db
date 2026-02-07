@@ -139,15 +139,32 @@ public class SqlParser
   {
     // The next token must be the * character or a comma delimited list of column names.
     var token = _tokenizer.GetNextToken();
-    var columns = new List<SelectColumn>();
+    var selectColumns = new List<SelectColumn>();
     if (token.Type == TokenType.Star)
     {
       var column = new SelectColumn(new WildcardExpression(), null);
-      columns.Add(column);
+      selectColumns.Add(column);
     }
     else // Parse the column list
     {
+      while (token.Type != TokenType.EndOfFile)
+      {
+        if (token.Type != TokenType.Identifier)
+          throw new InvalidSqlException($"Syntax error: expected column identifier but found '{token.Value}' at {token.Position}");
 
+        selectColumns.Add(new SelectColumn(new ColumnExpression(token.Value, null), null));
+
+        var nextToken = _tokenizer.Peek();
+        if (nextToken.Type == TokenType.Comma)
+        {
+          // Discard the comma...
+          var _ = _tokenizer.GetNextToken();
+          // Get the next token which should be the next column identifer.          
+          token = _tokenizer.GetNextToken();
+        }
+        else if (nextToken.Type == TokenType.From)
+          break;
+      }
     }
 
     // Parse the FROM clause...
@@ -172,9 +189,10 @@ public class SqlParser
       throw new InvalidSqlException($"Syntax error: expected table identifier but found '{token.Value}' at {token.Position}");
 
     var fromTable = token.Value;
-    // TODO: Parse the WHERE clause...  
 
-    return new SelectStatement(columns, new ObjectIdentifier(fromTable, databaseName), null);
+    // TODO: Parse the WHERE clause...
+
+    return new SelectStatement(selectColumns, new ObjectIdentifier(fromTable, databaseName), null);
   }
 
   private SqlExpression ParseExpression()
